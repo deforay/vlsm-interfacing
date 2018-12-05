@@ -286,6 +286,11 @@ export class CobasService {
       order.analysedDateTime = dd.analysDate;
       order.specimenDateTime = dd.specimenDate;
       order.authorisedDateTime = dd.acceptDate;
+      order.resultAcceptedDateTime = dd.acceptDate;
+      order.testLocation = this.settings.labName;
+      order.machineUsed = this.settings.rocheMachine;
+
+
 
       v.push(dd.operator);
       v.push(dd.unit);
@@ -312,9 +317,9 @@ export class CobasService {
       vv.push("");
       console.log("Cobas48_resultLog ", JSON.stringify(vv));
       console.log("Cobas48_results ", JSON.stringify(v));
-      if (dd.sampleID) {
-        this.orderModel.addResults(v, (res) => {
-          console.log("cobas48 processAddResult: ", "Result Succesful Added :" + dd.sampleID);
+      if (order.orderID) {
+        this.orderModel.addOrderTest(order, (res) => {
+          console.log("cobas48 processAddResult: ", "Result Succesfully added :" + dd.sampleID);
         }, (err) => {
           console.log("cobas48 processAddResult: ", JSON.stringify(err), "error");
           console.log("cobas48 processAddResult: ", JSON.stringify(v), "error");

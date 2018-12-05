@@ -5,9 +5,7 @@ export class OrderModel extends GeneralModel {
 
 
     addOrderTest(data, success, errorf) {
-        //let t = "REPLACE INTO orders (" + data.names.join(',') + ") VALUES " + data.values.join(',');
-
-        let t = "REPLACE INTO orders ";
+        let t = "REPLACE INTO orders (" + data.names.join(',') + ") VALUES " + data.values.join(',');
         this.exec(t, data, success, errorf);
     }
 

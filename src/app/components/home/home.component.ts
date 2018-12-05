@@ -7,7 +7,7 @@ import { Router } from '@angular/router';
   styleUrls: ['./home.component.scss']
 })
 export class HomeComponent implements OnInit {
-  private user: { login: string, password: string } = {
+  public user: { login: string, password: string } = {
     login: '',
     password: ''
   };

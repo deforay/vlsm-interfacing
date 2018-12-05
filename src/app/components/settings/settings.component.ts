@@ -8,7 +8,7 @@ import { Router } from '../../../../node_modules/@angular/router';
 })
 export class SettingsComponent implements OnInit {
 
-  private settings: any = {};
+  public settings: any = {};
 
   constructor(private router: Router) {
 
