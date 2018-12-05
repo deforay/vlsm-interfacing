@@ -204,6 +204,9 @@ export class CobasService {
       v.push(this.settings.labName);
       v.push(0);
       v.push(r.sampleID);
+      console.log("==============");
+      console.log(r);
+      console.log("==============");
 
       let vv = v;
       vv.push(r.test);
@@ -220,8 +223,6 @@ export class CobasService {
       }, (err) => {
         console.log("cobas processAddResult", JSON.stringify(err), "error");
       });
-
-
     }
     //console.log(r);
     return r;
@@ -232,6 +233,7 @@ export class CobasService {
   processServerData(t) {
     var sp = t.split("O|1|");
     var dd: any = {};
+    var order: any = {};
     var out = [], resIn = [], resLog = [];
     var speDate = "", analysDate = "", acceptDate = "";
     for (var i = 0; i < sp.length; i++) {
@@ -270,6 +272,20 @@ export class CobasService {
       dd.analysDate = analysDate;
       dd.acceptDate = acceptDate;
       dd.operator = p2[8];
+
+      console.log("==============");
+      console.log(dd);
+      console.log("==============");  
+      
+      order.orderID = dd.sampleID;
+      order.testID = dd.sampleID;
+      order.testType = dd.testName;
+      order.testUnit = dd.unit;
+      order.results = dd.result;
+      order.testedBy = dd.operator;
+      order.analysedDateTime = dd.analysDate;
+      order.specimenDateTime = dd.specimenDate;
+      order.authorisedDateTime = dd.acceptDate;
 
       v.push(dd.operator);
       v.push(dd.unit);

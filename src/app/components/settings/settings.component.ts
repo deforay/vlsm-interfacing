@@ -19,25 +19,27 @@ export class SettingsComponent implements OnInit {
     let appSettings = store.get('appSettings');
     let mysql = require('mysql');
 
-    this.settings.labID = appSettings.labID;
-    this.settings.labName = appSettings.labName;
+    if (undefined != appSettings) {
+      this.settings.labID = appSettings.labID;
+      this.settings.labName = appSettings.labName;
 
-    this.settings.rocheMachine = appSettings.rocheMachine;
-    this.settings.rochePort = appSettings.rochePort;
-    this.settings.rocheHost = appSettings.rocheHost;
-    this.settings.rocheConnectionType = appSettings.rocheConnectionType;
+      this.settings.rocheMachine = appSettings.rocheMachine;
+      this.settings.rochePort = appSettings.rochePort;
+      this.settings.rocheHost = appSettings.rocheHost;
+      this.settings.rocheConnectionType = appSettings.rocheConnectionType;
 
-    this.settings.mysqlHost = appSettings.mysqlHost;
-    this.settings.mysqlPort = appSettings.mysqlPort;
-    this.settings.mysqlDb = appSettings.mysqlDb;
-    this.settings.mysqlUser = appSettings.mysqlUser;
-    this.settings.mysqlPassword = appSettings.mysqlPassword;
+      this.settings.mysqlHost = appSettings.mysqlHost;
+      this.settings.mysqlPort = appSettings.mysqlPort;
+      this.settings.mysqlDb = appSettings.mysqlDb;
+      this.settings.mysqlUser = appSettings.mysqlUser;
+      this.settings.mysqlPassword = appSettings.mysqlPassword;
+    }
 
     // console.log("====================");
     // console.log(this.settings.mysqlDb);
     // console.log("====================");
 
-    
+
 
   }
 
