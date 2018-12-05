@@ -1,0 +1,22 @@
+# Project #
+
+
+# System #
+.DS_Store
+
+# Mercurial #
+.orig
+
+# Node #
+node_modules/
+
+# Grunt build #
+dist/
+
+# Bower #
+bower_components/
+public/system/lib
+.bower-cache/
+.bower-registry/
+.bower-tmp/
+.tmp/

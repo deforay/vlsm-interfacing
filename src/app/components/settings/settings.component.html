@@ -1,0 +1,81 @@
+
+<main role="main" class="container">
+
+    <h1 class="mt-5">App Settings</h1>
+
+  <form (submit)="updateSettings()">
+
+
+    <div class="form-row">
+      <div class="form-group col-md-3 col-sm-4">
+        <label for="host" class="">Lab Code/ID</label>
+        <input type="text" [(ngModel)]="settings.labID" name="labID" class="form-control" placeholder="Lab Code/ID" required>
+      </div>
+      <div class="form-group col-md-3 col-sm-4">
+        <label for="host" class="">Lab Name</label>
+        <input type="text" [(ngModel)]="settings.labName" name="labName" class="form-control" placeholder="Lab Name" required>
+      </div>
+    </div>
+    <hr>
+    <div class="form-row">
+      <div class="form-group col-md-3 col-sm-4">
+        <label for="host" class="">Roche Machine Name</label>
+        <input type="text" [(ngModel)]="settings.rocheMachine" name="rocheMachine" class="form-control" placeholder="eg. Cobas48" required>
+      </div>
+      <div class="form-group col-md-3 col-sm-4">
+        <label for="host" class="">Roche Host</label>
+        <input type="text" [(ngModel)]="settings.rocheHost" name="rocheHost" class="form-control" placeholder="Hostname" required>
+      </div>
+      <div class="form-group col-md-3 col-sm-4">
+        <label for="port" class="">Roche Port</label>
+        <input type="text" [(ngModel)]="settings.rochePort" name="rochePort" class="form-control" placeholder="Port Number" required>
+      </div>
+      <div class="form-group col-md-3 col-sm-4">
+        <label for="port" class="">Connection Type</label>
+        <select [(ngModel)]="settings.rocheConnectionType" name="rocheConnectionType" class="form-control">
+          <option>-- Select --</option>
+          <option value="server">TCP/IP Server</option>
+          <option value="client">TCP/IP Client</option>
+        </select>
+
+      </div>
+    </div>
+    <hr>
+    <div class="form-row">
+      <div class="form-group col-md-3 col-sm-4">
+        <label for="host" class="">MySQL Host</label>
+        <input type="text" [(ngModel)]="settings.mysqlHost" name="mysqlHost" class="form-control" placeholder="MySQL Hostname" required>
+      </div>
+      <div class="form-group col-md-3 col-sm-4">
+        <label for="port" class="">MySQL Port</label>
+        <input type="text" [(ngModel)]="settings.mysqlPort" name="mysqlPort" class="form-control" placeholder="MySQL Port Number"
+          required>
+      </div>
+      <div class="form-group col-md-3 col-sm-4">
+        <label for="port" class="">MySQL DB Name</label>
+        <input type="text" [(ngModel)]="settings.mysqlDb" name="mysqlDb" class="form-control" placeholder="MySQL DB Name" required>
+      </div>
+      <div class="form-group col-md-3 col-sm-4">
+        <label for="port" class="">MySQL DB User</label>
+        <input type="text" [(ngModel)]="settings.mysqlUser" name="mysqlUser" class="form-control" placeholder="MySQL DB User" required>
+      </div>
+      <div class="form-group col-md-3 col-sm-4">
+        <label for="port" class="">MySQL DB Password</label>
+        <input type="text" [(ngModel)]="settings.mysqlPassword" name="mysqlPassword" class="form-control" placeholder="MySQL DB Password"
+          required>
+      </div>
+    </div>
+    <hr>
+    <button class="btn btn-primary" type="submit">Update</button>
+    &nbsp;
+    <button routerLink="/dashboard" class="btn btn-danger">
+      <span>Back</span>
+    </button>
+  </form>
+
+
+
+
+
+</main>
+
