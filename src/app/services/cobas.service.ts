@@ -237,7 +237,7 @@ export class CobasService {
     var out = [], resIn = [], resLog = [];
     var speDate = "", analysDate = "", acceptDate = "";
     for (var i = 0; i < sp.length; i++) {
-      var v = [], vv = [];
+      var v = [], orderlog = [];
       var p1 = [], p2 = [], sa = [];
       var spp = sp[i].split("R|1|");
       if (spp[0])
@@ -273,64 +273,51 @@ export class CobasService {
       dd.acceptDate = acceptDate;
       dd.operator = p2[8];
 
-      console.log("==============");
-      console.log(dd);
-      console.log("==============");  
-      
       order.orderID = dd.sampleID;
       order.testID = dd.sampleID;
       order.testType = dd.testName;
       order.testUnit = dd.unit;
+      order.createdDate = new Date();
       order.results = dd.result;
       order.testedBy = dd.operator;
-      order.analysedDateTime = dd.analysDate;
+      order.resultStatus = 1;
+      order.analysedDateTime = analysDate;
       order.specimenDateTime = dd.specimenDate;
-      order.authorisedDateTime = dd.acceptDate;
-      order.resultAcceptedDateTime = dd.acceptDate;
+      order.authorisedDateTime = acceptDate;
+      order.resultAcceptedDateTime = acceptDate;
       order.testLocation = this.settings.labName;
       order.machineUsed = this.settings.rocheMachine;
-
-
-
-      v.push(dd.operator);
-      v.push(dd.unit);
-      v.push(result);
-      v.push(analysDate);
-      v.push(dd.specimenDate);
-      v.push(acceptDate);
-      v.push(this.settings.rocheMachine);
-      v.push(this.settings.labName);
-      v.push(0);
-      v.push(dd.sampleID);
-      //logs
-      vv.push(dd.operator);
-      vv.push(dd.unit);
-      vv.push(result);
-      vv.push(analysDate);
-      vv.push(dd.specimenDate);
-      vv.push(acceptDate);
-      vv.push(this.settings.rocheMachine);
-      vv.push(this.settings.labName);
-      vv.push(0);
-      vv.push(dd.sampleID);
-      vv.push("HIVVL");
-      vv.push("");
-      console.log("Cobas48_resultLog ", JSON.stringify(vv));
-      console.log("Cobas48_results ", JSON.stringify(v));
+      
+      orderlog.push(dd.operator);
+      orderlog.push(dd.unit);
+      orderlog.push(dd.result);
+      orderlog.push(analysDate);
+      orderlog.push(dd.specimenDate);
+      orderlog.push(acceptDate);
+      orderlog.push(this.settings.rocheMachine);
+      orderlog.push(this.settings.labName);
+      orderlog.push(0);
+      orderlog.push(dd.sampleID);
+      orderlog.push("HIVVL");
+      orderlog.push("");
+      
+      
       if (order.orderID) {
+        console.log("Cobas48_results ", JSON.stringify(order));
         this.orderModel.addOrderTest(order, (res) => {
-          console.log("cobas48 processAddResult: ", "Result Succesfully added :" + dd.sampleID);
+          console.log("cobas48 processAddResult: ", "Result Succesfully added :" + order.orderID);
         }, (err) => {
           console.log("cobas48 processAddResult: ", JSON.stringify(err), "error");
-          console.log("cobas48 processAddResult: ", JSON.stringify(v), "error");
+          //console.log("cobas48 processAddResult: ", JSON.stringify(order), "error");
         });
       }
-      this.orderModel.addOrderTestLog(vv, (res) => {
+      this.orderModel.addOrderTestLog(orderlog, (res) => {
+        console.log("Cobas48_resultLog ", JSON.stringify(orderlog));
         console.log("cobas48 processAddResultLog: ", "ResultLog Successful added: " + dd.sampleID);
       }, (err) => {
 
         console.log("cobas48 processAddResultLog: ", JSON.stringify(err), "error");
-        console.log("cobas48 processAddResultLog: ", JSON.stringify(vv), "error");
+        //console.log("cobas48 processAddResultLog: ", JSON.stringify(orderlog), "error");
       });
     }
   }
