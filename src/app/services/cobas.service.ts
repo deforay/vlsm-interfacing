@@ -47,34 +47,62 @@ export class CobasService {
   connect() {
     let that = this;
 
-    let client = new Socket();
 
-    this.socketClient = client;
 
-    client.connect(that.connectopts, function () {
-      console.log('Connected');
-    });
+    if (this.settings.rocheConnectionType == "SERVER") {
+      try {
+        let net = require('net');
 
-    client.on('data', function (data) {
-      that.dataFeedBackTCP(client, data, false);
-    });
+        let server = net.createServer((socket) => {
+          let clientName = `${socket.remoteAddress}:${socket.remotePort}`;
+          // See https://nodejs.org/api/stream.html#stream_readable_setencoding_encoding
+          socket.setEncoding('binary');
 
-    client.on('close', function () {
-      console.log('Disconnected');
-    });
-
-    client.on('error', (e) => {
-      console.log(e);
-      if (e) {
-        setTimeout(() => {
-          client.connect(that.connectopts, function () {
-            console.log('Connected again !');
-            console.log("cobas ", "ConnectSerial Connected");
-
+          // Hack that must be added to make this work as expected
+          delete socket._readableState.decoder;
+          // Logging the message on the server
+          console.log("CobasServer", `${clientName} connected.`);
+          console.log(`${clientName} connected.`);
+          socket.on('data', (data) => {
+            that.dataFeedBackTCP(socket, data, true);
           });
-        }, 15000);
+        });
+        server.listen(this.settings.rochePort, () => {
+          console.log("CobasServer", "Server Bound");
+        });
+      } catch (e) {
+        console.log(e);
       }
-    })
+    } else {
+      let client = new Socket();
+
+      this.socketClient = client;
+
+      client.connect(that.connectopts, function () {
+        console.log('Connected');
+      });
+
+      client.on('data', function (data) {
+        that.dataFeedBackTCP(client, data, false);
+      });
+
+      client.on('close', function () {
+        console.log('Disconnected');
+      });
+
+      client.on('error', (e) => {
+        console.log(e);
+        if (e) {
+          setTimeout(() => {
+            client.connect(that.connectopts, function () {
+              console.log('Connected again !');
+              console.log("cobas ", "ConnectSerial Connected");
+
+            });
+          }, 15000);
+        }
+      })
+    }
 
   }
 
@@ -153,6 +181,7 @@ export class CobasService {
 
   processClientData(t) {
     //  console.log(t);
+    var order: any = {};
     let sp = t.split("R|1|");
     let r: any = {};
     let s = [];
@@ -193,36 +222,49 @@ export class CobasService {
       // if(s[l-2]) r.sampleID=s[l-2];
       if (s[12]) r.machine = s[12];
       if (s[15]) r.status = s[15];
-      let v = [];
-      v.push(r.operator);
-      v.push(r.unit);
-      v.push(r.results);
-      v.push(r.timestamp);
-      v.push(r.orderDate);
-      v.push(r.timestamp);
-      v.push(this.settings.rocheMachine);
-      v.push(this.settings.labName);
-      v.push(0);
-      v.push(r.sampleID);
-      console.log("==============");
-      console.log(r);
-      console.log("==============");
 
-      let vv = v;
-      vv.push(r.test);
-      vv.push(r.lotNo);
-      console.log(vv);
-      console.log("PROCCEES FEEDcobas", JSON.stringify(vv));
-      this.orderModel.addOrderTestLog(vv, (res) => {
-        console.log("cobas processAddResultLog ", "ResultLog Succesful Added : " + r.sampleID);
-      }, (err) => {
-        console.log("cobas processAddResultLog ", JSON.stringify(err), "error");
-      });
-      this.orderModel.addResults(v, (res) => {
-        console.log("cobas processAddResult", "Result Successful Added : " + r.sampleID);
-      }, (err) => {
-        console.log("cobas processAddResult", JSON.stringify(err), "error");
-      });
+      let orderlog = [];
+      orderlog.push(r.operator);
+      orderlog.push(r.unit);
+      orderlog.push(r.results);
+      orderlog.push(r.timestamp);
+      orderlog.push(r.orderDate);
+      orderlog.push(r.timestamp);
+      orderlog.push(this.settings.rocheMachine);
+      orderlog.push(this.settings.labName);
+      orderlog.push(0);
+      orderlog.push(r.sampleID);
+      orderlog.push(r.test);
+      orderlog.push(r.lotNo);
+
+      order.orderID = r.sampleID;
+      order.testID = r.sampleID;
+      order.testType = r.testName;
+      order.testUnit = r.unit;
+      //order.createdDate = '';
+      order.results = r.result;
+      order.testedBy = r.operator;
+      order.resultStatus = 1;
+      order.analysedDateTime = r.timestamp;
+      order.specimenDateTime = r.specimenDate;
+      order.authorisedDateTime = r.timestamp;
+      order.resultAcceptedDateTime = r.timestamp;
+      order.testLocation = this.settings.labName;
+      order.machineUsed = this.settings.rocheMachine;
+
+      if (order.results) {
+        console.log("PROCCEES FEEDcobas", JSON.stringify(order));
+        this.orderModel.addOrderTestLog(orderlog, (res) => {
+          console.log("cobas processAddResult Log ", "Result Log Succesfully Added : " + r.sampleID);
+        }, (err) => {
+          console.log("cobas processAddResult Log ", JSON.stringify(err), "error");
+        });
+        this.orderModel.addOrderTest(order, (res) => {
+          console.log("cobas processAddResult", "Result Successfully Added : " + r.sampleID);
+        }, (err) => {
+          console.log("cobas processAddResult", JSON.stringify(err), "error");
+        });
+      }
     }
     //console.log(r);
     return r;
@@ -277,7 +319,7 @@ export class CobasService {
       order.testID = dd.sampleID;
       order.testType = dd.testName;
       order.testUnit = dd.unit;
-      order.createdDate = new Date();
+      //order.createdDate = '';
       order.results = dd.result;
       order.testedBy = dd.operator;
       order.resultStatus = 1;
@@ -287,7 +329,7 @@ export class CobasService {
       order.resultAcceptedDateTime = acceptDate;
       order.testLocation = this.settings.labName;
       order.machineUsed = this.settings.rocheMachine;
-      
+
       orderlog.push(dd.operator);
       orderlog.push(dd.unit);
       orderlog.push(dd.result);
@@ -300,9 +342,9 @@ export class CobasService {
       orderlog.push(dd.sampleID);
       orderlog.push("HIVVL");
       orderlog.push("");
-      
-      
-      if (order.orderID) {
+
+
+      if (order.results) {
         console.log("Cobas48_results ", JSON.stringify(order));
         this.orderModel.addOrderTest(order, (res) => {
           console.log("cobas48 processAddResult: ", "Result Succesfully added :" + order.orderID);
@@ -310,15 +352,16 @@ export class CobasService {
           console.log("cobas48 processAddResult: ", JSON.stringify(err), "error");
           //console.log("cobas48 processAddResult: ", JSON.stringify(order), "error");
         });
-      }
-      this.orderModel.addOrderTestLog(orderlog, (res) => {
-        console.log("Cobas48_resultLog ", JSON.stringify(orderlog));
-        console.log("cobas48 processAddResultLog: ", "ResultLog Successful added: " + dd.sampleID);
-      }, (err) => {
 
-        console.log("cobas48 processAddResultLog: ", JSON.stringify(err), "error");
-        //console.log("cobas48 processAddResultLog: ", JSON.stringify(orderlog), "error");
-      });
+        this.orderModel.addOrderTestLog(orderlog, (res) => {
+          console.log("Cobas48_resultLog ", JSON.stringify(orderlog));
+          console.log("cobas48 processAddResultLog: ", "ResultLog Successful added: " + dd.sampleID);
+        }, (err) => {
+
+          console.log("cobas48 processAddResultLog: ", JSON.stringify(err), "error");
+          //console.log("cobas48 processAddResultLog: ", JSON.stringify(orderlog), "error");
+        });
+      }
     }
   }
 
