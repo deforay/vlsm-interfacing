@@ -35,22 +35,24 @@ function createWindow() {
 
 
   //################ AUTO LAUNCHER #################
-var aLauncher = new AutoLaunch({
-  name: app.getName(),
-  isHidden:true
-});
+  var aLauncher = new AutoLaunch({
+    name: app.getName(),
+    isHidden: true
+  });
 
-aLauncher.enable();
-aLauncher.isEnabled()
-.then(function(isEnabled){
-  if(isEnabled){
-      return;
-  }
   aLauncher.enable();
-})
-.catch(function(err){
-  console.log("AUTOLAUNCH",JSON.stringify(err));
-});
+  aLauncher.isEnabled()
+    .then(function (isEnabled) {
+      if (isEnabled) {
+        return;
+      }
+      aLauncher.enable();
+    })
+    .catch(function (err) {
+      console.log("AUTOLAUNCH", JSON.stringify(err));
+    });
+
+
 
   //win.webContents.openDevTools();
 
@@ -65,6 +67,20 @@ aLauncher.isEnabled()
 }
 
 try {
+
+  app.once('ready', () => {
+    console.log('started') // ping parent
+  })
+
+  const gotTheLock = app.requestSingleInstanceLock()
+
+  app.on('second-instance', () => {
+    setImmediate(() => app.exit(0))
+  })
+
+  if (!gotTheLock) {
+    app.exit(1)
+  }
 
   // This method will be called when Electron has finished
   // initialization and is ready to create browser windows.

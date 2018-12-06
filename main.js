@@ -56,6 +56,16 @@ function createWindow() {
     });
 }
 try {
+    electron_1.app.once('ready', function () {
+        console.log('started'); // ping parent
+    });
+    var gotTheLock = electron_1.app.requestSingleInstanceLock();
+    electron_1.app.on('second-instance', function () {
+        setImmediate(function () { return electron_1.app.exit(0); });
+    });
+    if (!gotTheLock) {
+        electron_1.app.exit(1);
+    }
     // This method will be called when Electron has finished
     // initialization and is ready to create browser windows.
     // Some APIs can only be used after this event occurs.
