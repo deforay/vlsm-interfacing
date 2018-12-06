@@ -1,4 +1,4 @@
-import { app, BrowserWindow, screen } from 'electron';
+import { app, BrowserWindow, screen, dialog } from 'electron';
 import * as path from 'path';
 import * as url from 'url';
 
@@ -8,6 +8,7 @@ serve = args.some(val => val === '--serve');
 
 function createWindow() {
 
+  const AutoLaunch = require("auto-launch");
   const electronScreen = screen;
   const size = electronScreen.getPrimaryDisplay().workAreaSize;
 
@@ -31,6 +32,25 @@ function createWindow() {
       slashes: true
     }));
   }
+
+
+  //################ AUTO LAUNCHER #################
+var aLauncher = new AutoLaunch({
+  name: app.getName(),
+  isHidden:true
+});
+
+aLauncher.enable();
+aLauncher.isEnabled()
+.then(function(isEnabled){
+  if(isEnabled){
+      return;
+  }
+  aLauncher.enable();
+})
+.catch(function(err){
+  console.log("AUTOLAUNCH",JSON.stringify(err));
+});
 
   //win.webContents.openDevTools();
 
