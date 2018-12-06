@@ -48,35 +48,40 @@
         </div>
         <hr>
         <div class="form-row">
-          <div class="form-group col-md-3 col-sm-4">
+          <div class="form-group col-md-4 col-sm-4">
             <label for="host" class="col-form-label-sm">MySQL Host</label>
             <input type="text" [(ngModel)]="settings.mysqlHost" name="mysqlHost" class="form-control form-control-sm" placeholder="MySQL Hostname" required>
           </div>
-          <div class="form-group col-md-3 col-sm-4">
+          <div class="form-group col-md-4 col-sm-4">
             <label for="port" class="col-form-label-sm">MySQL Port</label>
             <input type="text" [(ngModel)]="settings.mysqlPort" name="mysqlPort" class="form-control form-control-sm" placeholder="MySQL Port Number"
               required>
           </div>
-          <div class="form-group col-md-3 col-sm-4">
+          <div class="form-group col-md-4 col-sm-4">
             <label for="port" class="col-form-label-sm">MySQL DB Name</label>
             <input type="text" [(ngModel)]="settings.mysqlDb" name="mysqlDb" class="form-control form-control-sm" placeholder="MySQL DB Name" required>
           </div>
-          <div class="form-group col-md-3 col-sm-4">
+          <div class="form-group col-md-4 col-sm-4">
             <label for="port" class="col-form-label-sm">MySQL DB User</label>
             <input type="text" [(ngModel)]="settings.mysqlUser" name="mysqlUser" class="form-control form-control-sm" placeholder="MySQL DB User" required>
           </div>
-          <div class="form-group col-md-3 col-sm-4">
+          <div class="form-group col-md-4 col-sm-4">
             <label for="port" class="col-form-label-sm">MySQL DB Password</label>
             <input type="text" [(ngModel)]="settings.mysqlPassword" name="mysqlPassword" class="form-control form-control-sm" placeholder="MySQL DB Password"
               required>
           </div>
+          <div class="form-group col-md-4 col-sm-4">
+              <label for="" class="col-form-label-sm">&nbsp;&nbsp;</label><br>
+              <button (click)="checkMysqlConnection()" class="btn btn-dark btn-sm" type="button">Check MySQL Connection</button>
+          </div>
         </div>
         <hr>
         
-        <button class="btn btn-primary" type="submit">Update</button>
+        
+        <button class="btn btn-primary" type="submit">Save Settings</button>
         &nbsp;
         <button routerLink="/dashboard" class="btn btn-danger" type="button">
-          <span>Back</span>
+          <span>Back without saving</span>
         </button>
       </form>
 

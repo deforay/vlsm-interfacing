@@ -6,14 +6,17 @@ import { Router } from '../../../../node_modules/@angular/router';
   templateUrl: './settings.component.html',
   styleUrls: ['./settings.component.scss']
 })
+
 export class SettingsComponent implements OnInit {
 
   public settings: any = {};
+
 
   constructor(private router: Router) {
 
 
     const Store = require('electron-store');
+
     const store = new Store();
 
     let appSettings = store.get('appSettings');
@@ -73,6 +76,33 @@ export class SettingsComponent implements OnInit {
     this.router.navigate(['/dashboard']);
 
 
+  }
+
+  checkMysqlConnection() {
+
+    let mysql = require('mysql');
+    let connection = mysql.createConnection({
+      host: this.settings.mysqlHost,
+      user: this.settings.mysqlUser,
+      password: this.settings.mysqlPassword,
+      port: this.settings.mysqlPort
+    });
+
+    connection.connect(function (err) {
+
+      if (err) {
+        const { dialog } = require('electron').remote;
+        dialog.showErrorBox('Oops! Something went wrong!', 'Unable to connect. Check if all the database connection settings are correct.');
+        return;
+      } else {
+        const { dialog } = require('electron').remote;
+        dialog.showMessageBox({
+          message: "MySQL Connected successfully. Please click on update to save these settings.",
+          buttons: ["OK"]
+        });
+      }
+
+    });
   }
 
 }
