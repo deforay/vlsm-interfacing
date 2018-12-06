@@ -1,7 +1,11 @@
 import { Injectable } from '@angular/core';
+
+
+
 import { Socket } from 'net';
 
 import { OrderModel } from '../models/order.model'
+import { BehaviorSubject } from '../../../node_modules/rxjs';
 
 @Injectable({
   providedIn: 'root'
@@ -10,6 +14,9 @@ import { OrderModel } from '../models/order.model'
 
 export class CobasService {
 
+
+  private messageSource = new BehaviorSubject(false);
+  currentStatus = this.messageSource.asObservable();  
 
   private ACK = Buffer.from('06', 'hex');
   private ENQ = Buffer.from('05', 'hex');
@@ -44,6 +51,10 @@ export class CobasService {
 
   }
 
+  connectionStatus(isRocheConnected: boolean) {
+    this.messageSource.next(isRocheConnected)
+  }
+
   connect() {
     let that = this;
 
@@ -61,6 +72,7 @@ export class CobasService {
           // Hack that must be added to make this work as expected
           delete socket._readableState.decoder;
           // Logging the message on the server
+          that.connectionStatus(true);
           console.log("CobasServer", `${clientName} connected.`);
           console.log(`${clientName} connected.`);
           socket.on('data', (data) => {
@@ -71,6 +83,7 @@ export class CobasService {
           console.log("CobasServer", "Server Bound");
         });
       } catch (e) {
+        that.connectionStatus(false);
         console.log(e);
       }
     } else {
@@ -79,25 +92,28 @@ export class CobasService {
       this.socketClient = client;
 
       client.connect(that.connectopts, function () {
-        console.log('Connected');
+        that.connectionStatus(true);
+        console.log('Roche Cobas - Connected');
       });
 
       client.on('data', function (data) {
+        that.connectionStatus(true);
         that.dataFeedBackTCP(client, data, false);
       });
 
       client.on('close', function () {
-        console.log('Disconnected');
+        that.connectionStatus(false);
+        console.log('Roche Cobas - Disconnected');
       });
 
       client.on('error', (e) => {
+        that.connectionStatus(false);
         console.log(e);
         if (e) {
           setTimeout(() => {
             client.connect(that.connectopts, function () {
-              console.log('Connected again !');
-              console.log("cobas ", "ConnectSerial Connected");
-
+              that.connectionStatus(true);
+              console.log('Roche Cobas - Connected again !');
             });
           }, 15000);
         }
@@ -108,9 +124,10 @@ export class CobasService {
 
   disconnect() {
     this.socketClient.destroy();
+    this.connectionStatus(false);
     setTimeout(() => {
       this.connect();
-    }, 1000);
+    }, 10000);
   }
 
 

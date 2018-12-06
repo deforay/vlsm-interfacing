@@ -1,11 +1,26 @@
-
-
 <!-- Begin page content -->
 <main role="main" class="container">
   <br>
-  <h1 class="mt-5">Roche and Abbott Interface</h1>
-  <br><br><br>
-  <!-- <button (click)="reconnect()" class="btn btn-dark"><span>Reconnect</span></button> -->
-  <button routerLink="/settings" class="btn btn-dark"><span>Settings</span></button>
-</main>
+  <br>
+  <br>
+  <br>
 
+  <div>
+    <h4 *ngIf="isConnected; else notConnected" class="text-success">Roche Machine Connected.</h4>
+    <ng-template #notConnected>
+      <h4 class="text-danger">Roche Machine Not Connected. Please wait or retry.</h4>
+    </ng-template>
+  </div>
+  <br>
+  <br>
+  <br>
+  <br>
+  <button routerLink="/settings" class="btn btn-dark">
+    <span>Settings</span>
+  </button>
+
+
+
+
+
+</main>

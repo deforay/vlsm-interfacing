@@ -25,6 +25,10 @@ export class HomeComponent implements OnInit {
 
       const Store = require('electron-store');
       const store = new Store();
+
+      store.set('loggedin', true);  
+
+          
       let settings = store.get('appSettings');
       if((undefined == settings)){
         this.router.navigate(['/settings']);
