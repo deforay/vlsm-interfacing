@@ -12,7 +12,7 @@ node_modules/
 
 # Grunt build #
 dist/
-
+release/
 # Bower #
 bower_components/
 public/system/lib

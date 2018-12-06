@@ -5,19 +5,37 @@
   <br>
   <br>
 
-  <div>
-    <h4 *ngIf="isConnected; else notConnected" class="text-success">Roche Machine Connected.</h4>
-    <ng-template #notConnected>
-      <h4 class="text-danger">Roche Machine Not Connected. Please wait or retry.</h4>
-    </ng-template>
+  <div class="card">
+    <div class="card-body">
+
+
+      <h5 *ngIf="isConnected; else notConnected" class="card-title text-success">Roche Machine Connected.</h5>
+      <button *ngIf="isConnected" (click)="close()" class="btn btn-danger">
+        <span>Disconnect</span>
+      </button>
+
+
+      <ng-template #notConnected>
+        <h5 class="card-title text-danger">Roche Machine Not Connected. </h5>
+        <p class="card-text">Please wait or reconnect manually after few minutes.</p>
+        <button (click)="reconnect()" class="btn btn-success">
+          <span>Reconnect</span>
+        </button>
+        &nbsp;&nbsp;<button routerLink="/settings" class="btn btn-primary">
+          <span>Settings</span>
+        </button>        
+      </ng-template>
+
+
+    </div>
   </div>
+
+
   <br>
   <br>
   <br>
   <br>
-  <button routerLink="/settings" class="btn btn-dark">
-    <span>Settings</span>
-  </button>
+
 
 
 

@@ -16,7 +16,7 @@ export class CobasService {
 
 
   private messageSource = new BehaviorSubject(false);
-  currentStatus = this.messageSource.asObservable();  
+  currentStatus = this.messageSource.asObservable();
 
   private ACK = Buffer.from('06', 'hex');
   private ENQ = Buffer.from('05', 'hex');
@@ -31,8 +31,9 @@ export class CobasService {
   private strData: string = '';
   private connectopts: any = null;
   private settings = null;
-  private socketClient = null;
   private orderModel = null;
+
+  public socketClient = null;
 
 
   constructor() {
@@ -51,84 +52,98 @@ export class CobasService {
 
   }
 
+  // Method used to track machine connection status
   connectionStatus(isRocheConnected: boolean) {
     this.messageSource.next(isRocheConnected)
   }
 
+
+  // Method used to connect to the Roche Machine
   connect() {
     let that = this;
 
 
+    // if (this.settings.rocheConnectionType == "server") {
+    //   try {
+    //     let net = require('net');
 
-    if (this.settings.rocheConnectionType == "SERVER") {
-      try {
-        let net = require('net');
+    //     let server = net.createServer((socket) => {
+    //       let clientName = `${socket.remoteAddress}:${socket.remotePort}`;
+    //       // See https://nodejs.org/api/stream.html#stream_readable_setencoding_encoding
+    //       socket.setEncoding('binary');
 
-        let server = net.createServer((socket) => {
-          let clientName = `${socket.remoteAddress}:${socket.remotePort}`;
-          // See https://nodejs.org/api/stream.html#stream_readable_setencoding_encoding
-          socket.setEncoding('binary');
+    //       // Hack that must be added to make this work as expected
+    //       delete socket._readableState.decoder;
+    //       // Logging the message on the server
+    //       that.connectionStatus(true);
+    //       console.log("CobasServer", `${clientName} connected.`);
+    //       console.log(`${clientName} connected.`);
+    //       socket.on('data', (data) => {
+    //         that.handleTCPResponse(socket, data);
+    //       });
+    //     });
+    //     server.listen(this.settings.rochePort, () => {
+    //       console.log("CobasServer", "Server Bound");
+    //     });
+    //   } catch (e) {
+    //     that.connectionStatus(false);
+    //     console.log(e);
+    //   }
+    // } else {
 
-          // Hack that must be added to make this work as expected
-          delete socket._readableState.decoder;
-          // Logging the message on the server
-          that.connectionStatus(true);
-          console.log("CobasServer", `${clientName} connected.`);
-          console.log(`${clientName} connected.`);
-          socket.on('data', (data) => {
-            that.dataFeedBackTCP(socket, data, true);
-          });
-        });
-        server.listen(this.settings.rochePort, () => {
-          console.log("CobasServer", "Server Bound");
-        });
-      } catch (e) {
-        that.connectionStatus(false);
-        console.log(e);
-      }
-    } else {
-      let client = new Socket();
+    //  Socket Client
 
-      this.socketClient = client;
+    // }
 
-      client.connect(that.connectopts, function () {
+
+      that.socketClient = new Socket();
+
+
+      that.socketClient.connect(that.connectopts, function () {
         that.connectionStatus(true);
         console.log('Roche Cobas - Connected');
       });
 
-      client.on('data', function (data) {
+      that.socketClient.on('data', function (data) {
         that.connectionStatus(true);
-        that.dataFeedBackTCP(client, data, false);
+        that.handleTCPResponse(that.socketClient, data);
       });
 
-      client.on('close', function () {
+      that.socketClient.on('close', function () {
+        that.socketClient.destroy();
         that.connectionStatus(false);
         console.log('Roche Cobas - Disconnected');
       });
 
-      client.on('error', (e) => {
+      that.socketClient.on('error', (e) => {
         that.connectionStatus(false);
         console.log(e);
         if (e) {
           setTimeout(() => {
-            client.connect(that.connectopts, function () {
+            that.socketClient.connect(that.connectopts, function () {
               that.connectionStatus(true);
               console.log('Roche Cobas - Connected again !');
             });
-          }, 15000);
+          }, 10000);
         }
-      })
+      });
+
+  }
+
+  reconnect() {
+    if (typeof this.socketClient.destroy === 'function') {
+      this.socketClient.destroy();
     }
-
-  }
-
-  disconnect() {
-    this.socketClient.destroy();
     this.connectionStatus(false);
-    setTimeout(() => {
-      this.connect();
-    }, 10000);
+    this.connect();
   }
+
+  closeConnection() {
+    if (typeof this.socketClient.destroy === 'function') {
+      this.socketClient.destroy();
+      this.connectionStatus(false);
+    }
+  }  
 
 
 
@@ -141,17 +156,17 @@ export class CobasService {
   }
 
 
-  dataFeedBackTCP(client, data, isServer) {
+  handleTCPResponse(client, data) {
 
     var d = data.toString("hex");
 
     if (d === "04") {
       client.write(this.ACK);
       console.log("Cobas EOT", this.strData);
-      if (this.settings.rocheConnectionType == 'server') {
-        this.processServerData(this.strData);
-      } else if (this.settings.rocheConnectionType == 'client') {
+      if (this.settings.rocheConnectionType == 'client') {
         this.processClientData(this.strData);
+      } else {
+        this.processServerData(this.strData);
       }
 
       this.strData = "";

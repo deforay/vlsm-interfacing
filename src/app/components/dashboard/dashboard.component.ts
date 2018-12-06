@@ -1,5 +1,6 @@
 import { Component, OnInit, NgZone } from '@angular/core';
 import { CobasService } from '../../services/cobas.service';
+import { Router } from '../../../../node_modules/@angular/router';
 
 
 @Component({
@@ -11,8 +12,17 @@ export class DashboardComponent implements OnInit {
 
   public isConnected: boolean = false;
 
-  constructor(public cobasService: CobasService, private _ngZone: NgZone) {
+  constructor(public cobasService: CobasService, private _ngZone: NgZone, private router: Router) {
+    
+      const Store = require('electron-store');
+      const store = new Store();
 
+      let appSettings = store.get('appSettings');
+      if(undefined == appSettings || !appSettings.rochePort || !appSettings.rocheHost){
+        this.router.navigate(['/settings']);
+      }
+      this.cobasService.connect();
+    
 
   }
 
@@ -21,17 +31,20 @@ export class DashboardComponent implements OnInit {
       this._ngZone.run(() => {
         console.log(status);
         this.isConnected = status;
-        if(!this.isConnected){
-          this.cobasService.connect();
-        }        
       });
     })
 
   }
 
   reconnect() {
-    this.cobasService.disconnect();
-    this.cobasService.connect();
+    this.cobasService.reconnect();
+    //this.cobasService.connect();
+
+  }
+
+  close() {
+    this.cobasService.closeConnection();
+    //this.cobasService.connect();
 
   }
 

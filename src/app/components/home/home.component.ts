@@ -28,9 +28,8 @@ export class HomeComponent implements OnInit {
 
       store.set('loggedin', true);  
 
-          
-      let settings = store.get('appSettings');
-      if((undefined == settings)){
+      let appSettings = store.get('appSettings');
+      if(undefined == appSettings){
         this.router.navigate(['/settings']);
       }else{
         this.router.navigate(['/dashboard']);
