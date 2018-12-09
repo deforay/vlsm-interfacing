@@ -131,15 +131,15 @@ export class CobasService {
   }
 
   reconnect() {
-    if (typeof this.socketClient.destroy === 'function') {
+    if (this.socketClient) {
       this.socketClient.destroy();
+      this.connectionStatus(false);
     }
-    this.connectionStatus(false);
     this.connect();
   }
 
   closeConnection() {
-    if (typeof this.socketClient.destroy === 'function') {
+    if (this.socketClient) {
       this.socketClient.destroy();
       this.connectionStatus(false);
     }

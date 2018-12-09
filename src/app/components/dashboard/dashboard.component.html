@@ -8,22 +8,25 @@
   <div class="card">
     <div class="card-body">
 
-
-      <h5 *ngIf="isConnected; else notConnected" class="card-title text-success">Roche Machine Connected.</h5>
-      <button *ngIf="isConnected" (click)="close()" class="btn btn-danger">
-        <span>Disconnect</span>
-      </button>
+      <div *ngIf="isConnected; else notConnected">
+        <h5 class="card-title text-success">Roche Machine Connected.</h5>
+        <!-- <p class="card-text">Disconnect to modify settings.</p> -->
+        <button (click)="close()" class="btn btn-danger">
+          <span>Disconnect</span>
+        </button>
+      </div>
 
 
       <ng-template #notConnected>
         <h5 class="card-title text-danger">Roche Machine Not Connected. </h5>
-        <p class="card-text">Please wait or reconnect manually after few minutes.</p>
-        <button (click)="reconnect()" class="btn btn-success">
-          <span>Reconnect</span>
+        <p class="card-text">Please try to reconnect and wait for a few moments.</p>
+        <button (click)="reconnect()" class="btn btn-success" [disabled]="connectionInProcess">
+          <span>{{reconnectButtonText}}</span>
         </button>
-        &nbsp;&nbsp;<button routerLink="/settings" class="btn btn-primary">
+        &nbsp;&nbsp;
+        <button *ngIf="!connectionInProcess" routerLink="/settings" class="btn btn-primary">
           <span>Settings</span>
-        </button>        
+        </button>
       </ng-template>
 
 

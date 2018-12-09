@@ -11,6 +11,8 @@ import { Router } from '../../../../node_modules/@angular/router';
 export class DashboardComponent implements OnInit {
 
   public isConnected: boolean = false;
+  public connectionInProcess : boolean = false;
+  public reconnectButtonText: string = 'Reconnect';
 
   constructor(public cobasService: CobasService, private _ngZone: NgZone, private router: Router) {
     
@@ -21,7 +23,7 @@ export class DashboardComponent implements OnInit {
       if(undefined == appSettings || !appSettings.rochePort || !appSettings.rocheHost){
         this.router.navigate(['/settings']);
       }
-      this.cobasService.connect();
+      //this.cobasService.connect();
     
 
   }
@@ -37,12 +39,17 @@ export class DashboardComponent implements OnInit {
   }
 
   reconnect() {
+
+    this.connectionInProcess = true;
+    this.reconnectButtonText = 'Please wait ... ';
     this.cobasService.reconnect();
     //this.cobasService.connect();
 
   }
 
   close() {
+    this.connectionInProcess = false;
+    this.reconnectButtonText = 'Reconnect';
     this.cobasService.closeConnection();
     //this.cobasService.connect();
 
