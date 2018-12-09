@@ -15,8 +15,11 @@ import { BehaviorSubject } from '../../../node_modules/rxjs';
 export class CobasService {
 
 
-  private messageSource = new BehaviorSubject(false);
-  currentStatus = this.messageSource.asObservable();
+  private statusSubject = new BehaviorSubject(false);
+  currentStatus = this.statusSubject.asObservable();
+
+  private connectionTriesSubject = new BehaviorSubject(false);
+  stopTrying = this.connectionTriesSubject.asObservable();
 
   private ACK = Buffer.from('06', 'hex');
   private ENQ = Buffer.from('05', 'hex');
@@ -34,6 +37,8 @@ export class CobasService {
   private orderModel = null;
 
   public socketClient = null;
+
+  public connectionTries = 0;
 
 
   constructor() {
@@ -54,13 +59,19 @@ export class CobasService {
 
   // Method used to track machine connection status
   connectionStatus(isRocheConnected: boolean) {
-    this.messageSource.next(isRocheConnected)
+    this.statusSubject.next(isRocheConnected);
+  }
+
+  // Method used to track machine connection status
+  stopTryingStatus(stopTrying: boolean) {
+    this.connectionTriesSubject.next(stopTrying);
   }
 
 
   // Method used to connect to the Roche Machine
   connect() {
     let that = this;
+
 
 
     // if (this.settings.rocheConnectionType == "server") {
@@ -96,37 +107,51 @@ export class CobasService {
     // }
 
 
-      that.socketClient = new Socket();
+    that.socketClient = new Socket();
 
 
-      that.socketClient.connect(that.connectopts, function () {
-        that.connectionStatus(true);
-        console.log('Roche Cobas - Connected');
-      });
+    console.log('Roche Cobas - Trying to connect');
+    this.connectionTries++; // incrementing the connection tries
 
-      that.socketClient.on('data', function (data) {
-        that.connectionStatus(true);
-        that.handleTCPResponse(that.socketClient, data);
-      });
+    that.socketClient.connect(that.connectopts, function () {
+      this.connectionTries = 0; // resetting connection tries to 0
+      that.connectionStatus(true);
+      console.log('Roche Cobas - Connected');
+    });
 
-      that.socketClient.on('close', function () {
-        that.socketClient.destroy();
-        that.connectionStatus(false);
-        console.log('Roche Cobas - Disconnected');
-      });
+    that.socketClient.on('data', function (data) {
+      that.connectionStatus(true);
+      that.handleTCPResponse(that.socketClient, data);
+    });
 
-      that.socketClient.on('error', (e) => {
-        that.connectionStatus(false);
-        console.log(e);
-        if (e) {
+    that.socketClient.on('close', function () {
+      that.socketClient.destroy();
+      that.connectionStatus(false);
+      console.log('Roche Cobas - Disconnected');
+    });
+
+    that.socketClient.on('error', (e) => {
+      that.connectionStatus(false);
+      console.log(e);
+      if (e) {
+        // if we have already tried and failed multiple times, we can stop trying
+        if (this.connectionTries <= 2) {
           setTimeout(() => {
+            console.log('Roche Cobas - Trying to connect');
+            this.connectionTries++; // incrementing the connection tries
             that.socketClient.connect(that.connectopts, function () {
+              this.connectionTries = 0; // resetting connection tries to 0
               that.connectionStatus(true);
               console.log('Roche Cobas - Connected again !');
             });
-          }, 10000);
+          }, 5000);
+        } else {
+          console.log('Giving up. Not trying again. Something wrong !');
+          that.connectionStatus(false);
+          that.stopTryingStatus(true);
         }
-      });
+      }
+    });
 
   }
 
@@ -143,7 +168,7 @@ export class CobasService {
       this.socketClient.destroy();
       this.connectionStatus(false);
     }
-  }  
+  }
 
 
 

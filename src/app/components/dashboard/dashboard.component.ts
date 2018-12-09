@@ -11,28 +11,41 @@ import { Router } from '../../../../node_modules/@angular/router';
 export class DashboardComponent implements OnInit {
 
   public isConnected: boolean = false;
-  public connectionInProcess : boolean = false;
-  public reconnectButtonText: string = 'Reconnect';
+  public stopTrying: boolean = false;
+  public connectionInProcess: boolean = false;
+  public reconnectButtonText: string = 'Connect';
 
   constructor(public cobasService: CobasService, private _ngZone: NgZone, private router: Router) {
-    
-      const Store = require('electron-store');
-      const store = new Store();
 
-      let appSettings = store.get('appSettings');
-      if(undefined == appSettings || !appSettings.rochePort || !appSettings.rocheHost){
-        this.router.navigate(['/settings']);
-      }
-      //this.cobasService.connect();
-    
+    const Store = require('electron-store');
+    const store = new Store();
+
+    let appSettings = store.get('appSettings');
+    if (undefined == appSettings || !appSettings.rochePort || !appSettings.rocheHost) {
+      this.router.navigate(['/settings']);
+    }
+    //this.cobasService.connect();
+
 
   }
 
   ngOnInit() {
-    this.cobasService.currentStatus.subscribe(status => {
-      this._ngZone.run(() => {
+    let that = this;
+    that.cobasService.currentStatus.subscribe(status => {
+      that._ngZone.run(() => {
         console.log(status);
-        this.isConnected = status;
+        that.isConnected = status;
+      });
+    })
+    that.cobasService.stopTrying.subscribe(status => {
+      that._ngZone.run(() => {
+        //console.log(status);
+        that.stopTrying = status;
+        if (that.stopTrying) {
+          const { dialog } = require('electron').remote;
+          dialog.showErrorBox('Oops! Something went wrong!', 'Unable to connect. Check if all the Roche machine connection settings are correct.');
+          that.close();
+        }
       });
     })
 
@@ -49,7 +62,7 @@ export class DashboardComponent implements OnInit {
 
   close() {
     this.connectionInProcess = false;
-    this.reconnectButtonText = 'Reconnect';
+    this.reconnectButtonText = 'Connect';
     this.cobasService.closeConnection();
     //this.cobasService.connect();
 
