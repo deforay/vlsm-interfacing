@@ -33,7 +33,7 @@ export class DashboardComponent implements OnInit {
     let that = this;
     that.cobasService.currentStatus.subscribe(status => {
       that._ngZone.run(() => {
-        console.log(status);
+        //console.log(status);
         that.isConnected = status;
       });
     })

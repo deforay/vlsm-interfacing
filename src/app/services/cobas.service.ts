@@ -94,10 +94,10 @@ export class CobasService {
     let that = this;
 
     if (that.settings.rocheConnectionType == "tcpserver") {
-      that.server = that.net.createServer(function (socket) {
+      this.server = that.net.createServer(function (socket) {
         // confirm socket connection from client
         console.log((new Date()) + 'A client connected to server...');
-        //that.connectionStatus(true);
+        that.connectionStatus(true);
         socket.on('data', function (data) {
 
           that.handleTCPServerResponse(this.server, data, 'hl7');
@@ -107,17 +107,17 @@ export class CobasService {
       }).listen(this.settings.rochePort, this.settings.rocheHost);
 
 
-      // that.server.on('error', function (e) {
-      //   if (e.code == 'EADDRINUSE') {
-      //     console.log('Address in use, retrying...');
-      //     setTimeout(function () {
-      //       this.server.close();
-      //       this.server.listen(this.settings.rochePort, this.settings.rocheHost);
-      //     }, 1000);
-      //   }else{
-      //     console.log('Some error : ' + e.code);
-      //   }
-      // });      
+      this.server.on('error', function (e) {
+        if (e.code == 'EADDRINUSE') {
+          console.log('Address in use, retrying...');
+          setTimeout(function () {
+            this.server.close();
+            this.server.listen(this.settings.rochePort, this.settings.rocheHost);
+          }, 1000);
+        }else{
+          console.log('Some error ' + e.code);
+        }
+      });      
 
     } else {
 
@@ -178,13 +178,12 @@ export class CobasService {
     if (this.socketClient) {
       this.socketClient.destroy();
       this.connectionStatus(false);
-      this.connect();
     }
     if (this.server) {
       this.server.destroy();
       this.connectionStatus(false);
-      this.connect();
     }    
+    this.connect();
     
   }
 
