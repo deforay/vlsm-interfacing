@@ -78,9 +78,7 @@ export class CobasService {
     }
 
     var moment = require('moment');
-    var date = moment(new Date()).format('MM/DD/YYYY');;
-
-
+    var date = moment(new Date()).format('YYYYMMDDhms');;
 
     let ack = "MSH|^~\&|LIS||COBAS6800/8800||"+date+"||ACK^R22|ACK-R22-"+date+"||2.5||||||8859/1";
         ack += "MSA|AA|" + messageID;
@@ -221,11 +219,12 @@ export class CobasService {
 
     console.log("==== STARTING ====");
 
-    //msgg = msgg.replace(/[\x0b\x1a]/g, '');
-    //var message = this.hl7parser.create(msgg);
-    var message = this.hl7parser.create("MSH|^~\&|||||20121031232617||ADT^A04|20381|P|2.3||||NE\rEVN|A04|20121031162617||01\rPID|1|16194|16194||Jones^Bob");
-
-    var msgID = message.get("MSH.6").toString();
+    msgg = msgg.replace(/[\x0b\x1c]/g, '');
+    msgg = msgg.replace(/(\r\n|\n|\r)/gm, '\\r');
+    msgg = msgg.replace(/(\r\r)/gm, '\\r');
+    
+    var message = this.hl7parser.create(msgg);
+    var msgID = message.get("MSH.7").toString();
     this.hl7ACK(msgID);
     console.log(message);
 
