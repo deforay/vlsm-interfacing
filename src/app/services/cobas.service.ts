@@ -77,7 +77,12 @@ export class CobasService {
       messageID = Math.random();
     }
 
-    let ack = "MSH|^~\&|LIS||COBAS6800/8800||20190122150305||ACK^R22|ACK-R22-20190122150305||2.5||||||8859/1";
+    var moment = require('moment');
+    var date = moment(new Date()).format('MM/DD/YYYY');;
+
+
+
+    let ack = "MSH|^~\&|LIS||COBAS6800/8800||"+date+"||ACK^R22|ACK-R22-"+date+"||2.5||||||8859/1";
         ack += "MSA|AA|" + messageID;
 
     return ack;    
@@ -109,6 +114,8 @@ export class CobasService {
             this.server.close();
             this.server.listen(this.settings.rochePort, this.settings.rocheHost);
           }, 1000);
+        }else{
+          console.log('Some error : ' + e.code);
         }
       });      
 
