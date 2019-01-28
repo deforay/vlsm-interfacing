@@ -18,6 +18,8 @@ export class CobasService {
   private statusSubject = new BehaviorSubject(false);
   currentStatus = this.statusSubject.asObservable();
 
+  private net = require('net');
+
   private connectionTriesSubject = new BehaviorSubject(false);
   stopTrying = this.connectionTriesSubject.asObservable();
 
@@ -39,6 +41,7 @@ export class CobasService {
   public socketClient = null;
 
   public connectionTries = 0;
+  public hl7parser = require("hl7parser");  
 
 
   constructor() {
@@ -72,86 +75,69 @@ export class CobasService {
   connect() {
     let that = this;
 
+    if (that.settings.rocheConnectionType == "tcpserver") {
+      let server = that.net.createServer(function (socket) {
+        // confirm socket connection from client
+        console.log((new Date()) + 'A client connected to server...');
+        socket.on('data', function (data) {
+
+          that.handleTCPServerResponse(server, data, 'hl7');
+
+        });
+      }).listen(this.settings.rochePort, this.settings.rocheHost);
+
+    } else {
 
 
-    // if (this.settings.rocheConnectionType == "server") {
-    //   try {
-    //     let net = require('net');
-
-    //     let server = net.createServer((socket) => {
-    //       let clientName = `${socket.remoteAddress}:${socket.remotePort}`;
-    //       // See https://nodejs.org/api/stream.html#stream_readable_setencoding_encoding
-    //       socket.setEncoding('binary');
-
-    //       // Hack that must be added to make this work as expected
-    //       delete socket._readableState.decoder;
-    //       // Logging the message on the server
-    //       that.connectionStatus(true);
-    //       console.log("CobasServer", `${clientName} connected.`);
-    //       console.log(`${clientName} connected.`);
-    //       socket.on('data', (data) => {
-    //         that.handleTCPResponse(socket, data);
-    //       });
-    //     });
-    //     server.listen(this.settings.rochePort, () => {
-    //       console.log("CobasServer", "Server Bound");
-    //     });
-    //   } catch (e) {
-    //     that.connectionStatus(false);
-    //     console.log(e);
-    //   }
-    // } else {
-
-    //  Socket Client
-
-    // }
+      that.socketClient = new Socket();
 
 
-    that.socketClient = new Socket();
+      console.log('Roche Cobas - Trying to connect');
+      this.connectionTries++; // incrementing the connection tries
 
+      that.socketClient.connect(that.connectopts, function () {
+        this.connectionTries = 0; // resetting connection tries to 0
+        that.connectionStatus(true);
+        console.log('Roche Cobas - Connected');
+      });
 
-    console.log('Roche Cobas - Trying to connect');
-    this.connectionTries++; // incrementing the connection tries
+      that.socketClient.on('data', function (data) {
+        that.connectionStatus(true);
+        that.handleTCPClientResponse(that.socketClient, data);
+      });
 
-    that.socketClient.connect(that.connectopts, function () {
-      this.connectionTries = 0; // resetting connection tries to 0
-      that.connectionStatus(true);
-      console.log('Roche Cobas - Connected');
-    });
+      that.socketClient.on('close', function () {
+        that.socketClient.destroy();
+        that.connectionStatus(false);
+        console.log('Roche Cobas - Disconnected');
+      });
 
-    that.socketClient.on('data', function (data) {
-      that.connectionStatus(true);
-      that.handleTCPResponse(that.socketClient, data);
-    });
-
-    that.socketClient.on('close', function () {
-      that.socketClient.destroy();
-      that.connectionStatus(false);
-      console.log('Roche Cobas - Disconnected');
-    });
-
-    that.socketClient.on('error', (e) => {
-      that.connectionStatus(false);
-      console.log(e);
-      if (e) {
-        // if we have already tried and failed multiple times, we can stop trying
-        if (this.connectionTries <= 2) {
-          setTimeout(() => {
-            console.log('Roche Cobas - Trying to connect');
-            this.connectionTries++; // incrementing the connection tries
-            that.socketClient.connect(that.connectopts, function () {
-              this.connectionTries = 0; // resetting connection tries to 0
-              that.connectionStatus(true);
-              console.log('Roche Cobas - Connected again !');
-            });
-          }, 5000);
-        } else {
-          console.log('Giving up. Not trying again. Something wrong !');
-          that.connectionStatus(false);
-          that.stopTryingStatus(true);
+      that.socketClient.on('error', (e) => {
+        that.connectionStatus(false);
+        console.log(e);
+        if (e) {
+          // if we have already tried and failed multiple times, we can stop trying
+          if (this.connectionTries <= 2) {
+            setTimeout(() => {
+              console.log('Roche Cobas - Trying to connect');
+              this.connectionTries++; // incrementing the connection tries
+              that.socketClient.connect(that.connectopts, function () {
+                this.connectionTries = 0; // resetting connection tries to 0
+                that.connectionStatus(true);
+                console.log('Roche Cobas - Connected again !');
+              });
+            }, 5000);
+          } else {
+            console.log('Giving up. Not trying again. Something wrong !');
+            that.connectionStatus(false);
+            that.stopTryingStatus(true);
+          }
         }
-      }
-    });
+      });
+    }
+
+
+
 
   }
 
@@ -181,19 +167,63 @@ export class CobasService {
   }
 
 
-  handleTCPResponse(client, data) {
+  parseHl7Result(data) {
+    var d = data.toString("hex");
+    var msgg = this.hex2ascii(d);
+
+    // console.log(data);
+    // console.log(JSON.stringify(data, null, 4));
+
+    // console.log(d);
+    // console.log(JSON.stringify(d, null, 4));
+
+    console.log("==== STARTING ====");
+
+    msgg = msgg.replace(/[\x0b\x1a]/g, '');
+    var message = this.hl7parser.create(msgg);
+    console.log(message);
+
+    console.log("==== ENDING ====");
+
+    var order: any = {};
+    let r: any = {};    
+
+    // order.orderID = r.sampleID;
+    // order.testID = r.sampleID;
+    // order.testType = r.testName;
+    // order.testUnit = r.unit;
+    // //order.createdDate = '';
+    // order.results = r.result;
+    // order.testedBy = r.operator;
+    // order.resultStatus = 1;
+    // order.analysedDateTime = r.timestamp;
+    // order.specimenDateTime = r.specimenDate;
+    // order.authorisedDateTime = r.timestamp;
+    // order.resultAcceptedDateTime = r.timestamp;
+    // order.testLocation = this.settings.labName;
+    // order.machineUsed = this.settings.rocheMachine;    
+  }
+
+  handleTCPServerResponse(server, data, format) {
+    if (format === 'hl7') {
+      this.parseHl7Result(data);
+    }
+  }
+
+
+  handleTCPClientResponse(client, data) {
 
     var d = data.toString("hex");
 
     if (d === "04") {
       client.write(this.ACK);
       console.log("Cobas EOT", this.strData);
-      if (this.settings.rocheConnectionType == 'client') {
-        this.processClientData(this.strData);
-      } else {
-        this.processServerData(this.strData);
-      }
-
+      // if (this.settings.rocheConnectionType == 'tcpclient') {
+      //   this.processClientData(this.strData);
+      // } else {
+      //   this.processServerData(this.strData);
+      // }
+      this.processClientData(this.strData);
       this.strData = "";
     } else if (d == "21") {
       client.write(this.ACK);
@@ -247,7 +277,9 @@ export class CobasService {
       var sd = "1|" + sp[1];
       var ss = sp[0];
       console.log("SS " + ss);
-      ss = ss.replace(/\u001707\r\n\u000221/g, "").replace(/\r\n/g, "").replace(/\rC/g, "").replace(/\u001767\u0002237/g, "")
+      ss = ss.replace(/\u001707\r\n\u000221/g, "")
+        .replace(/\r\n/g, "").replace(/\rC/g, "")
+        .replace(/\u001767\u0002237/g, "")
         .replace(/\u0003BD/g, "").replace(/\u000309/g, "");
       sd = sd.replace(/\u001707\r\n\u000221/g, "").replace(/\r\n/g, "").replace("\rC", "").replace(/\u001767\u0002237/g, "")
         .replace(/\u0003BD/g, "").replace(/\u000309/g, "");
