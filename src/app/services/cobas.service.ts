@@ -39,6 +39,7 @@ export class CobasService {
   private orderModel = null;
 
   public socketClient = null;
+  public server = null;
 
   public connectionTries = 0;
   public hl7parser = require("hl7parser");  
@@ -70,21 +71,46 @@ export class CobasService {
     this.connectionTriesSubject.next(stopTrying);
   }
 
+  hl7ACK(messageID){
+
+    if(!messageID){
+      messageID = Math.random();
+    }
+
+    let ack = "MSH|^~\&|LIS||COBAS6800/8800||20190122150305||ACK^R22|ACK-R22-20190122150305||2.5||||||8859/1";
+        ack += "MSA|AA|" + messageID;
+
+    return ack;    
+  }
+
 
   // Method used to connect to the Roche Machine
   connect() {
     let that = this;
 
     if (that.settings.rocheConnectionType == "tcpserver") {
-      let server = that.net.createServer(function (socket) {
+      this.server = that.net.createServer(function (socket) {
         // confirm socket connection from client
         console.log((new Date()) + 'A client connected to server...');
+        that.connectionStatus(true);
         socket.on('data', function (data) {
 
-          that.handleTCPServerResponse(server, data, 'hl7');
+          that.handleTCPServerResponse(this.server, data, 'hl7');
+          
 
         });
       }).listen(this.settings.rochePort, this.settings.rocheHost);
+
+
+      this.server.on('error', function (e) {
+        if (e.code == 'EADDRINUSE') {
+          console.log('Address in use, retrying...');
+          setTimeout(function () {
+            this.server.close();
+            this.server.listen(this.settings.rochePort, this.settings.rocheHost);
+          }, 1000);
+        }
+      });      
 
     } else {
 
@@ -92,13 +118,13 @@ export class CobasService {
       that.socketClient = new Socket();
 
 
-      console.log('Roche Cobas - Trying to connect');
+      console.log('Roche Cobas - Trying to connect as client');
       this.connectionTries++; // incrementing the connection tries
 
       that.socketClient.connect(that.connectopts, function () {
         this.connectionTries = 0; // resetting connection tries to 0
         that.connectionStatus(true);
-        console.log('Roche Cobas - Connected');
+        console.log('Roche Cobas - Connected as client');
       });
 
       that.socketClient.on('data', function (data) {
@@ -109,7 +135,7 @@ export class CobasService {
       that.socketClient.on('close', function () {
         that.socketClient.destroy();
         that.connectionStatus(false);
-        console.log('Roche Cobas - Disconnected');
+        console.log('Roche Cobas - client Disconnected');
       });
 
       that.socketClient.on('error', (e) => {
@@ -119,12 +145,12 @@ export class CobasService {
           // if we have already tried and failed multiple times, we can stop trying
           if (this.connectionTries <= 2) {
             setTimeout(() => {
-              console.log('Roche Cobas - Trying to connect');
+              console.log('Roche Cobas - Trying to connect as client');
               this.connectionTries++; // incrementing the connection tries
               that.socketClient.connect(that.connectopts, function () {
                 this.connectionTries = 0; // resetting connection tries to 0
                 that.connectionStatus(true);
-                console.log('Roche Cobas - Connected again !');
+                console.log('Roche Cobas - Connected as client again !');
               });
             }, 5000);
           } else {
@@ -145,13 +171,23 @@ export class CobasService {
     if (this.socketClient) {
       this.socketClient.destroy();
       this.connectionStatus(false);
+      this.connect();
     }
-    this.connect();
+    if (this.server) {
+      this.server.destroy();
+      this.connectionStatus(false);
+      this.connect();
+    }    
+    
   }
 
   closeConnection() {
     if (this.socketClient) {
       this.socketClient.destroy();
+      this.connectionStatus(false);
+    }
+    if (this.server) {
+      this.server.destroy();
       this.connectionStatus(false);
     }
   }
@@ -181,6 +217,8 @@ export class CobasService {
 
     msgg = msgg.replace(/[\x0b\x1a]/g, '');
     var message = this.hl7parser.create(msgg);
+    var msgID = message.get("MSH.7").toString();
+    this.hl7ACK(msgID);
     console.log(message);
 
     console.log("==== ENDING ====");
