@@ -221,9 +221,11 @@ export class CobasService {
 
     console.log("==== STARTING ====");
 
-    msgg = msgg.replace(/[\x0b\x1a]/g, '');
-    var message = this.hl7parser.create(msgg);
-    var msgID = message.get("MSH.7").toString();
+    //msgg = msgg.replace(/[\x0b\x1a]/g, '');
+    //var message = this.hl7parser.create(msgg);
+    var message = this.hl7parser.create("MSH|^~\&|||||20121031232617||ADT^A04|20381|P|2.3||||NE\rEVN|A04|20121031162617||01\rPID|1|16194|16194||Jones^Bob");
+
+    var msgID = message.get("MSH.6").toString();
     this.hl7ACK(msgID);
     console.log(message);
 
