@@ -96,6 +96,7 @@ export class CobasService {
         // confirm socket connection from client
         console.log((new Date()) + 'A client connected to server...');
         that.connectionStatus(true);
+        that.socketClient = socket;
         socket.on('data', function (data) {
 
           that.handleTCPServerResponse(this.server, data, 'hl7');
@@ -224,8 +225,8 @@ export class CobasService {
     msgg = msgg.replace(/(\r\r)/gm, '\\r');
     
     var message = this.hl7parser.create(msgg);
-    var msgID = message.get("MSH.7").toString();
-    this.hl7ACK(msgID);
+    var msgID = message.get("MSH.10").toString();
+    this.socketClient.write(this.hl7ACK(msgID));
     console.log(message);
 
     console.log("==== ENDING ====");
