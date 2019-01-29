@@ -42,7 +42,7 @@ export class CobasService {
   public server = null;
 
   public connectionTries = 0;
-  public hl7parser = require("hl7parser");  
+  public hl7parser = require("hl7parser");
 
 
   constructor() {
@@ -71,24 +71,25 @@ export class CobasService {
     this.connectionTriesSubject.next(stopTrying);
   }
 
-  hl7ACK(messageID){
+  hl7ACK(messageID) {
 
-    if(!messageID){
+    if (!messageID || messageID == "") {
       messageID = Math.random();
     }
 
     var moment = require('moment');
     var date = moment(new Date()).format('YYYYMMDDhms');;
 
-    let ack = "MSH|^~\&|LIS||COBAS6800/8800||"+date+"||ACK^R22|ACK-R22-"+date+"||2.5||||||8859/1";
-        ack += "MSA|AA|" + messageID;
+    let ack = String.fromCharCode(11) + "MSH|^~\&|LIS||COBAS6800/8800||" + date + "||ACK^R22|ACK-R22-" + date + "||2.5||||||8859/1" + String.fromCharCode(13);
+    ack += "MSA|AA|" + messageID + String.fromCharCode(13) + String.fromCharCode(28) + String.fromCharCode(13);
 
-    return ack;    
+    return ack;
   }
 
 
   // Method used to connect to the Roche Machine
   connect() {
+
     let that = this;
 
     if (that.settings.rocheConnectionType == "tcpserver") {
@@ -100,7 +101,7 @@ export class CobasService {
         socket.on('data', function (data) {
 
           that.handleTCPServerResponse(this.server, data, 'hl7');
-          
+
 
         });
       }).listen(this.settings.rochePort, this.settings.rocheHost);
@@ -113,10 +114,10 @@ export class CobasService {
             this.server.close();
             this.server.listen(this.settings.rochePort, this.settings.rocheHost);
           }, 1000);
-        }else{
+        } else {
           console.log('Some error ' + e.code);
         }
-      });      
+      });
 
     } else {
 
@@ -181,9 +182,9 @@ export class CobasService {
     if (this.server) {
       this.server.destroy();
       this.connectionStatus(false);
-    }    
+    }
     this.connect();
-    
+
   }
 
   closeConnection() {
@@ -220,19 +221,59 @@ export class CobasService {
 
     console.log("==== STARTING ====");
 
+
     msgg = msgg.replace(/[\x0b\x1c]/g, '');
-    msgg = msgg.replace(/(\r\n|\n|\r)/gm, '\\r');
-    msgg = msgg.replace(/(\r\r)/gm, '\\r');
-    
+    msgg = msgg.trim();
+    msgg = msgg.replace(/[\r\n\x0B\x0C\u0085\u2028\u2029]+/gm, "\r");
+
     var message = this.hl7parser.create(msgg);
     var msgID = message.get("MSH.10").toString();
     this.socketClient.write(this.hl7ACK(msgID));
-    console.log(message);
+    console.log(message.get('OBX').get(1).toString());
 
     console.log("==== ENDING ====");
 
     var order: any = {};
-    let r: any = {};    
+    var result = null;
+    var resultOutcome = message.get('OBX').get(2).get('OBX.5.1').toString();
+
+
+
+    order.orderID = message.get('SPM.2').toString();
+    order.testID = message.get('SPM.2').toString();
+    order.testType = 'HIVVL';
+
+    if (resultOutcome == 'Titer') {
+      order.testUnit = message.get('OBX').get(0).get('OBX.6.1').toString();
+      order.results = message.get('OBX').get(0).get('OBX.5.1').toString();
+    } else if (resultOutcome == '< Titer min') {
+      order.testUnit = '';
+      order.results = '< Titer min';
+    } else if (resultOutcome == '> Titer max') {
+      order.testUnit = '';
+      order.results = '> Titer max';
+    } else if (resultOutcome == 'Target Not Detected') {
+      order.testUnit = '';
+      order.results = 'Target Not Detected';
+    }
+
+
+    order.testedBy = message.get('OBX').get(0).get('OBX.16').toString();
+    order.resultStatus = 1;
+    order.analysedDateTime = this.formatRawDate(message.get('OBX').get(0).get('OBX.19').toString());
+    order.specimenDateTime = this.formatRawDate(message.get('OBX').get(0).get('OBX.19').toString());
+    order.authorisedDateTime = this.formatRawDate(message.get('OBX').get(0).get('OBX.19').toString());
+    order.resultAcceptedDateTime = this.formatRawDate(message.get('OBX').get(0).get('OBX.19').toString());
+    order.testLocation = this.settings.labName;
+    order.machineUsed = this.settings.rocheMachine;
+
+    if (order.results) {
+      this.orderModel.addOrderTest(order, (res) => {
+        console.log("Result Successfully Added : " + order.orderID);
+      }, (err) => {
+        console.log("cobas add result : ", JSON.stringify(err), "error");
+      });
+    }
 
     // order.orderID = r.sampleID;
     // order.testID = r.sampleID;
@@ -292,7 +333,7 @@ export class CobasService {
 
   formatRawDate(rawDate) {
     let d = rawDate;
-    if (rawDate != null) {
+    if (!rawDate) {
       let len = rawDate.length;
 
       let year = rawDate.substring(0, 4);
