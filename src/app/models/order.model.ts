@@ -24,9 +24,9 @@ export class OrderModel extends GeneralModel {
     }
 
     addResults(data, success, errorf) {
-        let t = "UPDATE orders SET testedBy=?,testUnit=?,results=?,analysedDateTime=?,specimenDateTime=?";
-        t += ",resultAcceptedDateTime=?,machineUsed=?,testLocation=?,resultStatus=? ";
-        t += " WHERE testID=? AND resultStatus<1";
+        let t = "UPDATE orders SET tested_by = ?,test_unit = ?,results = ?,analysed_date_time = ?,specimen_date_time = ?";
+        t += ",result_accepted_date_time = ?,machine_used = ?,test_location = ?,result_status = ? ";
+        t += " WHERE test_id = ? AND result_status < 1";
         this.exec(t, data, success, errorf);
     }
 

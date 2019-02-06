@@ -234,61 +234,66 @@ export class CobasService {
     console.log("==== ENDING ====");
 
     var order: any = {};
-    var result = null;
+    //var result = null;
     var resultOutcome = message.get('OBX').get(2).get('OBX.5.1').toString();
 
-
-
-    order.orderID = message.get('SPM.2').toString();
-    order.testID = message.get('SPM.2').toString();
-    order.testType = 'HIVVL';
+    order.order_id = message.get('SPM.2').toString();
+    order.test_id = message.get('SPM.2').toString();
+    order.test_type = 'HIVVL';
 
     if (resultOutcome == 'Titer') {
-      order.testUnit = message.get('OBX').get(0).get('OBX.6.1').toString();
+      order.test_unit = message.get('OBX').get(0).get('OBX.6.1').toString();
       order.results = message.get('OBX').get(0).get('OBX.5.1').toString();
     } else if (resultOutcome == '< Titer min') {
-      order.testUnit = '';
+      order.test_unit = '';
       order.results = '< Titer min';
     } else if (resultOutcome == '> Titer max') {
-      order.testUnit = '';
+      order.test_unit = '';
       order.results = '> Titer max';
     } else if (resultOutcome == 'Target Not Detected') {
-      order.testUnit = '';
+      order.test_unit = '';
       order.results = 'Target Not Detected';
+    } else if (resultOutcome == 'Invalid') {
+      order.test_unit = '';
+      order.results = 'Invalid';
+    } else {
+      order.test_unit = message.get('OBX').get(0).get('OBX.6.1').toString();
+      order.results = resultOutcome;
     }
 
-
-    order.testedBy = message.get('OBX').get(0).get('OBX.16').toString();
-    order.resultStatus = 1;
-    order.analysedDateTime = this.formatRawDate(message.get('OBX').get(0).get('OBX.19').toString());
-    order.specimenDateTime = this.formatRawDate(message.get('OBX').get(0).get('OBX.19').toString());
-    order.authorisedDateTime = this.formatRawDate(message.get('OBX').get(0).get('OBX.19').toString());
-    order.resultAcceptedDateTime = this.formatRawDate(message.get('OBX').get(0).get('OBX.19').toString());
-    order.testLocation = this.settings.labName;
-    order.machineUsed = this.settings.rocheMachine;
+    order.tested_by = message.get('OBX').get(0).get('OBX.16').toString();
+    order.result_status = 1;
+    order.analysed_date_time = this.formatRawDate(message.get('OBX').get(0).get('OBX.19').toString());
+    order.specimen_date_time = this.formatRawDate(message.get('OBX').get(0).get('OBX.19').toString());
+    order.authorised_date_time = this.formatRawDate(message.get('OBX').get(0).get('OBX.19').toString());
+    order.result_accepted_date_time = this.formatRawDate(message.get('OBX').get(0).get('OBX.19').toString());
+    order.test_location = this.settings.labName;
+    order.machine_used = this.settings.rocheMachine;
 
     if (order.results) {
       this.orderModel.addOrderTest(order, (res) => {
-        console.log("Result Successfully Added : " + order.orderID);
+        console.log("Result Successfully Added : " + order.order_id);
       }, (err) => {
         console.log("cobas add result : ", JSON.stringify(err), "error");
       });
+    }else{
+      console.log("Unable to store data into the database");
     }
 
-    // order.orderID = r.sampleID;
-    // order.testID = r.sampleID;
-    // order.testType = r.testName;
-    // order.testUnit = r.unit;
+    // order.order_id = r.sampleID;
+    // order.test_id = r.sampleID;
+    // order.test_type = r.testName;
+    // order.test_unit = r.unit;
     // //order.createdDate = '';
     // order.results = r.result;
-    // order.testedBy = r.operator;
-    // order.resultStatus = 1;
-    // order.analysedDateTime = r.timestamp;
-    // order.specimenDateTime = r.specimenDate;
-    // order.authorisedDateTime = r.timestamp;
-    // order.resultAcceptedDateTime = r.timestamp;
-    // order.testLocation = this.settings.labName;
-    // order.machineUsed = this.settings.rocheMachine;    
+    // order.tested_by = r.operator;
+    // order.result_status = 1;
+    // order.analysed_date_time = r.timestamp;
+    // order.specimen_date_time = r.specimenDate;
+    // order.authorised_date_time = r.timestamp;
+    // order.result_accepted_date_time = r.timestamp;
+    // order.test_location = this.settings.labName;
+    // order.machine_used = this.settings.rocheMachine;    
   }
 
   handleTCPServerResponse(server, data, format) {
@@ -413,20 +418,20 @@ export class CobasService {
       orderlog.push(r.test);
       orderlog.push(r.lotNo);
 
-      order.orderID = r.sampleID;
-      order.testID = r.sampleID;
-      order.testType = r.testName;
-      order.testUnit = r.unit;
+      order.order_id = r.sampleID;
+      order.test_id = r.sampleID;
+      order.test_type = r.testName;
+      order.test_unit = r.unit;
       //order.createdDate = '';
       order.results = r.result;
-      order.testedBy = r.operator;
-      order.resultStatus = 1;
-      order.analysedDateTime = r.timestamp;
-      order.specimenDateTime = r.specimenDate;
-      order.authorisedDateTime = r.timestamp;
-      order.resultAcceptedDateTime = r.timestamp;
-      order.testLocation = this.settings.labName;
-      order.machineUsed = this.settings.rocheMachine;
+      order.tested_by = r.operator;
+      order.result_status = 1;
+      order.analysed_date_time = r.timestamp;
+      order.specimen_date_time = r.specimenDate;
+      order.authorised_date_time = r.timestamp;
+      order.result_accepted_date_time = r.timestamp;
+      order.test_location = this.settings.labName;
+      order.machine_used = this.settings.rocheMachine;
 
       if (order.results) {
         console.log("PROCCEES FEEDcobas", JSON.stringify(order));
@@ -491,20 +496,20 @@ export class CobasService {
       dd.acceptDate = acceptDate;
       dd.operator = p2[8];
 
-      order.orderID = dd.sampleID;
-      order.testID = dd.sampleID;
-      order.testType = dd.testName;
-      order.testUnit = dd.unit;
+      order.order_id = dd.sampleID;
+      order.test_id = dd.sampleID;
+      order.test_type = dd.testName;
+      order.test_unit = dd.unit;
       //order.createdDate = '';
       order.results = dd.result;
-      order.testedBy = dd.operator;
-      order.resultStatus = 1;
-      order.analysedDateTime = analysDate;
-      order.specimenDateTime = dd.specimenDate;
-      order.authorisedDateTime = acceptDate;
-      order.resultAcceptedDateTime = acceptDate;
-      order.testLocation = this.settings.labName;
-      order.machineUsed = this.settings.rocheMachine;
+      order.tested_by = dd.operator;
+      order.result_status = 1;
+      order.analysed_date_time = analysDate;
+      order.specimen_date_time = dd.specimenDate;
+      order.authorised_date_time = acceptDate;
+      order.result_accepted_date_time = acceptDate;
+      order.test_location = this.settings.labName;
+      order.machine_used = this.settings.rocheMachine;
 
       orderlog.push(dd.operator);
       orderlog.push(dd.unit);
@@ -523,7 +528,7 @@ export class CobasService {
       if (order.results) {
         console.log("Cobas48_results ", JSON.stringify(order));
         this.orderModel.addOrderTest(order, (res) => {
-          console.log("cobas48 processAddResult: ", "Result Succesfully added :" + order.orderID);
+          console.log("cobas48 processAddResult: ", "Result Succesfully added :" + order.order_id);
         }, (err) => {
           console.log("cobas48 processAddResult: ", JSON.stringify(err), "error");
           //console.log("cobas48 processAddResult: ", JSON.stringify(order), "error");
