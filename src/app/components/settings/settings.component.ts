@@ -30,6 +30,7 @@ export class SettingsComponent implements OnInit {
       this.settings.rochePort = appSettings.rochePort;
       this.settings.rocheHost = appSettings.rocheHost;
       this.settings.rocheConnectionType = appSettings.rocheConnectionType;
+      this.settings.rocheProtocol = appSettings.rocheProtocol;
 
       this.settings.mysqlHost = appSettings.mysqlHost;
       this.settings.mysqlPort = appSettings.mysqlPort;
@@ -58,6 +59,7 @@ export class SettingsComponent implements OnInit {
       rocheMachine: this.settings.rocheMachine,
       rocheHost: this.settings.rocheHost,
       rocheConnectionType: this.settings.rocheConnectionType,
+      rocheProtocol: this.settings.rocheProtocol,
       mysqlHost: this.settings.mysqlHost,
       mysqlPort: this.settings.mysqlPort,
       mysqlDb: this.settings.mysqlDb,
@@ -97,7 +99,7 @@ export class SettingsComponent implements OnInit {
       } else {
         const { dialog } = require('electron').remote;
         dialog.showMessageBox({
-          message: "MySQL Connected successfully. Please click on update to save these settings.",
+          message: "MySQL Connected successfully. Please click on SAVE SETTINGS to update these settings.",
           buttons: ["OK"]
         });
       }

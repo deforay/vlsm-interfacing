@@ -21,7 +21,7 @@ export class DashboardComponent implements OnInit {
     const store = new Store();
 
     let appSettings = store.get('appSettings');
-    if (undefined == appSettings || !appSettings.rochePort || !appSettings.rocheHost) {
+    if (undefined == appSettings || !appSettings.rochePort || !appSettings.rocheProtocol || !appSettings.rocheHost) {
       this.router.navigate(['/settings']);
     }
     //this.cobasService.connect();

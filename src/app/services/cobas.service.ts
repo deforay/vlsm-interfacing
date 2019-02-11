@@ -47,15 +47,9 @@ export class CobasService {
 
   constructor() {
 
-    const Store = require('electron-store');
-    const store = new Store();
 
-    this.settings = store.get('appSettings');
 
-    this.connectopts = {
-      port: this.settings.rochePort,
-      host: this.settings.rocheHost
-    }
+    
 
     this.orderModel = new OrderModel;
 
@@ -92,6 +86,15 @@ export class CobasService {
 
     let that = this;
 
+    const Store = require('electron-store');
+    const store = new Store();    
+    this.settings = store.get('appSettings');
+
+    this.connectopts = {
+      port: this.settings.rochePort,
+      host: this.settings.rocheHost
+    }    
+
     if (that.settings.rocheConnectionType == "tcpserver") {
       this.server = that.net.createServer(function (socket) {
         // confirm socket connection from client
@@ -100,7 +103,7 @@ export class CobasService {
         that.socketClient = socket;
         socket.on('data', function (data) {
 
-          that.handleTCPServerResponse(this.server, data, 'hl7');
+          that.handleTCPResponse(data);
 
 
         });
@@ -136,7 +139,7 @@ export class CobasService {
 
       that.socketClient.on('data', function (data) {
         that.connectionStatus(true);
-        that.handleTCPClientResponse(that.socketClient, data);
+        that.handleTCPResponse(data);
       });
 
       that.socketClient.on('close', function () {
@@ -209,7 +212,7 @@ export class CobasService {
   }
 
 
-  parseHl7Result(data) {
+  parseHl7Data(data) {
     var d = data.toString("hex");
     var msgg = this.hex2ascii(d);
 
@@ -296,44 +299,45 @@ export class CobasService {
     // order.machine_used = this.settings.rocheMachine;    
   }
 
-  handleTCPServerResponse(server, data, format) {
-    if (format === 'hl7') {
-      this.parseHl7Result(data);
+  handleTCPResponse(data) {
+    
+    if (this.settings.rocheProtocol === 'hl7') {
+
+      this.parseHl7Data(data);
+
+    } else if (this.settings.rocheProtocol === 'astm') {
+
+      
+      let that = this;
+      var d = data.toString("hex");
+  
+      if (d === "04") {
+        that.socketClient.write(this.ACK);
+        console.log("Cobas EOT", this.strData);
+        // if (this.settings.rocheConnectionType == 'tcpclient') {
+        //   this.processClientData(this.strData);
+        // } else {
+        //   this.processServerData(this.strData);
+        // }
+        that.processASTMData(that.strData);
+        that.strData = "";
+      } else if (d == "21") {
+        that.socketClient.write(that.ACK);
+        console.log('NAK Received');
+      } else {
+        let text = that.hex2ascii(d);
+  
+        if (d === "02") text = "<STX>";
+        if (d === "17") text = "<ETB>";
+        if (d === "0D") text = "<CR>";
+        if (d === "0A") text = "<LF>";
+        if (d === "03") text = "<ETX>";
+        if (d == "5E") text = "::";
+        that.strData += text;
+        console.log("Cobas_ACK_PPROCESS", that.strData);
+        that.socketClient.write(that.ACK);
+      }      
     }
-  }
-
-
-  handleTCPClientResponse(client, data) {
-
-    var d = data.toString("hex");
-
-    if (d === "04") {
-      client.write(this.ACK);
-      console.log("Cobas EOT", this.strData);
-      // if (this.settings.rocheConnectionType == 'tcpclient') {
-      //   this.processClientData(this.strData);
-      // } else {
-      //   this.processServerData(this.strData);
-      // }
-      this.processClientData(this.strData);
-      this.strData = "";
-    } else if (d == "21") {
-      client.write(this.ACK);
-      console.log('NAK Received');
-    } else {
-      let text = this.hex2ascii(d);
-
-      if (d === "02") text = "<STX>";
-      if (d === "17") text = "<ETB>";
-      if (d === "0D") text = "<CR>";
-      if (d === "0A") text = "<LF>";
-      if (d === "03") text = "<ETX>";
-      if (d == "5E") text = "::";
-      this.strData += text;
-      console.log("Cobas_ACK_PPROCESS", this.strData);
-      client.write(this.ACK);
-    }
-
   }
 
   formatRawDate(rawDate) {
@@ -358,7 +362,7 @@ export class CobasService {
     return d;
   }
 
-  processClientData(t) {
+  processASTMData(t) {
     //  console.log(t);
     var order: any = {};
     let sp = t.split("R|1|");
@@ -368,13 +372,14 @@ export class CobasService {
     if (sp[1]) {
       var sd = "1|" + sp[1];
       var ss = sp[0];
+      ss = ss.replace(/[\x05\x02\x03]/g, '');
       console.log("SS " + ss);
-      ss = ss.replace(/\u001707\r\n\u000221/g, "")
-        .replace(/\r\n/g, "").replace(/\rC/g, "")
-        .replace(/\u001767\u0002237/g, "")
-        .replace(/\u0003BD/g, "").replace(/\u000309/g, "");
-      sd = sd.replace(/\u001707\r\n\u000221/g, "").replace(/\r\n/g, "").replace("\rC", "").replace(/\u001767\u0002237/g, "")
-        .replace(/\u0003BD/g, "").replace(/\u000309/g, "");
+      // ss = ss.replace(/\u001707\r\n\u000221/g, "")
+      //   .replace(/\r\n/g, "").replace(/\rC/g, "")
+      //   .replace(/\u001767\u0002237/g, "")
+      //   .replace(/\u0003BD/g, "").replace(/\u000309/g, "");
+      // sd = sd.replace(/\u001707\r\n\u000221/g, "").replace(/\r\n/g, "").replace("\rC", "").replace(/\u001767\u0002237/g, "")
+      //   .replace(/\u0003BD/g, "").replace(/\u000309/g, "");
       s = sd.split("|");
       u = ss.split("|");
       // console.log(s);
@@ -400,6 +405,7 @@ export class CobasService {
         if (r.timestamp2.length === 14) r.timestamp = r.timestamp2;
       }
       r.timestamp = this.formatRawDate(r.timestamp);
+      r.testName = (r.test) ? r.test.replace("^^^", "") : r.test;
       // if(s[l-2]) r.sampleID=s[l-2];
       if (s[12]) r.machine = s[12];
       if (s[15]) r.status = s[15];
@@ -423,7 +429,7 @@ export class CobasService {
       order.test_type = r.testName;
       order.test_unit = r.unit;
       //order.createdDate = '';
-      order.results = r.result;
+      order.results = r.results;
       order.tested_by = r.operator;
       order.result_status = 1;
       order.analysed_date_time = r.timestamp;
@@ -435,11 +441,11 @@ export class CobasService {
 
       if (order.results) {
         console.log("PROCCEES FEEDcobas", JSON.stringify(order));
-        this.orderModel.addOrderTestLog(orderlog, (res) => {
-          console.log("cobas processAddResult Log ", "Result Log Succesfully Added : " + r.sampleID);
-        }, (err) => {
-          console.log("cobas processAddResult Log ", JSON.stringify(err), "error");
-        });
+        // this.orderModel.addOrderTestLog(orderlog, (res) => {
+        //   console.log("cobas processAddResult Log ", "Result Log Succesfully Added : " + r.sampleID);
+        // }, (err) => {
+        //   console.log("cobas processAddResult Log ", JSON.stringify(err), "error");
+        // });
         this.orderModel.addOrderTest(order, (res) => {
           console.log("cobas processAddResult", "Result Successfully Added : " + r.sampleID);
         }, (err) => {
@@ -453,102 +459,98 @@ export class CobasService {
 
 
 
-  processServerData(t) {
-    var sp = t.split("O|1|");
-    var dd: any = {};
-    var order: any = {};
-    var out = [], resIn = [], resLog = [];
-    var speDate = "", analysDate = "", acceptDate = "";
-    for (var i = 0; i < sp.length; i++) {
-      var v = [], orderlog = [];
-      var p1 = [], p2 = [], sa = [];
-      var spp = sp[i].split("R|1|");
-      if (spp[0])
-        p1 = spp[0].split("|");
-      if (spp[1])
-        p2 = spp[1].split("|");
-      //get sample ID
-      if (p1[0])
-        sa = p1[0].split("^");
-      if (sa[0])
-        dd.sampleID = sa[0];
-      if (p1[5] && p1[5].length == 14) speDate = this.formatRawDate(p1[5]);
-      if (p2[9] && p2[9].length == 14) analysDate = this.formatRawDate(p2[9]);
-      if (p2[10] && p2[10].length == 14) acceptDate = this.formatRawDate(p2[10]);
-      dd.specimenDate = speDate;
-      dd.testName = (p2[0]) ? p2[0].replace("^^^", "") : p2[0];
-      var result0 = (p2[1]) ? p2[1].replace("cp/mL", "") : p2[1];
-      var result1 = parseFloat(result0);
-      var result = (result1) ? result1 : result0;
-      var rres = result + "";
-      if (rres && rres.toLowerCase().indexOf("target") != -1) result = "Target Not Detected";
-      if (rres && rres.toLowerCase().indexOf("detected") != -1) result = "Target Not Detected";
+  // processServerData(t) {
+  //   var sp = t.split("O|1|");
+  //   var dd: any = {};
+  //   var order: any = {};
+  //   var out = [], resIn = [], resLog = [];
+  //   var speDate = "", analysDate = "", acceptDate = "";
+  //   for (var i = 0; i < sp.length; i++) {
+  //     var v = [], orderlog = [];
+  //     var p1 = [], p2 = [], sa = [];
+  //     var spp = sp[i].split("R|1|");
+  //     if (spp[0])
+  //       p1 = spp[0].split("|");
+  //     if (spp[1])
+  //       p2 = spp[1].split("|");
+  //     //get sample ID
+  //     if (p1[0])
+  //       sa = p1[0].split("^");
+  //     if (sa[0])
+  //       dd.sampleID = sa[0];
+  //     if (p1[5] && p1[5].length == 14) speDate = this.formatRawDate(p1[5]);
+  //     if (p2[9] && p2[9].length == 14) analysDate = this.formatRawDate(p2[9]);
+  //     if (p2[10] && p2[10].length == 14) acceptDate = this.formatRawDate(p2[10]);
+  //     dd.specimenDate = speDate;
+  //     dd.testName = (p2[0]) ? p2[0].replace("^^^", "") : p2[0];
+  //     var result0 = (p2[1]) ? p2[1].replace("cp/mL", "") : p2[1];
+  //     var result1 = parseFloat(result0);
+  //     var result = (result1) ? result1 : result0;
+  //     var rres = result + "";
+  //     if (rres && rres.toLowerCase().indexOf("target") != -1) result = "Target Not Detected";
+  //     if (rres && rres.toLowerCase().indexOf("detected") != -1) result = "Target Not Detected";
 
-      if (rres && rres.toLowerCase().indexOf("titer") != -1) {
-        if (rres && (rres.toLowerCase().indexOf("min") != -1 || rres.toLowerCase().indexOf("<") != -1)) result = "<20";
-        if (rres && (rres.toLowerCase().indexOf("max") != -1 || rres.toLowerCase().indexOf(">") != -1)) result = ">10000000";
-      } //result="<20";
+  //     if (rres && rres.toLowerCase().indexOf("titer") != -1) {
+  //       if (rres && (rres.toLowerCase().indexOf("min") != -1 || rres.toLowerCase().indexOf("<") != -1)) result = "<20";
+  //       if (rres && (rres.toLowerCase().indexOf("max") != -1 || rres.toLowerCase().indexOf(">") != -1)) result = ">10000000";
+  //     } //result="<20";
 
-      dd.result = result;
-      dd.unit = p2[2];
-      dd.flag = p2[6];
-      dd.analysDate = analysDate;
-      dd.acceptDate = acceptDate;
-      dd.operator = p2[8];
+  //     dd.result = result;
+  //     dd.unit = p2[2];
+  //     dd.flag = p2[6];
+  //     dd.analysDate = analysDate;
+  //     dd.acceptDate = acceptDate;
+  //     dd.operator = p2[8];
 
-      order.order_id = dd.sampleID;
-      order.test_id = dd.sampleID;
-      order.test_type = dd.testName;
-      order.test_unit = dd.unit;
-      //order.createdDate = '';
-      order.results = dd.result;
-      order.tested_by = dd.operator;
-      order.result_status = 1;
-      order.analysed_date_time = analysDate;
-      order.specimen_date_time = dd.specimenDate;
-      order.authorised_date_time = acceptDate;
-      order.result_accepted_date_time = acceptDate;
-      order.test_location = this.settings.labName;
-      order.machine_used = this.settings.rocheMachine;
+  //     order.order_id = dd.sampleID;
+  //     order.test_id = dd.sampleID;
+  //     order.test_type = dd.testName;
+  //     order.test_unit = dd.unit;
+  //     //order.createdDate = '';
+  //     order.results = dd.result;
+  //     order.tested_by = dd.operator;
+  //     order.result_status = 1;
+  //     order.analysed_date_time = analysDate;
+  //     order.specimen_date_time = dd.specimenDate;
+  //     order.authorised_date_time = acceptDate;
+  //     order.result_accepted_date_time = acceptDate;
+  //     order.test_location = this.settings.labName;
+  //     order.machine_used = this.settings.rocheMachine;
 
-      orderlog.push(dd.operator);
-      orderlog.push(dd.unit);
-      orderlog.push(dd.result);
-      orderlog.push(analysDate);
-      orderlog.push(dd.specimenDate);
-      orderlog.push(acceptDate);
-      orderlog.push(this.settings.rocheMachine);
-      orderlog.push(this.settings.labName);
-      orderlog.push(0);
-      orderlog.push(dd.sampleID);
-      orderlog.push("HIVVL");
-      orderlog.push("");
-
-
-      if (order.results) {
-        console.log("Cobas48_results ", JSON.stringify(order));
-        this.orderModel.addOrderTest(order, (res) => {
-          console.log("cobas48 processAddResult: ", "Result Succesfully added :" + order.order_id);
-        }, (err) => {
-          console.log("cobas48 processAddResult: ", JSON.stringify(err), "error");
-          //console.log("cobas48 processAddResult: ", JSON.stringify(order), "error");
-        });
-
-        this.orderModel.addOrderTestLog(orderlog, (res) => {
-          console.log("Cobas48_resultLog ", JSON.stringify(orderlog));
-          console.log("cobas48 processAddResultLog: ", "ResultLog Successful added: " + dd.sampleID);
-        }, (err) => {
-
-          console.log("cobas48 processAddResultLog: ", JSON.stringify(err), "error");
-          //console.log("cobas48 processAddResultLog: ", JSON.stringify(orderlog), "error");
-        });
-      }
-    }
-  }
+  //     orderlog.push(dd.operator);
+  //     orderlog.push(dd.unit);
+  //     orderlog.push(dd.result);
+  //     orderlog.push(analysDate);
+  //     orderlog.push(dd.specimenDate);
+  //     orderlog.push(acceptDate);
+  //     orderlog.push(this.settings.rocheMachine);
+  //     orderlog.push(this.settings.labName);
+  //     orderlog.push(0);
+  //     orderlog.push(dd.sampleID);
+  //     orderlog.push("HIVVL");
+  //     orderlog.push("");
 
 
-  insertData(data) {
+  //     if (order.results) {
+  //       console.log("Cobas48_results ", JSON.stringify(order));
+  //       this.orderModel.addOrderTest(order, (res) => {
+  //         console.log("cobas48 processAddResult: ", "Result Succesfully added :" + order.order_id);
+  //       }, (err) => {
+  //         console.log("cobas48 processAddResult: ", JSON.stringify(err), "error");
+  //         //console.log("cobas48 processAddResult: ", JSON.stringify(order), "error");
+  //       });
 
-  }
+  //       this.orderModel.addOrderTestLog(orderlog, (res) => {
+  //         console.log("Cobas48_resultLog ", JSON.stringify(orderlog));
+  //         console.log("cobas48 processAddResultLog: ", "ResultLog Successful added: " + dd.sampleID);
+  //       }, (err) => {
+
+  //         console.log("cobas48 processAddResultLog: ", JSON.stringify(err), "error");
+  //         //console.log("cobas48 processAddResultLog: ", JSON.stringify(orderlog), "error");
+  //       });
+  //     }
+  //   }
+  // }
+
 
 }
