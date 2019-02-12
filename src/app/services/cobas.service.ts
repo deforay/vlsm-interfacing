@@ -96,6 +96,7 @@ export class CobasService {
     }    
 
     if (that.settings.rocheConnectionType == "tcpserver") {
+      console.log('Trying to create a server connection');
       this.server = that.net.createServer(function (socket) {
         // confirm socket connection from client
         console.log((new Date()) + 'A client has connected to this server');
@@ -178,24 +179,12 @@ export class CobasService {
   }
 
   reconnect() {
-    if (this.socketClient) {
-      this.socketClient.destroy();
-      this.connectionStatus(false);
-    }
-    if (this.server) {
-      this.server.destroy();
-      this.connectionStatus(false);
-    }
+    this.closeConnection();
     this.connect();
-
   }
 
   closeConnection() {
     if (this.socketClient) {
-      this.socketClient.destroy();
-      this.connectionStatus(false);
-    }
-    if (this.server) {
       this.socketClient.destroy();
       this.connectionStatus(false);
     }
