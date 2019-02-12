@@ -185,6 +185,10 @@ export class CobasService {
   }
 
   closeConnection() {
+    const Store = require('electron-store');
+    const store = new Store();    
+    this.settings = store.get('appSettings');
+        
     if (this.settings.rocheConnectionType == "tcpclient") {
       this.socketClient.destroy();
       this.connectionStatus(false);
