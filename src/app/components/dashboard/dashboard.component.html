@@ -24,6 +24,10 @@
           <span>{{reconnectButtonText}}</span>
         </button>
         &nbsp;&nbsp;
+        <button *ngIf="connectionInProcess" (click)="close()" class="btn btn-danger">
+          <span>Cancel</span>
+        </button>   
+        &nbsp;&nbsp;     
         <button *ngIf="!connectionInProcess" routerLink="/settings" class="btn btn-primary">
           <span>Settings</span>
         </button>
