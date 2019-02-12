@@ -90,14 +90,10 @@ export class CobasService {
     const store = new Store();    
     this.settings = store.get('appSettings');
 
-    this.connectopts = {
-      port: this.settings.rochePort,
-      host: this.settings.rocheHost
-    }    
 
     if (that.settings.rocheConnectionType == "tcpserver") {
       console.log('Trying to create a server connection');
-      this.server = that.net.createServer(function (socket) {
+      that.server = that.net.createServer(function (socket) {
         // confirm socket connection from client
         console.log((new Date()) + 'A client has connected to this server');
         that.connectionStatus(true);
@@ -108,7 +104,7 @@ export class CobasService {
 
 
         });
-      }).listen(this.settings.rochePort, this.settings.rocheHost);
+      }).listen(that.settings.rochePort, that.settings.rocheHost);
 
 
       this.server.on('error', function (e) {
@@ -127,6 +123,11 @@ export class CobasService {
 
 
       that.socketClient = new Socket();
+      this.connectopts = {
+        port: this.settings.rochePort,
+        host: this.settings.rocheHost
+      }    
+  
 
 
       console.log('Roche Cobas - Trying to connect as client');
@@ -184,9 +185,13 @@ export class CobasService {
   }
 
   closeConnection() {
-    if (this.socketClient) {
+    if (this.settings.rocheConnectionType == "tcpclient") {
       this.socketClient.destroy();
       this.connectionStatus(false);
+      console.log('Disconnected');
+    } else {
+      this.socketClient.destroy();
+      this.server.close();
     }
   }
 
