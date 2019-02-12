@@ -98,7 +98,7 @@ export class CobasService {
     if (that.settings.rocheConnectionType == "tcpserver") {
       this.server = that.net.createServer(function (socket) {
         // confirm socket connection from client
-        console.log((new Date()) + 'A client connected to server...');
+        console.log((new Date()) + 'A client has connected to this server');
         that.connectionStatus(true);
         that.socketClient = socket;
         socket.on('data', function (data) {
@@ -145,7 +145,7 @@ export class CobasService {
       that.socketClient.on('close', function () {
         that.socketClient.destroy();
         that.connectionStatus(false);
-        console.log('Roche Cobas - client Disconnected');
+        console.log('Roche Cobas - Client Disconnected');
       });
 
       that.socketClient.on('error', (e) => {
@@ -196,7 +196,7 @@ export class CobasService {
       this.connectionStatus(false);
     }
     if (this.server) {
-      this.server.destroy();
+      this.socketClient.destroy();
       this.connectionStatus(false);
     }
   }
@@ -213,30 +213,23 @@ export class CobasService {
 
 
   parseHl7Data(data) {
-    var d = data.toString("hex");
-    var msgg = this.hex2ascii(d);
+    let d = data.toString("hex");
+    let rawText = this.hex2ascii(d);
+    let order: any = {};
+    
 
-    // console.log(data);
-    // console.log(JSON.stringify(data, null, 4));
+    order.raw_text = rawText;
+    
+    rawText = rawText.replace(/[\x0b\x1c]/g, '');
+    rawText = rawText.trim();
+    rawText = rawText.replace(/[\r\n\x0B\x0C\u0085\u2028\u2029]+/gm, "\r");
 
-    // console.log(d);
-    // console.log(JSON.stringify(d, null, 4));
-
-    console.log("==== STARTING ====");
-
-
-    msgg = msgg.replace(/[\x0b\x1c]/g, '');
-    msgg = msgg.trim();
-    msgg = msgg.replace(/[\r\n\x0B\x0C\u0085\u2028\u2029]+/gm, "\r");
-
-    var message = this.hl7parser.create(msgg);
+    var message = this.hl7parser.create(rawText);
     var msgID = message.get("MSH.10").toString();
     this.socketClient.write(this.hl7ACK(msgID));
-    console.log(message.get('OBX').get(1).toString());
+    
 
-    console.log("==== ENDING ====");
-
-    var order: any = {};
+    
     //var result = null;
     var resultOutcome = message.get('OBX').get(2).get('OBX.5.1').toString();
 
@@ -266,8 +259,9 @@ export class CobasService {
 
     order.tested_by = message.get('OBX').get(0).get('OBX.16').toString();
     order.result_status = 1;
+    order.lims_sync_status = 0;
     order.analysed_date_time = this.formatRawDate(message.get('OBX').get(0).get('OBX.19').toString());
-    order.specimen_date_time = this.formatRawDate(message.get('OBX').get(0).get('OBX.19').toString());
+    //order.specimen_date_time = this.formatRawDate(message.get('OBX').get(0).get('OBX.19').toString());
     order.authorised_date_time = this.formatRawDate(message.get('OBX').get(0).get('OBX.19').toString());
     order.result_accepted_date_time = this.formatRawDate(message.get('OBX').get(0).get('OBX.19').toString());
     order.test_location = this.settings.labName;
@@ -313,7 +307,7 @@ export class CobasService {
   
       if (d === "04") {
         that.socketClient.write(this.ACK);
-        console.log("Cobas EOT", this.strData);
+        //console.log("Cobas EOT", this.strData);
         // if (this.settings.rocheConnectionType == 'tcpclient') {
         //   this.processClientData(this.strData);
         // } else {
@@ -334,7 +328,7 @@ export class CobasService {
         if (d === "03") text = "<ETX>";
         if (d == "5E") text = "::";
         that.strData += text;
-        console.log("Cobas_ACK_PPROCESS", that.strData);
+        //console.log("Cobas_ACK_PPROCESS", that.strData);
         that.socketClient.write(that.ACK);
       }      
     }
@@ -362,99 +356,47 @@ export class CobasService {
     return d;
   }
 
-  processASTMData(t) {
-    //  console.log(t);
+  processASTMData(astmData) {
+
+    console.log(astmData);
+
+    let data = astmData.replace(/[\x05\x02\x03]/g, '');
+
+    let astmArray = data.split(/\r?\n/);
+
+    let dataArray = []
+    
+    astmArray.forEach(function(element) {
+      if(element != ''){ 
+        dataArray[element.substring(1, 2)] = element.split("|");
+      }
+    });
+    
     var order: any = {};
-    let sp = t.split("R|1|");
-    let r: any = {};
-    let s = [];
-    let u = [];
-    if (sp[1]) {
-      var sd = "1|" + sp[1];
-      var ss = sp[0];
-      ss = ss.replace(/[\x05\x02\x03]/g, '');
-      console.log("SS " + ss);
-      // ss = ss.replace(/\u001707\r\n\u000221/g, "")
-      //   .replace(/\r\n/g, "").replace(/\rC/g, "")
-      //   .replace(/\u001767\u0002237/g, "")
-      //   .replace(/\u0003BD/g, "").replace(/\u000309/g, "");
-      // sd = sd.replace(/\u001707\r\n\u000221/g, "").replace(/\r\n/g, "").replace("\rC", "").replace(/\u001767\u0002237/g, "")
-      //   .replace(/\u0003BD/g, "").replace(/\u000309/g, "");
-      s = sd.split("|");
-      u = ss.split("|");
-      // console.log(s);
-      var l = s.length;
-      r.leng = s.length;
-      if (u[16]) r.lotNo = u[16];
-      if (u[17]) {
-        r.sampleID = u[17]; r.sampleID17 = u[17]
-      };
-      if (u[20]) r.orderDate = this.formatRawDate(u[20]);
-      if (!r.sampleID && u[32]) r.lotNo = u[32];
-      if (!r.sampleID && u[33]) r.sampleID = u[33];
+    
+    order.order_id = dataArray['O'][3];
+    order.test_id = dataArray['O'][2];
+    order.test_type = (dataArray['R'][2]) ? dataArray['R'][2].replace("^^^", "") : dataArray['R'][2];
+    order.test_unit = dataArray['R'][4];
+    order.raw_text = astmData;
+    order.results = dataArray['R'][3];
+    order.tested_by = dataArray['R'][10];
+    order.result_status = 1;
+    order.analysed_date_time = this.formatRawDate(dataArray['R'][12]);
+    order.lims_sync_status = 0;
+    order.authorised_date_time = this.formatRawDate(dataArray['R'][12]);
+    order.result_accepted_date_time = this.formatRawDate(dataArray['R'][12]);
+    order.test_location = this.settings.labName;
+    order.machine_used = this.settings.rocheMachine;    
 
-      if (!r.orderDate && u[36]) r.orderDate = this.formatRawDate(u[36]);
-
-      if (s[1]) r.test = s[1];
-      if (s[2]) r.results = s[2];
-      if (s[3]) r.unit = s[3];
-      if (s[9]) r.operator = s[9];
-      if (s[10]) r.timestamp2 = s[10];
-      if (s[11]) r.timestamp = s[11];
-      if (r.timestamp2) {
-        if (r.timestamp2.length === 14) r.timestamp = r.timestamp2;
-      }
-      r.timestamp = this.formatRawDate(r.timestamp);
-      r.testName = (r.test) ? r.test.replace("^^^", "") : r.test;
-      // if(s[l-2]) r.sampleID=s[l-2];
-      if (s[12]) r.machine = s[12];
-      if (s[15]) r.status = s[15];
-
-      let orderlog = [];
-      orderlog.push(r.operator);
-      orderlog.push(r.unit);
-      orderlog.push(r.results);
-      orderlog.push(r.timestamp);
-      orderlog.push(r.orderDate);
-      orderlog.push(r.timestamp);
-      orderlog.push(this.settings.rocheMachine);
-      orderlog.push(this.settings.labName);
-      orderlog.push(0);
-      orderlog.push(r.sampleID);
-      orderlog.push(r.test);
-      orderlog.push(r.lotNo);
-
-      order.order_id = r.sampleID;
-      order.test_id = r.sampleID;
-      order.test_type = r.testName;
-      order.test_unit = r.unit;
-      //order.createdDate = '';
-      order.results = r.results;
-      order.tested_by = r.operator;
-      order.result_status = 1;
-      order.analysed_date_time = r.timestamp;
-      order.specimen_date_time = r.specimenDate;
-      order.authorised_date_time = r.timestamp;
-      order.result_accepted_date_time = r.timestamp;
-      order.test_location = this.settings.labName;
-      order.machine_used = this.settings.rocheMachine;
-
-      if (order.results) {
-        console.log("PROCCEES FEEDcobas", JSON.stringify(order));
-        // this.orderModel.addOrderTestLog(orderlog, (res) => {
-        //   console.log("cobas processAddResult Log ", "Result Log Succesfully Added : " + r.sampleID);
-        // }, (err) => {
-        //   console.log("cobas processAddResult Log ", JSON.stringify(err), "error");
-        // });
-        this.orderModel.addOrderTest(order, (res) => {
-          console.log("cobas processAddResult", "Result Successfully Added : " + r.sampleID);
-        }, (err) => {
-          console.log("cobas processAddResult", JSON.stringify(err), "error");
-        });
-      }
+    if (order.order_id) {
+      console.log("COBAS ASTM Trying to add order :", JSON.stringify(order));
+      this.orderModel.addOrderTest(order, (res) => {
+        console.log("COBAS ASTM - Result Successfully Added : " + order.order_id);
+      }, (err) => {
+        console.log("COBAS ASTM - ADDING FAILED", JSON.stringify(err), "error");
+      });
     }
-    //console.log(r);
-    return r;
   }
 
 

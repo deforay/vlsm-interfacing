@@ -10,7 +10,7 @@ export class OrderModel extends GeneralModel {
         console.log(Object.keys(data));
         console.log(Object.values(data));
         console.log("=============");
-        let t = "INSERT INTO orders (" + Object.keys(data).join(',') + ") VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)";
+        let t = "INSERT INTO orders (" + Object.keys(data).join(',') + ") VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)";
         this.exec(t, Object.values(data), success, errorf);
     }
 
