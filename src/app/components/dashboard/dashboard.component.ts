@@ -43,7 +43,7 @@ export class DashboardComponent implements OnInit {
         that.stopTrying = status;
         if (that.stopTrying) {
           const { dialog } = require('electron').remote;
-          dialog.showErrorBox('Oops! Something went wrong!', 'Unable to connect. Check if all the Roche machine connection settings are correct.');
+          dialog.showErrorBox('Oops! Something went wrong!', 'Unable to connect. Check if all the Roche machine connection settings are correct and the Machine is running.');
           that.close();
         }
       });

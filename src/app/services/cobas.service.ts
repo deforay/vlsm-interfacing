@@ -108,15 +108,18 @@ export class CobasService {
 
 
       this.server.on('error', function (e) {
-        if (e.code == 'EADDRINUSE') {
-          console.log('Address in use, retrying...');
-          setTimeout(function () {
-            this.server.close();
-            this.server.listen(this.settings.rochePort, this.settings.rocheHost);
-          }, 1000);
-        } else {
-          console.log('Some error ' + e.code);
-        }
+        that.connectionStatus(false);
+        that.stopTryingStatus(true);
+        console.log('Error while connecting ' + e.code);
+        // if (e.code == 'EADDRINUSE') {
+        //   console.log('Address in use, retrying...');
+        //   setTimeout(function () {
+        //     this.server.close();
+        //     this.server.listen(this.settings.rochePort, this.settings.rocheHost);
+        //   }, 1000);
+        // } else {
+        //   console.log('Some error ' + e.code);
+        // }
       });
 
     } else {
@@ -152,25 +155,26 @@ export class CobasService {
 
       that.socketClient.on('error', (e) => {
         that.connectionStatus(false);
+        that.stopTryingStatus(true);
         console.log(e);
-        if (e) {
-          // if we have already tried and failed multiple times, we can stop trying
-          if (this.connectionTries <= 2) {
-            setTimeout(() => {
-              console.log('Roche Cobas - Trying to connect as client');
-              this.connectionTries++; // incrementing the connection tries
-              that.socketClient.connect(that.connectopts, function () {
-                this.connectionTries = 0; // resetting connection tries to 0
-                that.connectionStatus(true);
-                console.log('Roche Cobas - Connected as client again !');
-              });
-            }, 5000);
-          } else {
-            console.log('Giving up. Not trying again. Something wrong !');
-            that.connectionStatus(false);
-            that.stopTryingStatus(true);
-          }
-        }
+        // if (e) {
+        //   // if we have already tried and failed multiple times, we can stop trying
+        //   if (this.connectionTries <= 2) {
+        //     setTimeout(() => {
+        //       console.log('Roche Cobas - Trying to connect as client');
+        //       this.connectionTries++; // incrementing the connection tries
+        //       that.socketClient.connect(that.connectopts, function () {
+        //         this.connectionTries = 0; // resetting connection tries to 0
+        //         that.connectionStatus(true);
+        //         console.log('Roche Cobas - Connected as client again !');
+        //       });
+        //     }, 5000);
+        //   } else {
+        //     console.log('Giving up. Not trying again. Something wrong !');
+        //     that.connectionStatus(false);
+        //     that.stopTryingStatus(true);
+        //   }
+        // }
       });
     }
 
