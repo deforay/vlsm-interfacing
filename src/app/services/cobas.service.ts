@@ -188,14 +188,20 @@ export class CobasService {
     const Store = require('electron-store');
     const store = new Store();    
     this.settings = store.get('appSettings');
-        
+
     if (this.settings.rocheConnectionType == "tcpclient") {
-      this.socketClient.destroy();
-      this.connectionStatus(false);
-      console.log('Disconnected');
+      if(this.socketClient){
+        this.socketClient.destroy();
+        this.connectionStatus(false);
+        console.log('Disconnected');
+      }
+
     } else {
-      this.socketClient.destroy();
-      this.server.close();
+      if(this.server){
+        this.socketClient.destroy();
+        this.server.close();
+        console.log('Disconnected');
+      }
     }
   }
 
