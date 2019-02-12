@@ -200,6 +200,7 @@ export class CobasService {
       if(this.server){
         this.socketClient.destroy();
         this.server.close();
+        this.connectionStatus(false);
         console.log('Disconnected');
       }
     }
