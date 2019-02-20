@@ -19,6 +19,8 @@ export class CobasService {
   currentStatus = this.statusSubject.asObservable();
 
   private net = require('net');
+  
+  private serialConnection = null;  
 
   private connectionTriesSubject = new BehaviorSubject(false);
   stopTrying = this.connectionTriesSubject.asObservable();
@@ -49,7 +51,6 @@ export class CobasService {
 
 
 
-    
 
     this.orderModel = new OrderModel;
 
@@ -122,7 +123,7 @@ export class CobasService {
         // }
       });
 
-    } else {
+    } else if (that.settings.rocheConnectionType == "tcpclient") {
 
 
       that.socketClient = new Socket();
@@ -176,6 +177,43 @@ export class CobasService {
         //   }
         // }
       });
+    } else{
+
+        let flowControl=true;
+
+        let that = this;
+        
+        if(this.settings.flowControl=="false") {
+          flowControl=false;
+        }
+
+        let SerialPort = require('serialport');
+
+        that.serialConnection = new SerialPort(this.settings.devicePath, {
+          baudrate:parseInt(this.settings.baudRate),
+          dataBits:parseInt(this.settings.dataBits),
+          parity:this.settings.parity,
+          rtscts:flowControl
+        });
+
+        that.serialConnection.on("open",  () =>{
+          that.socketClient = that.serialConnection;
+          console.log('Connected to Serial Port successfully !');
+       });        
+
+       that.serialConnection.on('data', (data)=> {
+          that.handleTCPResponse(data);
+       });       
+
+       that.serialConnection.on('error',(err)=>{
+        console.log(err);
+        if(err){
+            setTimeout(()=>{
+              that.connect();
+            },15000);
+        }
+    });       
+
     }
 
 
