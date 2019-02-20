@@ -187,7 +187,7 @@ export class CobasService {
           flowControl=false;
         }
 
-        let SerialPort = require('serialport');
+        const SerialPort = require('serialport')
 
         that.serialConnection = new SerialPort(this.settings.devicePath, {
           baudrate:parseInt(this.settings.baudRate),

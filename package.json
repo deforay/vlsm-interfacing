@@ -17,6 +17,7 @@
   "main": "main.js",
   "private": true,
   "scripts": {
+    "install": "electron-rebuild",
     "postinstall": "npm run postinstall:electron && electron-builder install-app-deps",
     "postinstall:web": "node postinstall-web",
     "postinstall:electron": "node postinstall",
