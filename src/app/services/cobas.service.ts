@@ -20,7 +20,7 @@ export class CobasService {
 
   private net = require('net');
   
-  private serialConnection = null;  
+  //private serialConnection = null;  
 
   private connectionTriesSubject = new BehaviorSubject(false);
   stopTrying = this.connectionTriesSubject.asObservable();
@@ -177,42 +177,42 @@ export class CobasService {
         //   }
         // }
       });
-    } else{
+    } else {
 
-        let flowControl=true;
+      //   let flowControl=true;
 
-        let that = this;
+      //   let that = this;
         
-        if(this.settings.flowControl=="false") {
-          flowControl=false;
-        }
+      //   if(this.settings.flowControl=="false") {
+      //     flowControl=false;
+      //   }
 
-        const SerialPort = require('serialport')
+      //   const SerialPort = require('serialport')
 
-        that.serialConnection = new SerialPort(this.settings.devicePath, {
-          baudrate:parseInt(this.settings.baudRate),
-          dataBits:parseInt(this.settings.dataBits),
-          parity:this.settings.parity,
-          rtscts:flowControl
-        });
+      //   that.serialConnection = new SerialPort(this.settings.devicePath, {
+      //     baudrate:parseInt(this.settings.baudRate),
+      //     dataBits:parseInt(this.settings.dataBits),
+      //     parity:this.settings.parity,
+      //     rtscts:flowControl
+      //   });
 
-        that.serialConnection.on("open",  () =>{
-          that.socketClient = that.serialConnection;
-          console.log('Connected to Serial Port successfully !');
-       });        
+      //   that.serialConnection.on("open",  () =>{
+      //     that.socketClient = that.serialConnection;
+      //     console.log('Connected to Serial Port successfully !');
+      //  });        
 
-       that.serialConnection.on('data', (data)=> {
-          that.handleTCPResponse(data);
-       });       
+      //  that.serialConnection.on('data', (data)=> {
+      //     that.handleTCPResponse(data);
+      //  });       
 
-       that.serialConnection.on('error',(err)=>{
-        console.log(err);
-        if(err){
-            setTimeout(()=>{
-              that.connect();
-            },15000);
-        }
-    });       
+      //  that.serialConnection.on('error',(err)=>{
+      //     console.log(err);
+      //     if(err){
+      //         setTimeout(()=>{
+      //           that.connect();
+      //         },15000);
+      //     }
+      //  });
 
     }
 

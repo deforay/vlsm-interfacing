@@ -6,11 +6,7 @@
     </div>
 
     <div class="card-body">
-      
-
       <form (submit)="updateSettings()" class="form">
-
-
         <div class="form-row">
           <div class="form-group col-md-4 col-sm-4">
             <label for="labID" class="col-form-label-sm">Lab Code/ID</label>
@@ -50,34 +46,34 @@
               <option>-- Select --</option>
               <option value="tcpserver">TCP/IP Server</option>
               <option value="tcpclient">TCP/IP Client</option>
-              <option value="serial">RS232 (Serial)</option>
+              <!-- <option value="serial">RS232 (Serial)</option> -->
             </select>
           </div>
 
-          <div class="form-group col-md-3 col-sm-6">
+          <!-- <div class="form-group col-md-3 col-sm-6">
             <label for="flowControl" class="col-form-label-sm">Flow Control</label>
             <select [(ngModel)]="settings.flowControl" name="flowControl" class="form-control form-control-sm">
               <option>-- Select --</option>
               <option value="true">True</option>
               <option value="false">False</option>
             </select>
-          </div>
-          <div class="form-group col-md-3 col-sm-6">
+          </div> -->
+          <!-- <div class="form-group col-md-3 col-sm-6">
             <label for="baudRate" class="col-form-label-sm">Baud Rate</label>
             <input type="text" [(ngModel)]="settings.baudRate" name="baudRate" class="form-control form-control-sm" placeholder="eg. 9600">
-          </div>
-          <div class="form-group col-md-3 col-sm-6">
+          </div> -->
+          <!-- <div class="form-group col-md-3 col-sm-6">
             <label for="dataBits" class="col-form-label-sm">No. of Data Bits</label>
             <input type="text" [(ngModel)]="settings.dataBits" name="dataBits" class="form-control form-control-sm" placeholder="7 or 8">
-          </div>
+          </div> -->
           <!-- <div class="form-group col-md-3 col-sm-6">
             <label for="stopBits" class="col-form-label-sm">No. of Stop Bits</label>
             <input type="text" [(ngModel)]="settings.stopBits" name="stopBits" class="form-control form-control-sm" placeholder="1 or 2">
           </div> -->
-          <div class="form-group col-md-3 col-sm-6">
+          <!-- <div class="form-group col-md-3 col-sm-6">
             <label for="parity" class="col-form-label-sm">Parity</label>
             <input type="text" [(ngModel)]="settings.parity" name="parity" class="form-control form-control-sm" placeholder="None / Odd / Even">
-          </div>
+          </div> -->
 
 
         </div>

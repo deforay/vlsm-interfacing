@@ -40,12 +40,12 @@ export class DashboardComponent implements OnInit {
     that.cobasService.stopTrying.subscribe(status => {
       that._ngZone.run(() => {
         //console.log(status);
-        that.stopTrying = status;
-        if (that.stopTrying) {
-          const { dialog } = require('electron').remote;
-          dialog.showErrorBox('Oops! Something went wrong!', 'Unable to connect. Check if all the Roche machine connection settings are correct and the Machine is running.');
-          that.close();
-        }
+        // that.stopTrying = status;
+        // if (that.stopTrying) {
+        //   const { dialog } = require('electron').remote;
+        //   dialog.showErrorBox('Oops! Something went wrong!', 'Unable to connect. Check if all the Roche machine connection settings are correct and the Machine is running.');
+        //   that.close();
+        // }
       });
     })
 
