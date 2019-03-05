@@ -342,15 +342,20 @@ export class CobasService {
 
   handleTCPResponse(data) {
     
+    
     if (this.settings.rocheProtocol === 'hl7') {
 
+      console.log('INSIDE HL7 IF');
       this.parseHl7Data(data);
 
     } else if (this.settings.rocheProtocol === 'astm') {
-
+      
+      console.log('INSIDE ASTM ELSE IF');
       
       let that = this;
       var d = data.toString("hex");
+
+      console.log(d);
   
       if (d === "04") {
         that.socketClient.write(this.ACK);
@@ -360,6 +365,8 @@ export class CobasService {
         // } else {
         //   this.processServerData(this.strData);
         // }
+        console.log('READY TO SEND');
+        console.log(that.strData);
         that.processASTMData(that.strData);
         that.strData = "";
       } else if (d == "21") {
