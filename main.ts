@@ -35,22 +35,22 @@ function createWindow() {
 
 
   //################ AUTO LAUNCHER #################
-  var aLauncher = new AutoLaunch({
-    name: app.getName(),
-    isHidden: true
-  });
+  // var aLauncher = new AutoLaunch({
+  //   name: app.getName(),
+  //   isHidden: true
+  // });
 
-  aLauncher.enable();
-  aLauncher.isEnabled()
-    .then(function (isEnabled) {
-      if (isEnabled) {
-        return;
-      }
-      aLauncher.enable();
-    })
-    .catch(function (err) {
-      console.log("AUTOLAUNCH", JSON.stringify(err));
-    });
+  // aLauncher.enable();
+  // aLauncher.isEnabled()
+  //   .then(function (isEnabled) {
+  //     if (isEnabled) {
+  //       return;
+  //     }
+  //     aLauncher.enable();
+  //   })
+  //   .catch(function (err) {
+  //     console.log("AUTOLAUNCH", JSON.stringify(err));
+  //   });
 
 
 
