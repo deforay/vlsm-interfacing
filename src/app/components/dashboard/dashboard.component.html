@@ -34,10 +34,40 @@
       </ng-template>
 
 
+
+      
+
+
     </div>
   </div>
+  <br><br><br>
+  <h4>Recent Results</h4>
+  <table style="font-size: 0.9em;" class="table dashtable table-bordered table-striped table-hover table-responsive">
+    <tr class="thead-dark">
+      <th style="width:15%;">Sample ID</th>
+      <th style="width:15%;">Result</th>
+      <th style="width:10%;">Unit</th>
+      <th style="width:15%;">Tested By</th>
+      <th style="width:15%;">Tested On</th>
+      <th style="width:5%;">LIMS Sync Status</th>
+    </tr>
 
-
+    <ng-container *ngIf="!lastOrders?.length > 0">
+      <tr>
+        <td colspan="6" class="center"> No data available in database </td>
+      </tr>
+    </ng-container>    
+    <ng-container *ngFor="let rows of lastOrders">
+      <tr>
+        <td>{{rows.test_id}}</td>
+        <td>{{rows.results}}</td>
+        <td>{{rows.test_unit}}</td>
+        <td>{{rows.tested_by}}</td>
+        <td>{{rows.analysed_date_time}}</td>
+        <td>{{rows.lims_sync_status}}</td>
+      </tr>
+    </ng-container>        
+  </table>
   <br>
   <br>
   <br>

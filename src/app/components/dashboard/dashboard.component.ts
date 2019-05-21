@@ -1,6 +1,6 @@
 import { Component, OnInit, NgZone } from '@angular/core';
 import { CobasService } from '../../services/cobas.service';
-import { Router } from '../../../../node_modules/@angular/router';
+import { Router } from '@angular/router';
 
 
 @Component({
@@ -14,6 +14,9 @@ export class DashboardComponent implements OnInit {
   public stopTrying: boolean = false;
   public connectionInProcess: boolean = false;
   public reconnectButtonText: string = 'Connect';
+  public interval: any = null;
+  public lastOrders: any = {};
+  
 
   constructor(public cobasService: CobasService, private _ngZone: NgZone, private router: Router) {
 
@@ -24,19 +27,24 @@ export class DashboardComponent implements OnInit {
     if (undefined == appSettings || !appSettings.rochePort || !appSettings.rocheProtocol || !appSettings.rocheHost) {
       this.router.navigate(['/settings']);
     }
-    //this.cobasService.connect();
-
-
   }
 
   ngOnInit() {
+
     let that = this;
+
     that.cobasService.currentStatus.subscribe(status => {
       that._ngZone.run(() => {
-        //console.log(status);
         that.isConnected = status;
       });
-    })
+    });
+    
+    // Let us fetch last few Orders
+    that.fetchLastOrders();
+    // let us call the function every 10 seconds
+    that.interval = setInterval(that.fetchLastOrders(), 10000);
+
+
     that.cobasService.stopTrying.subscribe(status => {
       that._ngZone.run(() => {
         //console.log(status);
@@ -48,6 +56,19 @@ export class DashboardComponent implements OnInit {
         // }
       });
     })
+
+  }
+
+
+  fetchLastOrders(){
+    let that = this;
+    that.cobasService.fetchLastOrders();
+
+    that.cobasService.lastOrders.subscribe(lastFewOrders => {
+      that._ngZone.run(() => {
+        that.lastOrders = lastFewOrders[0];
+      });
+    });
 
   }
 
@@ -67,5 +88,12 @@ export class DashboardComponent implements OnInit {
     //this.cobasService.connect();
 
   }
+
+  ngOnDestroy() {
+    clearInterval(this.interval);
+  }
+
+
+
 
 }

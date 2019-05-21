@@ -31,22 +31,22 @@ function createWindow() {
         }));
     }
     //################ AUTO LAUNCHER #################
-    // var aLauncher = new AutoLaunch({
-    //   name: app.getName(),
-    //   isHidden: true
-    // });
-    // aLauncher.enable();
-    // aLauncher.isEnabled()
-    //   .then(function (isEnabled) {
-    //     if (isEnabled) {
-    //       return;
-    //     }
-    //     aLauncher.enable();
-    //   })
-    //   .catch(function (err) {
-    //     console.log("AUTOLAUNCH", JSON.stringify(err));
-    //   });
-    win.webContents.openDevTools();
+    var aLauncher = new AutoLaunch({
+        name: electron_1.app.getName(),
+        isHidden: true
+    });
+    aLauncher.enable();
+    aLauncher.isEnabled()
+        .then(function (isEnabled) {
+        if (isEnabled) {
+            return;
+        }
+        aLauncher.enable();
+    })
+        .catch(function (err) {
+        console.log("AUTOLAUNCH", JSON.stringify(err));
+    });
+    //win.webContents.openDevTools();
     // Emitted when the window is closed.
     win.on('closed', function () {
         // Dereference the window object, usually you would store window
