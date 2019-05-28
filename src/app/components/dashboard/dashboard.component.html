@@ -26,22 +26,27 @@
         &nbsp;&nbsp;
         <button *ngIf="connectionInProcess" (click)="close()" class="btn btn-danger">
           <span>Cancel</span>
-        </button>   
-        &nbsp;&nbsp;     
+        </button>
+        &nbsp;&nbsp;
         <button *ngIf="!connectionInProcess" routerLink="/settings" class="btn btn-primary">
           <span>Settings</span>
         </button>
       </ng-template>
-
-
-
-      
-
-
     </div>
   </div>
-  <br><br><br>
-  <h4>Recent Results</h4>
+  <br>
+  <br>
+  <br>
+  <h4>
+
+    Recent Results
+
+    <button (click)="fetchLastOrders(true);" class="btn btn-sm btn-primary pull-right">
+      <span>Fetch Recent Orders</span>
+    </button>
+
+
+  </h4>
   <table style="font-size: 0.9em;" class="table dashtable table-bordered table-striped table-hover table-responsive">
     <tr class="thead-dark">
       <th style="width:15%;">Sample ID</th>
@@ -52,11 +57,11 @@
       <th style="width:5%;">LIMS Sync Status</th>
     </tr>
 
-    <ng-container *ngIf="!lastOrders?.length > 0">
+    <ng-container *ngIf="!(lastOrders?.length > 0)">
       <tr>
         <td colspan="6" class="center"> No data available in database </td>
       </tr>
-    </ng-container>    
+    </ng-container>
     <ng-container *ngFor="let rows of lastOrders">
       <tr>
         <td>{{rows.test_id}}</td>
@@ -66,7 +71,7 @@
         <td>{{rows.analysed_date_time}}</td>
         <td>{{rows.lims_sync_status}}</td>
       </tr>
-    </ng-container>        
+    </ng-container>
   </table>
   <br>
   <br>

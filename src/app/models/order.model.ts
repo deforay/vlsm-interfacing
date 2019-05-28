@@ -15,7 +15,7 @@ export class OrderModel extends GeneralModel {
     }
 
     fetchLastOrders(success, errorf){
-        let t = "SELECT * FROM orders ORDER BY id DESC LIMIT 20";
+        let t = "SELECT * FROM orders ORDER BY id DESC LIMIT 100";
         this.exec(t, null, success, errorf);
     }
 

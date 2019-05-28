@@ -10,44 +10,46 @@ import { Router } from '@angular/router';
 })
 export class DashboardComponent implements OnInit {
 
-  public isConnected: boolean = false;
-  public stopTrying: boolean = false;
-  public connectionInProcess: boolean = false;
-  public reconnectButtonText: string = 'Connect';
-  public interval: any = null;
-  public lastOrders: any = {};
-  
+  public isConnected = false;
+  public stopTrying = false;
+  public connectionInProcess = false;
+  public reconnectButtonText = 'Connect';
+  public interval: any;
+  public lastOrders: any;
+
 
   constructor(public cobasService: CobasService, private _ngZone: NgZone, private router: Router) {
 
     const Store = require('electron-store');
     const store = new Store();
 
-    let appSettings = store.get('appSettings');
-    if (undefined == appSettings || !appSettings.rochePort || !appSettings.rocheProtocol || !appSettings.rocheHost) {
+    const appSettings = store.get('appSettings');
+    if (undefined === appSettings || !appSettings.rochePort || !appSettings.rocheProtocol || !appSettings.rocheHost) {
       this.router.navigate(['/settings']);
     }
   }
 
   ngOnInit() {
 
-    let that = this;
+    const that = this;
 
     that.cobasService.currentStatus.subscribe(status => {
       that._ngZone.run(() => {
         that.isConnected = status;
       });
     });
-    
-    // Let us fetch last few Orders
-    that.fetchLastOrders();
-    // let us call the function every 10 seconds
-    that.interval = setInterval(that.fetchLastOrders(), 10000);
+
+    // Let us fetch last few Orders on load
+    that.fetchLastOrders(false);
+
+    // let us call the function every 5 minutes
+    that.interval = setInterval(() => { that.fetchLastOrders(false); }, 1000 * 300 );
+
 
 
     that.cobasService.stopTrying.subscribe(status => {
       that._ngZone.run(() => {
-        //console.log(status);
+        // console.log(status);
         // that.stopTrying = status;
         // if (that.stopTrying) {
         //   const { dialog } = require('electron').remote;
@@ -60,15 +62,25 @@ export class DashboardComponent implements OnInit {
   }
 
 
-  fetchLastOrders(){
-    let that = this;
+  fetchLastOrders(showNotification){
+    const that = this;
     that.cobasService.fetchLastOrders();
 
     that.cobasService.lastOrders.subscribe(lastFewOrders => {
       that._ngZone.run(() => {
         that.lastOrders = lastFewOrders[0];
+
+        if(showNotification){
+          new Notification('VLSM Interfacing', {
+            body: 'Fetched recent orders'
+          });
+        }
+
+
       });
     });
+
+
 
   }
 
