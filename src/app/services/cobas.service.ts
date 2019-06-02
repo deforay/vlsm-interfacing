@@ -76,7 +76,7 @@ export class CobasService {
     }
 
     var moment = require('moment');
-    var date = moment(new Date()).format('YYYYMMDDhms');;
+    var date = moment(new Date()).format('YYYYMMDDHHmmss');;
 
     let ack = String.fromCharCode(11) + "MSH|^~\&|LIS||COBAS6800/8800||" + date + "||ACK^R22|ACK-R22-" + date + "||2.5||||||8859/1" + String.fromCharCode(13);
     ack += "MSA|AA|" + messageID + String.fromCharCode(13) + String.fromCharCode(28) + String.fromCharCode(13);
