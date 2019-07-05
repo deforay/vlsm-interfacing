@@ -19,7 +19,7 @@ export class CobasService {
 
   private net = require('net');
   //private serialConnection = null;  
-  
+
   private statusSubject = new BehaviorSubject(false);
   currentStatus = this.statusSubject.asObservable();
 
@@ -44,6 +44,7 @@ export class CobasService {
   private settings = null;
   private orderModel = null;
   private rawDataModel = null;
+  private timer = null;
 
   public socketClient = null;
   public server = null;
@@ -288,7 +289,27 @@ export class CobasService {
     // order.machine_used = this.settings.rocheMachine;    
   }
 
+  saveRawData() {
+    let that = this;
+    // Let us store this Raw Data before we process it
+    var rData: any = {};
+    rData.data = that.strData;
+    rData.machine = that.settings.rocheMachine;
+    this.rawDataModel.addRawData(rData, (res) => {
+      console.log("Raw Data successfully added - through timer");
+    }, (err) => {
+      console.log("Not able to save Raw Data - through timer", JSON.stringify(err), "error");
+    });
+  }
+
   handleTCPResponse(data) {
+
+    if(this.timer != null){
+      this.timer = setTimeout(this.saveRawData, 5000);
+    }else{
+      clearTimeout(this.timer);
+    }
+    
 
 
     if (this.settings.rocheProtocol === 'hl7') {
@@ -298,17 +319,20 @@ export class CobasService {
 
     } else if (this.settings.rocheProtocol === 'astm') {
 
-      //console.log('INSIDE ASTM ELSE IF');
+      console.log('INSIDE ASTM ELSE IF');
 
       let that = this;
       var d = data.toString("hex");
 
-      //console.log(d);
+      // console.log("HEX " + d);
+      // console.log("TEXT " + that.hex2ascii(d));
 
       if (d === "04") {
+
         that.socketClient.write(that.ACK);
-        
+
         console.log('READY TO SEND');
+        clearTimeout(that.timer);
         //console.log(that.strData);
 
         // Let us store this Raw Data before we process it
@@ -321,30 +345,23 @@ export class CobasService {
           console.log("Not able to save Raw Data", JSON.stringify(err), "error");
         });
 
-
-
         that.processASTMData(that.strData);
         that.strData = "";
       } else if (d == "21") {
         that.socketClient.write(that.ACK);
         console.log('NAK Received');
       } else {
-        let text = that.hex2ascii(d);
 
-        if (d === "02") {
-          // if(that.strData != ''){
-          //   that.processASTMData(that.strData);
-          //   that.strData = '';
-          // }
-          text = "<STX>";
-        }
+        let text = that.hex2ascii(d);
+        if (d === "02") text = "<STX>"
         else if (d === "17") text = "<ETB>"
         else if (d === "0D") text = "<CR>"
         else if (d === "0A") text = "<LF>"
         else if (d === "03") text = "<ETX>"
         else if (d == "5E") text = "::";
+
         that.strData += text;
-        //console.log("Cobas_ACK_PPROCESS", that.strData);
+        //console.log(that.strData);
         that.socketClient.write(that.ACK);
       }
     }
@@ -377,32 +394,31 @@ export class CobasService {
     //console.log(astmData);
 
     let that = this;
-
     let fullDataArray = astmData.split('<STX>');
 
     fullDataArray.forEach(function (partData) {
-      
+
       let data = partData.replace(/[\x05\x02\x03]/g, '');
-
       let astmArray = data.split(/\r?\n/);
-
       let dataArray = []
 
       astmArray.forEach(function (element) {
         if (element != '') {
-          
-          if(dataArray[element.substring(1, 2)] == undefined){
+
+          if (dataArray[element.substring(1, 2)] == undefined) {
             dataArray[element.substring(1, 2)] = element.split("|");
-          }else{
+          } else {
             var arr = element.split("|");
             arr.shift();
             dataArray[element.substring(1, 2)] += arr;
           }
-          
+
         }
       });
 
-      console.log(dataArray);
+      //console.log(dataArray.length);
+
+      if (dataArray === []) return false;
 
       var order: any = {};
 
@@ -430,12 +446,12 @@ export class CobasService {
         });
       }
     });
-          
+
   }
 
 
-  fetchLastOrders(){   
-    let that = this; 
+  fetchLastOrders() {
+    let that = this;
     that.orderModel.fetchLastOrders((res) => {
       res = [res]; // converting it into an array
       that.lastOrdersSubject.next(res);
@@ -443,8 +459,8 @@ export class CobasService {
       console.log("ADDING FAILED", JSON.stringify(err), "error");
     });
 
-    
-    
+
+
   }
 
 }
