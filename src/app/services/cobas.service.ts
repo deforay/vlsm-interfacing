@@ -289,26 +289,34 @@ export class CobasService {
     // order.machine_used = this.settings.rocheMachine;    
   }
 
-  saveRawData() {
+  forceSaveRawData(t) {
     let that = this;
     // Let us store this Raw Data before we process it
     var rData: any = {};
-    rData.data = that.strData;
-    rData.machine = that.settings.rocheMachine;
-    this.rawDataModel.addRawData(rData, (res) => {
+    rData.data = t.strData;
+    rData.machine = 'MACHINE';
+    let rawDataModel = new RawDataModel;
+    rawDataModel.addRawData(rData, (res) => {
       console.log("Raw Data successfully added - through timer");
     }, (err) => {
       console.log("Not able to save Raw Data - through timer", JSON.stringify(err), "error");
     });
+
+    t.processASTMData(t.strData)
   }
 
   handleTCPResponse(data) {
 
     if(this.timer != null){
-      this.timer = setTimeout(this.saveRawData, 5000);
-    }else{
       clearTimeout(this.timer);
     }
+    
+    this.timer = setTimeout(this.forceSaveRawData, 5000, this);
+
+    // console.log(this.timer);
+    //}else{
+    //  clearTimeout(this.timer);
+    //}
     
 
 
@@ -331,7 +339,7 @@ export class CobasService {
 
         that.socketClient.write(that.ACK);
 
-        console.log('READY TO SEND');
+        console.log('Received EOT. READY TO SEND');
         clearTimeout(that.timer);
         //console.log(that.strData);
 
@@ -354,14 +362,22 @@ export class CobasService {
 
         let text = that.hex2ascii(d);
         if (d === "02") text = "<STX>"
+        //else if (d === "05") text = "<ENQ>"
         else if (d === "17") text = "<ETB>"
         else if (d === "0D") text = "<CR>"
         else if (d === "0A") text = "<LF>"
         else if (d === "03") text = "<ETX>"
         else if (d == "5E") text = "::";
 
+        
+        let substring = "H|";
+    
+        if(text.includes(substring)){
+          text = '<START>' + text
+        }
+
         that.strData += text;
-        //console.log(that.strData);
+        console.log(that.strData);
         that.socketClient.write(that.ACK);
       }
     }
@@ -394,10 +410,14 @@ export class CobasService {
     //console.log(astmData);
 
     let that = this;
-    let fullDataArray = astmData.split('<STX>');
+    let fullDataArray = astmData.split('<START>');
+
+    console.log("AFTER SPLITTING USING <START>");
+    //console.log(fullDataArray);
 
     fullDataArray.forEach(function (partData) {
-
+      console.log("--- ROW ---");
+      console.log(partData);
       let data = partData.replace(/[\x05\x02\x03]/g, '');
       let astmArray = data.split(/\r?\n/);
       let dataArray = []
@@ -415,36 +435,67 @@ export class CobasService {
 
         }
       });
+      console.log("--- DATA ARRAY ---");
+     // console.log(dataArray);
+      //console.log(dataArray['R']);
 
-      //console.log(dataArray.length);
-
-      if (dataArray === []) return false;
+      if (dataArray === []) {
+        console.log('dataArray blank');
+        return;
+      }
 
       var order: any = {};
 
-      order.order_id = dataArray['O'][3];
-      order.test_id = dataArray['O'][2];
-      order.test_type = (dataArray['R'][2]) ? dataArray['R'][2].replace("^^^", "") : dataArray['R'][2];
-      order.test_unit = dataArray['R'][4];
-      order.raw_text = astmData;
-      order.results = dataArray['R'][3];
-      order.tested_by = dataArray['R'][10];
-      order.result_status = 1;
-      order.analysed_date_time = that.formatRawDate(dataArray['R'][12]);
-      order.lims_sync_status = 0;
-      order.authorised_date_time = that.formatRawDate(dataArray['R'][12]);
-      order.result_accepted_date_time = that.formatRawDate(dataArray['R'][12]);
-      order.test_location = that.settings.labName;
-      order.machine_used = that.settings.rocheMachine;
+      try {
 
-      if (order.order_id) {
-        console.log("Trying to add order :", JSON.stringify(order));
-        that.orderModel.addOrderTest(order, (res) => {
-          console.log("Result Successfully Added : " + order.order_id);
-        }, (err) => {
-          console.log("ADDING FAILED", JSON.stringify(err), "error");
-        });
+        if(typeof dataArray['R'] == 'string'){
+          dataArray['R'] = dataArray['R'].split(",");
+        }
+       // console.log(typeof dataArray['O']);
+        //
+        //dataArray['O'] = dataArray['O'].split(",");
+        // console.log(JSON.stringify(dataArray));
+        // console.log(JSON.stringify(dataArray['R']));
+  
+        // console.log('Result in position 3 ' + dataArray['R'][3]);
+        // console.log('Unit in position 2' + dataArray['R'][2]);
+        // console.log('tested_by in position 10' + dataArray['R'][10]);
+
+        
+        order.order_id = dataArray['O'][3];
+        order.test_id = dataArray['O'][2];
+        order.test_type = (dataArray['R'][2]) ? dataArray['R'][2].replace("^^^", "") : dataArray['R'][2];
+        order.test_unit = dataArray['R'][4];
+        order.raw_text = astmData;
+        order.results = dataArray['R'][3];
+        order.tested_by = dataArray['R'][10];
+        order.result_status = 1;
+        order.analysed_date_time = that.formatRawDate(dataArray['R'][12]);
+        order.lims_sync_status = 0;
+        order.authorised_date_time = that.formatRawDate(dataArray['R'][12]);
+        order.result_accepted_date_time = that.formatRawDate(dataArray['R'][12]);
+        order.test_location = that.settings.labName;
+        order.machine_used = that.settings.rocheMachine;
+  
+        if (order.order_id) {
+          //console.log("Trying to add order :", JSON.stringify(order));
+          that.orderModel.addOrderTest(order, (res) => {
+            console.log("Result Successfully Added : " + order.order_id);
+          }, (err) => {
+            console.error("ADDING FAILED", JSON.stringify(err), "error");
+          });
+        }
       }
+      catch(error) {
+        console.error(error);
+        return;
+        
+      }
+
+      //if (dataArray == undefined || dataArray['0'] == undefined || dataArray['O'][3] == undefined || dataArray['O'][3] == null || dataArray['O'][3] == '') return;
+      //if (dataArray == undefined || dataArray['R'] == undefined || dataArray['R'][2] == undefined || dataArray['R'][2] == null || dataArray['R'][2] == '') return;
+
+      
     });
 
   }
@@ -456,7 +507,7 @@ export class CobasService {
       res = [res]; // converting it into an array
       that.lastOrdersSubject.next(res);
     }, (err) => {
-      console.log("ADDING FAILED", JSON.stringify(err), "error");
+      console.error("ADDING FAILED", JSON.stringify(err), "error");
     });
 
 
