@@ -16,6 +16,7 @@ export class DashboardComponent implements OnInit {
   public reconnectButtonText = 'Connect';
   public interval: any;
   public lastOrders: any;
+  public liveLogText = [];
 
 
   constructor(public cobasService: CobasService, private _ngZone: NgZone, private router: Router) {
@@ -36,6 +37,14 @@ export class DashboardComponent implements OnInit {
     that.cobasService.currentStatus.subscribe(status => {
       that._ngZone.run(() => {
         that.isConnected = status;
+      });
+    });
+
+    
+
+    that.cobasService.liveLog.subscribe(mesg => {
+      that._ngZone.run(() => {
+        that.liveLogText = mesg;
       });
     });
 

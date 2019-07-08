@@ -33,9 +33,20 @@
         </button>
       </ng-template>
     </div>
+
+    <div class="livelog">
+
+        <ng-container *ngIf="!(liveLogText?.length > 0)">
+          <span></span>
+        </ng-container>
+        <ng-container *ngFor="let x of liveLogText">
+          <span>{{x}}</span><br>
+        </ng-container>
+      </div>    
   </div>
+
   <br>
-  <br>
+  
   <br>
   <h4>
 
@@ -47,7 +58,8 @@
 
 
   </h4>
-  <table style="font-size: 0.9em;" id="dashtable" class="table dashtable table-bordered table-striped table-hover table-responsive">
+  <table style="font-size: 0.9em;" id="dashtable"
+    class="table dashtable table-bordered table-striped table-hover table-responsive">
     <tr class="thead-dark">
       <th style="width:15%;">Sample ID</th>
       <th style="width:15%;">Result</th>
