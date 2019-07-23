@@ -40,7 +40,9 @@
           <span></span>
         </ng-container>
         <ng-container *ngFor="let x of liveLogText">
-          <span>{{x}}</span><br>
+          
+          <span [innerHTML]="x"> </span>
+
         </ng-container>
       </div>    
   </div>

@@ -106,17 +106,14 @@ export class CobasService {
 
 
     if (that.settings.rocheConnectionType == "tcpserver") {
-      that.showLiveLog('Trying to create a server connection');
+      that.logger('info', 'Trying to create a server connection');
       that.server = that.net.createServer(function (socket) {
         // confirm socket connection from client
-        that.showLiveLog((new Date()) + 'A client has connected to this server');
+        that.logger('info', (new Date()) + ' - a client has connected to this server');
         that.connectionStatus(true);
         that.socketClient = socket;
         socket.on('data', function (data) {
-
           that.handleTCPResponse(data);
-
-
         });
       }).listen(that.settings.rochePort, that.settings.rocheHost);
 
@@ -124,11 +121,10 @@ export class CobasService {
       this.server.on('error', function (e) {
         that.connectionStatus(false);
         that.stopTryingStatus(true);
-        that.showLiveLog('Error while connecting ' + e.code);
+        that.logger('error', 'Error while connecting ' + e.code);
       });
 
     } else if (that.settings.rocheConnectionType == "tcpclient") {
-
 
       that.socketClient = new Socket();
       this.connectopts = {
@@ -136,15 +132,13 @@ export class CobasService {
         host: this.settings.rocheHost
       }
 
-
-
-      this.showLiveLog('Trying to connect as client');
+      this.logger('info', 'Trying to connect as client');
       this.connectionTries++; // incrementing the connection tries
 
       that.socketClient.connect(that.connectopts, function () {
         this.connectionTries = 0; // resetting connection tries to 0
         that.connectionStatus(true);
-        that.showLiveLog('Connected as client');
+        that.logger('success', 'Connected as client successfully');
       });
 
       that.socketClient.on('data', function (data) {
@@ -155,13 +149,13 @@ export class CobasService {
       that.socketClient.on('close', function () {
         that.socketClient.destroy();
         that.connectionStatus(false);
-        that.showLiveLog('Client Disconnected');
+        that.logger('info', 'Client Disconnected');
       });
 
       that.socketClient.on('error', (e) => {
         that.connectionStatus(false);
         that.stopTryingStatus(true);
-        that.showLiveLog(e);
+        that.logger('error', e);
       });
     } else {
 
@@ -185,7 +179,7 @@ export class CobasService {
       if (this.socketClient) {
         this.socketClient.destroy();
         this.connectionStatus(false);
-        this.showLiveLog('Disconnected');
+        this.logger('info', 'Disconnected');
       }
 
     } else {
@@ -193,7 +187,7 @@ export class CobasService {
         this.socketClient.destroy();
         this.server.close();
         this.connectionStatus(false);
-        this.showLiveLog('Disconnected');
+        this.logger('info', 'Disconnected');
       }
     }
   }
@@ -220,9 +214,9 @@ export class CobasService {
     rData.data = rawText;
     rData.machine = this.settings.rocheMachine;
     this.rawDataModel.addRawData(rData, (res) => {
-      this.showLiveLog("Raw Data successfully added");
+      that.logger('success', "Raw Data successfully added");
     }, (err) => {
-      this.log.error("Not able to save Raw Data " + JSON.stringify(err));
+      that.logger('error', "Not able to save Raw Data " + JSON.stringify(err));
     });
 
 
@@ -275,12 +269,12 @@ export class CobasService {
 
     if (order.results) {
       this.orderModel.addOrderTest(order, (res) => {
-        that.showLiveLog("Result Successfully Added : " + order.order_id);
+        that.logger('success', "Result Successfully Added : " + order.order_id);
       }, (err) => {
-        that.log.error("Failed to add result : " + JSON.stringify(err));
+        that.logger('error', "Failed to add result : " + JSON.stringify(err));
       });
     } else {
-      that.log.error("Unable to store data into the database");
+      that.logger('error', "Unable to store data into the database");
     }
 
     // order.order_id = r.sampleID;
@@ -307,9 +301,9 @@ export class CobasService {
     rData.machine = 'MACHINE';
     let rawDataModel = new RawDataModel;
     rawDataModel.addRawData(rData, (res) => {
-      that.showLiveLog("Raw Data successfully added - through timer");
+      that.logger('success', "Raw Data successfully added - forced");
     }, (err) => {
-      that.log.error("Not able to save Raw Data - through timer " + JSON.stringify(err));
+      that.logger('error', "Not able to save Raw Data - forced" + JSON.stringify(err));
     });
 
     t.processASTMData(t.strData)
@@ -323,7 +317,7 @@ export class CobasService {
 
     this.timer = setTimeout(this.forceSaveRawData, 5000, this);
 
-    // this.showLiveLog(this.timer);
+    // this.logger('info',this.timer);
     //}else{
     //  clearTimeout(this.timer);
     //}
@@ -332,42 +326,42 @@ export class CobasService {
 
     if (this.settings.rocheProtocol === 'hl7') {
 
-      //this.showLiveLog('INSIDE HL7 IF');
+      this.logger('info','Processing HL7');
       this.parseHl7Data(data);
 
     } else if (this.settings.rocheProtocol === 'astm') {
 
-      //this.showLiveLog('INSIDE ASTM ELSE IF');
+      this.logger('info','Processing ASTM');
 
       let that = this;
       var d = data.toString("hex");
 
-      // this.showLiveLog("HEX " + d);
-      // this.showLiveLog("TEXT " + that.hex2ascii(d));
+      //this.logger('info',"HEX :" + d);
+      //this.logger('info', "TEXT :" + that.hex2ascii(d));
 
       if (d === "04") {
 
         that.socketClient.write(that.ACK);
 
-        this.showLiveLog('Received EOT. READY TO SEND');
+        this.logger('info', 'Received EOT. READY TO SEND');
         clearTimeout(that.timer);
-        //this.showLiveLog(that.strData);
+        //this.logger('info',that.strData);
 
         // Let us store this Raw Data before we process it
         var rData: any = {};
         rData.data = that.strData;
         rData.machine = that.settings.rocheMachine;
         this.rawDataModel.addRawData(rData, (res) => {
-          that.showLiveLog("Raw Data successfully added");
+          that.logger('success', "Raw Data successfully added");
         }, (err) => {
-          that.log.error("Not able to save Raw Data : " + JSON.stringify(err));
+          that.logger('error', "Not able to save Raw Data : " + JSON.stringify(err));
         });
 
         that.processASTMData(that.strData);
         that.strData = "";
       } else if (d == "21") {
         that.socketClient.write(that.ACK);
-        that.showLiveLog('NAK Received');
+        that.logger('error', 'NAK Received');
       } else {
 
         let text = that.hex2ascii(d);
@@ -379,15 +373,12 @@ export class CobasService {
         else if (d === "03") text = "<ETX>"
         else if (d == "5E") text = "::";
 
-
-        let substring = "H|";
-
-        if (text.includes(substring)) {
-          text = '<START>' + text
+        if (text.includes("H|")) {
+          text = '##START##' + text
         }
 
         that.strData += text;
-        that.showLiveLog(that.strData);
+        that.logger('info', that.strData);
         that.socketClient.write(that.ACK);
       }
     }
@@ -417,13 +408,13 @@ export class CobasService {
 
   processASTMData(astmData) {
 
-    //this.showLiveLog(astmData);
+    //this.logger('info',astmData);
 
     let that = this;
-    let fullDataArray = astmData.split('<START>');
+    let fullDataArray = astmData.split('##START##');
 
-    //that.showLiveLog("AFTER SPLITTING USING <START>");
-    //this.showLiveLog(fullDataArray);
+    //that.logger('info',"AFTER SPLITTING USING ##START##");
+    //this.logger('info',fullDataArray);
 
     fullDataArray.forEach(function (partData) {
       let data = partData.replace(/[\x05\x02\x03]/g, '');
@@ -443,11 +434,11 @@ export class CobasService {
 
         }
       });
-      // this.showLiveLog(dataArray);
-      //this.showLiveLog(dataArray['R']);
+      // this.logger('info',dataArray);
+      //this.logger('info',dataArray['R']);
 
       if (dataArray === []) {
-        that.showLiveLog('dataArray blank');
+        that.logger('info', 'dataArray blank');
         return;
       }
 
@@ -458,15 +449,15 @@ export class CobasService {
         if (typeof dataArray['R'] == 'string') {
           dataArray['R'] = dataArray['R'].split(",");
         }
-        // this.showLiveLog(typeof dataArray['O']);
+        // this.logger('info',typeof dataArray['O']);
         //
         //dataArray['O'] = dataArray['O'].split(",");
-        // this.showLiveLog(JSON.stringify(dataArray));
-        // this.showLiveLog(JSON.stringify(dataArray['R']));
+        // this.logger('info',JSON.stringify(dataArray));
+        // this.logger('info',JSON.stringify(dataArray['R']));
 
-        // this.showLiveLog('Result in position 3 ' + dataArray['R'][3]);
-        // this.showLiveLog('Unit in position 2' + dataArray['R'][2]);
-        // this.showLiveLog('tested_by in position 10' + dataArray['R'][10]);
+        // this.logger('info','Result in position 3 ' + dataArray['R'][3]);
+        // this.logger('info','Unit in position 2' + dataArray['R'][2]);
+        // this.logger('info','tested_by in position 10' + dataArray['R'][10]);
 
 
         order.order_id = dataArray['O'][3];
@@ -485,15 +476,16 @@ export class CobasService {
         order.machine_used = that.settings.rocheMachine;
 
         if (order.order_id) {
-          //that.showLiveLog("Trying to add order :", JSON.stringify(order));
+          //that.logger('info',"Trying to add order :", JSON.stringify(order));
           that.orderModel.addOrderTest(order, (res) => {
-            that.showLiveLog("Result Successfully Added : " + order.order_id);
+            that.logger('success', "Result Successfully Added : " + order.order_id);
           }, (err) => {
-            console.error("Failed to add : " + JSON.stringify(err));
+            that.logger('error', "Failed to add : " + JSON.stringify(err));
           });
         }
       }
       catch (error) {
+        that.logger("error",error);
         console.error(error);
         return;
 
@@ -514,19 +506,26 @@ export class CobasService {
       res = [res]; // converting it into an array
       that.lastOrdersSubject.next(res);
     }, (err) => {
-      that.log.error("Failed to fetch data " + JSON.stringify(err));
+      that.logger('error', "Failed to fetch data " + JSON.stringify(err));
     });
   }
 
 
-  showLiveLog(message) {
+  logger(logType, message) {
     let that = this;
-    that.log.info(message);
     var moment = require('moment');
     var date = moment(new Date()).format('DD-MMM-YYYY HH:mm:ss');
-    that.logtext[that.logtext.length] = "[info] [" + date + "] " + message
-    message = that.logtext;
-    that.liveLogSubject.next(message);
+    if (logType == 'info') {
+      that.log.info(message);
+      that.logtext[that.logtext.length] = "<span class='text-info'>[info]</span> [" + date + "] " + message + "<br>"
+    } else if (logType == 'error') {
+      that.log.error(message);
+      that.logtext[that.logtext.length] = "<span class='text-danger'>[error]</span> [" + date + "] " + message + "<br>"
+    } else if (logType == 'success') {
+      that.log.info(message);
+      that.logtext[that.logtext.length] = "<span class='text-success'>[success]</span> [" + date + "] " + message + "<br>"
+    }
+    that.liveLogSubject.next(that.logtext);
   }
 
 }
