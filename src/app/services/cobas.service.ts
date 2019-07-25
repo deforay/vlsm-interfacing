@@ -449,6 +449,10 @@ export class CobasService {
         if (typeof dataArray['R'] == 'string') {
           dataArray['R'] = dataArray['R'].split(",");
         }
+
+        if (typeof dataArray['O'] == 'string') {
+          dataArray['O'] = dataArray['O'].split(",");
+        }
         // this.logger('info',typeof dataArray['O']);
         //
         //dataArray['O'] = dataArray['O'].split(",");
