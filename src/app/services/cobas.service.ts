@@ -384,6 +384,20 @@ export class CobasService {
     }
   }
 
+  array_key_exists (key, search) { // eslint-disable-line camelcase
+    //  discuss at: http://locutus.io/php/array_key_exists/
+    // original by: Kevin van Zonneveld (http://kvz.io)
+    // improved by: Felix Geisendoerfer (http://www.debuggable.com/felix)
+    //   example 1: array_key_exists('kevin', {'kevin': 'van Zonneveld'})
+    //   returns 1: true
+  
+    if (!search || (search.constructor !== Array && search.constructor !== Object)) {
+      return false
+    }
+  
+    return key in search
+  }  
+
   formatRawDate(rawDate) {
     let d = rawDate;
     if (!rawDate) {
@@ -446,17 +460,19 @@ export class CobasService {
 
       try {
 
-        if (dataArray['R'] != undefined && typeof dataArray['R'] == 'string') {
+        if (that.array_key_exists('R', dataArray) && typeof dataArray['R'] == 'string') {
           dataArray['R'] = dataArray['R'].split(",");
         }
 
-        if (dataArray['O'] != undefined && typeof dataArray['O'] == 'string') {
+        if (that.array_key_exists('O', dataArray) && typeof dataArray['O'] == 'string') {
           dataArray['O'] = dataArray['O'].split(",");
         }
 
-        if (dataArray['C'] != undefined && typeof dataArray['C'] == 'string') {
+        if (that.array_key_exists('C', dataArray) !== undefined && typeof dataArray['C'] == 'string') {
           dataArray['C'] = dataArray['C'].split(",");
         }
+
+        console.log(dataArray);
         // this.logger('info',typeof dataArray['O']);
         //
         //dataArray['O'] = dataArray['O'].split(",");

@@ -49,10 +49,10 @@ export class DashboardComponent implements OnInit {
     });
 
     // Let us fetch last few Orders on load
-    that.fetchLastOrders(false);
+    that.fetchLastOrders('hide');
 
     // let us call the function every 5 minutes
-    that.interval = setInterval(() => { that.fetchLastOrders(false); }, 1000 * 300 );
+    that.interval = setInterval(() => { that.fetchLastOrders('hide'); }, 1000 * 300 );
 
 
 
@@ -72,14 +72,16 @@ export class DashboardComponent implements OnInit {
 
 
   fetchLastOrders(showNotification){
+    
     const that = this;
     that.cobasService.fetchLastOrders();
 
     that.cobasService.lastOrders.subscribe(lastFewOrders => {
       that._ngZone.run(() => {
         that.lastOrders = lastFewOrders[0];
-
-        if(showNotification){
+        console.log(showNotification);
+        if(showNotification !== 'hide'){
+          showNotification = 'hide';
           new Notification('VLSM Interfacing', {
             body: 'Fetched recent orders'
           });
