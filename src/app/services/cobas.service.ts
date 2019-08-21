@@ -468,7 +468,7 @@ export class CobasService {
           dataArray['O'] = dataArray['O'].split(",");
         }
 
-        if (that.array_key_exists('C', dataArray) !== undefined && typeof dataArray['C'] == 'string') {
+        if (that.array_key_exists('C', dataArray) && typeof dataArray['C'] == 'string') {
           dataArray['C'] = dataArray['C'].split(",");
         }
 
