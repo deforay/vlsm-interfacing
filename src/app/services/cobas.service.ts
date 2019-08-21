@@ -446,12 +446,16 @@ export class CobasService {
 
       try {
 
-        if (typeof dataArray['R'] == 'string') {
+        if (dataArray['R'] != undefined && typeof dataArray['R'] == 'string') {
           dataArray['R'] = dataArray['R'].split(",");
         }
 
-        if (typeof dataArray['O'] == 'string') {
+        if (dataArray['O'] != undefined && typeof dataArray['O'] == 'string') {
           dataArray['O'] = dataArray['O'].split(",");
+        }
+
+        if (dataArray['C'] != undefined && typeof dataArray['C'] == 'string') {
+          dataArray['C'] = dataArray['C'].split(",");
         }
         // this.logger('info',typeof dataArray['O']);
         //
@@ -468,7 +472,7 @@ export class CobasService {
         order.test_id = dataArray['O'][2];
         order.test_type = (dataArray['R'][2]) ? dataArray['R'][2].replace("^^^", "") : dataArray['R'][2];
         order.test_unit = dataArray['R'][4];
-        order.raw_text = astmData;
+        order.raw_text = partData;
         order.results = dataArray['R'][3];
         order.tested_by = dataArray['R'][10];
         order.result_status = 1;
