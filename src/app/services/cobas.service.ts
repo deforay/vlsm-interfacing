@@ -470,7 +470,7 @@ export class CobasService {
 
         if (that.array_key_exists('C', dataArray) && typeof dataArray['C'] == 'string') {
           dataArray['C'] = dataArray['C'].split(",");
-        }
+        } 
 
         console.log(dataArray);
         // this.logger('info',typeof dataArray['O']);
@@ -484,29 +484,42 @@ export class CobasService {
         // this.logger('info','tested_by in position 10' + dataArray['R'][10]);
 
 
-        order.order_id = dataArray['O'][3];
-        order.test_id = dataArray['O'][2];
-        order.test_type = (dataArray['R'][2]) ? dataArray['R'][2].replace("^^^", "") : dataArray['R'][2];
-        order.test_unit = dataArray['R'][4];
-        order.raw_text = partData;
-        order.results = dataArray['R'][3];
-        order.tested_by = dataArray['R'][10];
-        order.result_status = 1;
-        order.analysed_date_time = that.formatRawDate(dataArray['R'][12]);
-        order.lims_sync_status = 0;
-        order.authorised_date_time = that.formatRawDate(dataArray['R'][12]);
-        order.result_accepted_date_time = that.formatRawDate(dataArray['R'][12]);
-        order.test_location = that.settings.labName;
-        order.machine_used = that.settings.rocheMachine;
-
-        if (order.order_id) {
-          //that.logger('info',"Trying to add order :", JSON.stringify(order));
-          that.orderModel.addOrderTest(order, (res) => {
-            that.logger('success', "Result Successfully Added : " + order.order_id);
-          }, (err) => {
-            that.logger('error', "Failed to add : " + JSON.stringify(err));
-          });
+        if(dataArray['O'] !== undefined && dataArray['O']  != []){
+          order.order_id = dataArray['O'][3];
+          order.test_id = dataArray['O'][2];
+          if(dataArray['R'] !== undefined && dataArray['R']  != []){
+            order.test_type = (dataArray['R'][2]) ? dataArray['R'][2].replace("^^^", "") : dataArray['R'][2];
+            order.test_unit = dataArray['R'][4];
+            order.results = dataArray['R'][3];
+            order.tested_by = dataArray['R'][10];
+            order.analysed_date_time = that.formatRawDate(dataArray['R'][12]);
+            order.authorised_date_time = that.formatRawDate(dataArray['R'][12]);
+            order.result_accepted_date_time = that.formatRawDate(dataArray['R'][12]);
+          }else{
+            order.test_type = '';
+            order.test_unit = '';
+            order.results = 'Failed';
+            order.tested_by = '';
+            order.analysed_date_time = '';
+            order.authorised_date_time = '';
+            order.result_accepted_date_time = '';
+          }
+          order.raw_text = partData;
+          order.result_status = 1;
+          order.lims_sync_status = 0;
+          order.test_location = that.settings.labName;
+          order.machine_used = that.settings.rocheMachine;
+  
+          if (order.order_id) {
+            //that.logger('info',"Trying to add order :", JSON.stringify(order));
+            that.orderModel.addOrderTest(order, (res) => {
+              that.logger('success', "Result Successfully Added : " + order.order_id);
+            }, (err) => {
+              that.logger('error', "Failed to add : " + JSON.stringify(err));
+            });
+          }          
         }
+        
       }
       catch (error) {
         that.logger("error",error);
