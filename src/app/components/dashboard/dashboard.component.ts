@@ -40,7 +40,7 @@ export class DashboardComponent implements OnInit {
       });
     });
 
-    
+
 
     that.cobasService.liveLog.subscribe(mesg => {
       that._ngZone.run(() => {
@@ -52,39 +52,39 @@ export class DashboardComponent implements OnInit {
     that.fetchLastOrders('hide');
 
     // let us call the function every 5 minutes
-    that.interval = setInterval(() => { that.fetchLastOrders('hide'); }, 1000 * 300 );
+    that.interval = setInterval(() => { that.fetchLastOrders('hide'); }, 1000 * 300);
 
 
 
     that.cobasService.stopTrying.subscribe(status => {
       that._ngZone.run(() => {
+
         // console.log(status);
         // that.stopTrying = status;
         // if (that.stopTrying) {
-        //   const { dialog } = require('electron').remote;
-        //   dialog.showErrorBox('Oops! Something went wrong!', 'Unable to connect. Check if all the Roche machine connection settings are correct and the Machine is running.');
-        //   that.close();
+        // that.cobasService.logger('error', 'Unable to connect to machine. Check Settings');
+        // that.close();
         // }
       });
-    })
+    });
 
   }
 
 
-  fetchLastOrders(showNotification){
-    
+  fetchLastOrders(showNotification) {
     const that = this;
     that.cobasService.fetchLastOrders();
 
     that.cobasService.lastOrders.subscribe(lastFewOrders => {
       that._ngZone.run(() => {
         that.lastOrders = lastFewOrders[0];
-        console.log(showNotification);
-        if(showNotification !== 'hide'){
+        //console.log(showNotification);
+        if (showNotification !== 'hide') {
           showNotification = 'hide';
-          new Notification('VLSM Interfacing', {
-            body: 'Fetched recent orders'
-          });
+          // return new Notification('VLSM Interfacing', {
+          //   body: 'Fetched recent orders'
+          // });
+          that.cobasService.logger('info', 'Fetched recent records from database');
         }
 
 
@@ -96,20 +96,15 @@ export class DashboardComponent implements OnInit {
   }
 
   reconnect() {
-
     this.connectionInProcess = true;
     this.reconnectButtonText = 'Please wait ... ';
     this.cobasService.reconnect();
-    //this.cobasService.connect();
-
   }
 
   close() {
     this.connectionInProcess = false;
     this.reconnectButtonText = 'Connect';
     this.cobasService.closeConnection();
-    //this.cobasService.connect();
-
   }
 
   ngOnDestroy() {

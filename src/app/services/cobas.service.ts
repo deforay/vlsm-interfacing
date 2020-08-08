@@ -1,12 +1,7 @@
 import { Injectable } from '@angular/core';
-
-
-
-
 import { Socket } from 'net';
-
-import { OrderModel } from '../models/order.model'
-import { RawDataModel } from '../models/rawdata.model'
+import { OrderModel } from '../models/order.model';
+import { RawDataModel } from '../models/rawdata.model';
 import { BehaviorSubject, Observable } from 'rxjs';
 
 @Injectable({
@@ -18,7 +13,7 @@ export class CobasService {
 
 
   private net = require('net');
-  //private serialConnection = null;  
+  // private serialConnection = null;
 
   private statusSubject = new BehaviorSubject(false);
   currentStatus = this.statusSubject.asObservable();
@@ -43,7 +38,7 @@ export class CobasService {
   private LF = Buffer.from('10', 'hex');
   private NAK = Buffer.from('21', 'hex');
 
-  private strData: string = '';
+  private strData: string = null;
   private connectopts: any = null;
   private settings = null;
   private orderModel = null;
@@ -54,7 +49,7 @@ export class CobasService {
   public server = null;
 
   public connectionTries = 0;
-  public hl7parser = require("hl7parser");
+  public hl7parser = require('hl7parser');
 
   private log = null;
 
@@ -65,7 +60,7 @@ export class CobasService {
     this.orderModel = new OrderModel;
     this.rawDataModel = new RawDataModel;
     this.log = require('electron-log');
-    //console.log(this.log.findLogPath());
+    // console.log(this.log.findLogPath());
 
   }
 
@@ -81,15 +76,23 @@ export class CobasService {
 
   hl7ACK(messageID) {
 
-    if (!messageID || messageID == "") {
+    if (!messageID || messageID === '') {
       messageID = Math.random();
     }
 
-    var moment = require('moment');
-    var date = moment(new Date()).format('YYYYMMDDHHmmss');;
+    const moment = require('moment');
+    const date = moment(new Date()).format('YYYYMMDDHHmmss');;
 
-    let ack = String.fromCharCode(11) + "MSH|^~\&|LIS||COBAS6800/8800||" + date + "||ACK^R22|ACK-R22-" + date + "||2.5||||||8859/1" + String.fromCharCode(13);
-    ack += "MSA|AA|" + messageID + String.fromCharCode(13) + String.fromCharCode(28) + String.fromCharCode(13);
+    let ack = String.fromCharCode(11)
+      + 'MSH|^~\&|LIS||COBAS6800/8800||'
+      + date + '||ACK^R22|ACK-R22-'
+      + date + '||2.5||||||8859/1'
+      + String.fromCharCode(13);
+
+    ack += 'MSA|AA|' + messageID
+      + String.fromCharCode(13)
+      + String.fromCharCode(28)
+      + String.fromCharCode(13);
 
     return ack;
   }
@@ -98,14 +101,13 @@ export class CobasService {
   // Method used to connect to the Roche Machine
   connect() {
 
-    let that = this;
-
+    const that = this;
     const Store = require('electron-store');
     const store = new Store();
     this.settings = store.get('appSettings');
 
 
-    if (that.settings.rocheConnectionType == "tcpserver") {
+    if (that.settings.rocheConnectionType === 'tcpserver') {
       that.logger('info', 'Trying to create a server connection');
       that.server = that.net.createServer(function (socket) {
         // confirm socket connection from client
@@ -124,13 +126,13 @@ export class CobasService {
         that.logger('error', 'Error while connecting ' + e.code);
       });
 
-    } else if (that.settings.rocheConnectionType == "tcpclient") {
+    } else if (that.settings.rocheConnectionType === 'tcpclient') {
 
       that.socketClient = new Socket();
       this.connectopts = {
         port: this.settings.rochePort,
         host: this.settings.rocheHost
-      }
+      };
 
       this.logger('info', 'Trying to connect as client');
       this.connectionTries++; // incrementing the connection tries
@@ -161,8 +163,6 @@ export class CobasService {
 
     }
 
-
-
   }
 
   reconnect() {
@@ -175,7 +175,7 @@ export class CobasService {
     const store = new Store();
     this.settings = store.get('appSettings');
 
-    if (this.settings.rocheConnectionType == "tcpclient") {
+    if (this.settings.rocheConnectionType === 'tcpclient') {
       if (this.socketClient) {
         this.socketClient.destroy();
         this.connectionStatus(false);
@@ -195,22 +195,24 @@ export class CobasService {
 
 
   hex2ascii(hexx) {
-    var hex = hexx.toString();//force conversion
-    var str = '';
-    for (var i = 0; i < hex.length; i += 2)
+    const hex = hexx.toString(); // force conversion
+    let str = '';
+    for (let i = 0; i < hex.length; i += 2) {
       str += String.fromCharCode(parseInt(hex.substr(i, 2), 16));
+    }
+
     return str;
   }
 
 
   parseHl7Data(data) {
-    let d = data.toString("hex");
+    const d = data.toString('hex');
     let rawText = this.hex2ascii(d);
     let order: any = {};
     let that = this;
 
     // Let us store this Raw Data before we process it
-    var rData: any = {};
+    let rData: any = {};
     rData.data = rawText;
     rData.machine = this.settings.rocheMachine;
     this.rawDataModel.addRawData(rData, (res) => {
@@ -226,12 +228,12 @@ export class CobasService {
     rawText = rawText.trim();
     rawText = rawText.replace(/[\r\n\x0B\x0C\u0085\u2028\u2029]+/gm, "\r");
 
-    var message = this.hl7parser.create(rawText);
-    var msgID = message.get("MSH.10").toString();
+    let message = this.hl7parser.create(rawText);
+    let msgID = message.get('MSH.10').toString();
     this.socketClient.write(this.hl7ACK(msgID));
 
-    //var result = null;
-    var resultOutcome = message.get('OBX').get(2).get('OBX.5.1').toString();
+    // let result = null;
+    let resultOutcome = message.get('OBX').get(2).get('OBX.5.1').toString();
 
     order.order_id = message.get('SPM.2').toString();
     order.test_id = message.get('SPM.2').toString();
@@ -296,7 +298,7 @@ export class CobasService {
   forceSaveRawData(t) {
     let that = this;
     // Let us store this Raw Data before we process it
-    var rData: any = {};
+    let rData: any = {};
     rData.data = t.strData;
     rData.machine = 'MACHINE';
     let rawDataModel = new RawDataModel;
@@ -326,15 +328,15 @@ export class CobasService {
 
     if (this.settings.rocheProtocol === 'hl7') {
 
-      this.logger('info','Processing HL7');
+      this.logger('info', 'Processing HL7');
       this.parseHl7Data(data);
 
     } else if (this.settings.rocheProtocol === 'astm') {
 
-      this.logger('info','Processing ASTM');
+      this.logger('info', 'Processing ASTM');
 
       let that = this;
-      var d = data.toString("hex");
+      let d = data.toString("hex");
 
       //this.logger('info',"HEX :" + d);
       //this.logger('info', "TEXT :" + that.hex2ascii(d));
@@ -348,7 +350,7 @@ export class CobasService {
         //this.logger('info',that.strData);
 
         // Let us store this Raw Data before we process it
-        var rData: any = {};
+        let rData: any = {};
         rData.data = that.strData;
         rData.machine = that.settings.rocheMachine;
         this.rawDataModel.addRawData(rData, (res) => {
@@ -384,19 +386,19 @@ export class CobasService {
     }
   }
 
-  array_key_exists (key, search) { // eslint-disable-line camelcase
+  array_key_exists(key, search) { // eslint-disable-line camelcase
     //  discuss at: http://locutus.io/php/array_key_exists/
     // original by: Kevin van Zonneveld (http://kvz.io)
     // improved by: Felix Geisendoerfer (http://www.debuggable.com/felix)
     //   example 1: array_key_exists('kevin', {'kevin': 'van Zonneveld'})
     //   returns 1: true
-  
+
     if (!search || (search.constructor !== Array && search.constructor !== Object)) {
       return false
     }
-  
+
     return key in search
-  }  
+  }
 
   formatRawDate(rawDate) {
     let d = rawDate;
@@ -441,7 +443,7 @@ export class CobasService {
           if (dataArray[element.substring(1, 2)] == undefined) {
             dataArray[element.substring(1, 2)] = element.split("|");
           } else {
-            var arr = element.split("|");
+            let arr = element.split("|");
             arr.shift();
             dataArray[element.substring(1, 2)] += arr;
           }
@@ -456,7 +458,7 @@ export class CobasService {
         return;
       }
 
-      var order: any = {};
+      let order: any = {};
 
       try {
 
@@ -470,7 +472,7 @@ export class CobasService {
 
         if (that.array_key_exists('C', dataArray) && typeof dataArray['C'] == 'string') {
           dataArray['C'] = dataArray['C'].split(",");
-        } 
+        }
 
         console.log(dataArray);
         // this.logger('info',typeof dataArray['O']);
@@ -484,10 +486,10 @@ export class CobasService {
         // this.logger('info','tested_by in position 10' + dataArray['R'][10]);
 
 
-        if(dataArray['O'] !== undefined && dataArray['O']  != []){
+        if (dataArray['O'] !== undefined && dataArray['O'] != []) {
           order.order_id = dataArray['O'][3];
           order.test_id = dataArray['O'][2];
-          if(dataArray['R'] !== undefined && dataArray['R']  != []){
+          if (dataArray['R'] !== undefined && dataArray['R'] != []) {
             order.test_type = (dataArray['R'][2]) ? dataArray['R'][2].replace("^^^", "") : dataArray['R'][2];
             order.test_unit = dataArray['R'][4];
             order.results = dataArray['R'][3];
@@ -495,7 +497,7 @@ export class CobasService {
             order.analysed_date_time = that.formatRawDate(dataArray['R'][12]);
             order.authorised_date_time = that.formatRawDate(dataArray['R'][12]);
             order.result_accepted_date_time = that.formatRawDate(dataArray['R'][12]);
-          }else{
+          } else {
             order.test_type = '';
             order.test_unit = '';
             order.results = 'Failed';
@@ -509,7 +511,7 @@ export class CobasService {
           order.lims_sync_status = 0;
           order.test_location = that.settings.labName;
           order.machine_used = that.settings.rocheMachine;
-  
+
           if (order.order_id) {
             //that.logger('info',"Trying to add order :", JSON.stringify(order));
             that.orderModel.addOrderTest(order, (res) => {
@@ -517,12 +519,12 @@ export class CobasService {
             }, (err) => {
               that.logger('error', "Failed to add : " + JSON.stringify(err));
             });
-          }          
+          }
         }
-        
+
       }
       catch (error) {
-        that.logger("error",error);
+        that.logger("error", error);
         console.error(error);
         return;
 
@@ -549,18 +551,18 @@ export class CobasService {
 
 
   logger(logType, message) {
-    let that = this;
-    var moment = require('moment');
-    var date = moment(new Date()).format('DD-MMM-YYYY HH:mm:ss');
-    if (logType == 'info') {
+    const that = this;
+    const moment = require('moment');
+    const date = moment(new Date()).format('DD-MMM-YYYY HH:mm:ss');
+    if (logType === 'info') {
       that.log.info(message);
-      that.logtext[that.logtext.length] = "<span class='text-info'>[info]</span> [" + date + "] " + message + "<br>"
-    } else if (logType == 'error') {
+      that.logtext[that.logtext.length] = '<span class="text-info">[info]</span> [' + date + '] ' + message + '<br>';
+    } else if (logType === 'error') {
       that.log.error(message);
-      that.logtext[that.logtext.length] = "<span class='text-danger'>[error]</span> [" + date + "] " + message + "<br>"
-    } else if (logType == 'success') {
+      that.logtext[that.logtext.length] = '<span class="text-danger">[error]</span> [' + date + '] ' + message + '<br>';
+    } else if (logType === 'success') {
       that.log.info(message);
-      that.logtext[that.logtext.length] = "<span class='text-success'>[success]</span> [" + date + "] " + message + "<br>"
+      that.logtext[that.logtext.length] = '<span class="text-success">[success]</span> [' + date + '] ' + message + '<br>';
     }
     that.liveLogSubject.next(that.logtext);
   }
