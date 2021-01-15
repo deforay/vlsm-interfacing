@@ -7,7 +7,7 @@ var win, serve;
 var args = process.argv.slice(1);
 serve = args.some(function (val) { return val === '--serve'; });
 function createWindow() {
-    var AutoLaunch = require("auto-launch");
+    //const AutoLaunch = require("auto-launch");
     var electronScreen = electron_1.screen;
     var size = electronScreen.getPrimaryDisplay().workAreaSize;
     // Create the browser window.
@@ -15,7 +15,8 @@ function createWindow() {
         x: 0,
         y: 0,
         width: size.width,
-        height: size.height
+        height: size.height,
+        icon: path.join(__dirname, '/dist/icon.png')
     });
     if (serve) {
         require('electron-reload')(__dirname, {
@@ -30,22 +31,22 @@ function createWindow() {
             slashes: true
         }));
     }
-    //################ AUTO LAUNCHER #################
-    var aLauncher = new AutoLaunch({
-        name: electron_1.app.getName(),
-        isHidden: true
-    });
-    aLauncher.enable();
-    aLauncher.isEnabled()
-        .then(function (isEnabled) {
-        if (isEnabled) {
-            return;
-        }
-        aLauncher.enable();
-    })
-        .catch(function (err) {
-        console.log("AUTOLAUNCH", JSON.stringify(err));
-    });
+    // //################ AUTO LAUNCHER #################
+    // var aLauncher = new AutoLaunch({
+    //   name: app.getName(),
+    //   isHidden: true
+    // });
+    // aLauncher.enable();
+    // aLauncher.isEnabled()
+    //   .then(function (isEnabled) {
+    //     if (isEnabled) {
+    //       return;
+    //     }
+    //     aLauncher.enable();
+    //   })
+    //   .catch(function (err) {
+    //     console.log("AUTOLAUNCH", JSON.stringify(err));
+    //   });
     //win.webContents.openDevTools();
     // Emitted when the window is closed.
     win.on('closed', function () {
@@ -56,16 +57,16 @@ function createWindow() {
     });
 }
 try {
-    electron_1.app.once('ready', function () {
-        console.log('started'); // ping parent
-    });
-    var gotTheLock = electron_1.app.requestSingleInstanceLock();
-    electron_1.app.on('second-instance', function () {
-        setImmediate(function () { return electron_1.app.exit(0); });
-    });
-    if (!gotTheLock) {
-        electron_1.app.exit(1);
-    }
+    // app.once('ready', () => {
+    //   console.log('started') // ping parent
+    // })
+    //const gotTheLock = app.requestSingleInstanceLock()
+    // app.on('second-instance', () => {
+    //   setImmediate(() => app.exit(0))
+    // })
+    // if (!gotTheLock) {
+    //   app.exit(1)
+    // }
     // This method will be called when Electron has finished
     // initialization and is ready to create browser windows.
     // Some APIs can only be used after this event occurs.

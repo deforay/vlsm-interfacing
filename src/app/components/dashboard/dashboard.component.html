@@ -9,7 +9,7 @@
     <div class="card-body">
 
       <div *ngIf="isConnected; else notConnected">
-        <h5 class="card-title text-success">VL Machine Connected.</h5>
+        <h5 class="card-title text-success">Machine Connected.</h5>
         <!-- <p class="card-text">Disconnect to modify settings.</p> -->
         <button (click)="close()" class="btn btn-danger">
           <span>Disconnect</span>
@@ -18,7 +18,7 @@
 
 
       <ng-template #notConnected>
-        <h5 class="card-title text-danger">VL Machine Not Connected. </h5>
+        <h5 class="card-title text-danger">Machine Not Connected. </h5>
         <p class="card-text">Please try to reconnect and wait for a few moments.</p>
         <button (click)="reconnect()" class="btn btn-success" [disabled]="connectionInProcess">
           <span>{{reconnectButtonText}}</span>
@@ -31,24 +31,27 @@
         <button *ngIf="!connectionInProcess" routerLink="/settings" class="btn btn-primary">
           <span>Settings</span>
         </button>
+
+
       </ng-template>
     </div>
-
+    <!-- <a (click)="clearLiveLog()" class="btn btn-dark btn-xs push-right">
+      <span>Clear Log</span>
+    </a> -->
     <div class="livelog">
+      <ng-container *ngIf="!(liveLogText?.length > 0)">
+        <span></span>
+      </ng-container>
+      <ng-container *ngFor="let x of liveLogText">
 
-        <ng-container *ngIf="!(liveLogText?.length > 0)">
-          <span></span>
-        </ng-container>
-        <ng-container *ngFor="let x of liveLogText">
-          
-          <span [innerHTML]="x"> </span>
+        <span [innerHTML]="x"> </span>
 
-        </ng-container>
-      </div>    
+      </ng-container>
+    </div>
   </div>
 
   <br>
-  
+
   <br>
   <h4>
 
@@ -63,7 +66,7 @@
   <table style="font-size: 0.9em;" id="dashtable"
     class="table dashtable table-bordered table-striped table-hover table-responsive">
     <tr class="thead-dark">
-      <th style="width:15%;">Sample ID</th>
+      <th style="width:15%;">Sample/Order ID</th>
       <th style="width:15%;">Result</th>
       <th style="width:10%;">Unit</th>
       <th style="width:15%;">Tested By</th>

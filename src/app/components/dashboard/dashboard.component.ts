@@ -84,7 +84,7 @@ export class DashboardComponent implements OnInit {
           // return new Notification('VLSM Interfacing', {
           //   body: 'Fetched recent orders'
           // });
-          that.cobasService.logger('info', 'Fetched recent records from database');
+          //that.cobasService.logger('info', 'Fetched recent records from database');
         }
 
 
@@ -93,6 +93,10 @@ export class DashboardComponent implements OnInit {
 
 
 
+  }
+
+  clearLiveLog(){
+    this.liveLogText = null;
   }
 
   reconnect() {

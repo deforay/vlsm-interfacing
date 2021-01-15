@@ -35,10 +35,11 @@ export class CobasService {
   private ETX = Buffer.from('03', 'hex');
   private EOT = Buffer.from('04', 'hex');
   private CR = Buffer.from('13', 'hex');
+  private FS = Buffer.from('25', 'hex');
   private LF = Buffer.from('10', 'hex');
   private NAK = Buffer.from('21', 'hex');
 
-  private strData: string = null;
+  private strData: string = "";
   private connectopts: any = null;
   private settings = null;
   private orderModel = null;
@@ -107,17 +108,37 @@ export class CobasService {
     this.settings = store.get('appSettings');
 
 
+
+
     if (that.settings.rocheConnectionType === 'tcpserver') {
       that.logger('info', 'Trying to create a server connection');
-      that.server = that.net.createServer(function (socket) {
+      that.server = that.net.createServer();
+      that.server.listen(that.settings.rochePort, that.settings.rocheHost);
+
+      let sockets = [];
+
+      that.server.on('connection', function (socket) {
         // confirm socket connection from client
-        that.logger('info', (new Date()) + ' - a client has connected to this server');
+        that.logger('info', (new Date()) + ' : A remote client has connected to the Interfacing Server');
         that.connectionStatus(true);
+        sockets.push(socket);
         that.socketClient = socket;
         socket.on('data', function (data) {
           that.handleTCPResponse(data);
         });
-      }).listen(that.settings.rochePort, that.settings.rocheHost);
+
+        // Add a 'close' event handler to this instance of socket
+        socket.on('close', function (data) {
+          let index = sockets.findIndex(function (o) {
+            return o.rocheHost === socket.rocheHost && o.rochePort === socket.rochePort;
+          })
+          if (index !== -1) {
+            sockets.splice(index, 1);
+          }
+          console.log('CLOSED: ' + socket.rocheHost + ' ' + socket.rocheHost);
+        });
+
+      });
 
 
       this.server.on('error', function (e) {
@@ -205,131 +226,132 @@ export class CobasService {
   }
 
 
-  parseHl7Data(data) {
-    const d = data.toString('hex');
-    let rawText = this.hex2ascii(d);
-    let order: any = {};
+  processHL7Data(rawText) {
+
     let that = this;
-
-    // Let us store this Raw Data before we process it
-    let rData: any = {};
-    rData.data = rawText;
-    rData.machine = this.settings.rocheMachine;
-    this.rawDataModel.addRawData(rData, (res) => {
-      that.logger('success', "Raw Data successfully added");
-    }, (err) => {
-      that.logger('error', "Not able to save Raw Data " + JSON.stringify(err));
-    });
-
-
-    order.raw_text = rawText;
-
-    rawText = rawText.replace(/[\x0b\x1c]/g, '');
-    rawText = rawText.trim();
-    rawText = rawText.replace(/[\r\n\x0B\x0C\u0085\u2028\u2029]+/gm, "\r");
-
     let message = this.hl7parser.create(rawText);
     let msgID = message.get('MSH.10').toString();
     this.socketClient.write(this.hl7ACK(msgID));
 
     // let result = null;
-    let resultOutcome = message.get('OBX').get(2).get('OBX.5.1').toString();
+    //console.log(message.get('OBX'));
 
-    order.order_id = message.get('SPM.2').toString();
-    order.test_id = message.get('SPM.2').toString();
-    order.test_type = 'HIVVL';
+    let obx = message.get('OBX').toArray();
 
-    if (resultOutcome == 'Titer') {
-      order.test_unit = message.get('OBX').get(0).get('OBX.6.1').toString();
-      order.results = message.get('OBX').get(0).get('OBX.5.1').toString();
-    } else if (resultOutcome == '< Titer min') {
-      order.test_unit = '';
-      order.results = '< Titer min';
-    } else if (resultOutcome == '> Titer max') {
-      order.test_unit = '';
-      order.results = '> Titer max';
-    } else if (resultOutcome == 'Target Not Detected') {
-      order.test_unit = '';
-      order.results = 'Target Not Detected';
-    } else if (resultOutcome == 'Invalid') {
-      order.test_unit = '';
-      order.results = 'Invalid';
-    } else {
-      order.test_unit = message.get('OBX').get(0).get('OBX.6.1').toString();
-      order.results = resultOutcome;
-    }
+    //obx.forEach(function (singleObx) {
+    //  console.log(singleObx);
+    //});
 
-    order.tested_by = message.get('OBX').get(0).get('OBX.16').toString();
-    order.result_status = 1;
-    order.lims_sync_status = 0;
-    order.analysed_date_time = this.formatRawDate(message.get('OBX').get(0).get('OBX.19').toString());
-    //order.specimen_date_time = this.formatRawDate(message.get('OBX').get(0).get('OBX.19').toString());
-    order.authorised_date_time = this.formatRawDate(message.get('OBX').get(0).get('OBX.19').toString());
-    order.result_accepted_date_time = this.formatRawDate(message.get('OBX').get(0).get('OBX.19').toString());
-    order.test_location = this.settings.labName;
-    order.machine_used = this.settings.rocheMachine;
+    let spm = message.get('SPM');
+    let sampleNumber = 0;
 
-    if (order.results) {
-      this.orderModel.addOrderTest(order, (res) => {
-        that.logger('success', "Result Successfully Added : " + order.order_id);
-      }, (err) => {
-        that.logger('error', "Failed to add result : " + JSON.stringify(err));
-      });
-    } else {
-      that.logger('error', "Unable to store data into the database");
-    }
+    //console.log(obx[1]);
+    spm.forEach(function (singleSpm) {
+      sampleNumber = (singleSpm.get(1).toInteger());
+      let singleObx = obx[(sampleNumber * 2) - 1]; // there are twice as many OBX .. so we take the even number - 1 OBX for each SPM
 
-    // order.order_id = r.sampleID;
-    // order.test_id = r.sampleID;
-    // order.test_type = r.testName;
-    // order.test_unit = r.unit;
-    // //order.createdDate = '';
-    // order.results = r.result;
-    // order.tested_by = r.operator;
-    // order.result_status = 1;
-    // order.analysed_date_time = r.timestamp;
-    // order.specimen_date_time = r.specimenDate;
-    // order.authorised_date_time = r.timestamp;
-    // order.result_accepted_date_time = r.timestamp;
-    // order.test_location = this.settings.labName;
-    // order.machine_used = this.settings.rocheMachine;    
-  }
+      //console.log(singleObx.get('OBX.19').toString());
 
-  forceSaveRawData(t) {
-    let that = this;
-    // Let us store this Raw Data before we process it
-    let rData: any = {};
-    rData.data = t.strData;
-    rData.machine = 'MACHINE';
-    let rawDataModel = new RawDataModel;
-    rawDataModel.addRawData(rData, (res) => {
-      that.logger('success', "Raw Data successfully added - forced");
-    }, (err) => {
-      that.logger('error', "Not able to save Raw Data - forced" + JSON.stringify(err));
+      let resultOutcome = singleObx.get('OBX.5.1').toString();
+
+      let order: any = {};
+      order.raw_text = rawText;
+      order.order_id = singleSpm.get('SPM.2').toString().replace("&ROCHE", "");
+      order.test_id = singleSpm.get('SPM.2').toString().replace("&ROCHE", "");;
+      order.test_type = 'HIVVL';
+
+      if (resultOutcome == 'Titer') {
+        order.test_unit = singleObx.get('OBX.6.1').toString();
+        order.results = singleObx.get('OBX.5.1').toString();
+      } else if (resultOutcome == '<20') {
+        order.test_unit = '';
+        order.results = 'Target Not Detected';
+      } else if (resultOutcome == '> Titer max') {
+        order.test_unit = '';
+        order.results = '>10000000';
+      } else if (resultOutcome == 'Target Not Detected') {
+        order.test_unit = '';
+        order.results = 'Target Not Detected';
+      } else if (resultOutcome == 'Invalid') {
+        order.test_unit = '';
+        order.results = 'Invalid';
+      } else if (resultOutcome == 'Failed') {
+        order.test_unit = '';
+        order.results = 'Failed';
+      } else {
+        order.test_unit = singleObx.get('OBX.6.1').toString();
+        order.results = resultOutcome;
+      }
+
+      order.tested_by = singleObx.get('OBX.16').toString();
+      order.result_status = 1;
+      order.lims_sync_status = 0;
+      order.analysed_date_time = that.formatRawDate(singleObx.get('OBX.19').toString());
+      //order.specimen_date_time = this.formatRawDate(message.get('OBX').get(0).get('OBX.19').toString());
+      order.authorised_date_time = that.formatRawDate(singleObx.get('OBX.19').toString());
+      order.result_accepted_date_time = that.formatRawDate(singleObx.get('OBX.19').toString());
+      order.test_location = that.settings.labName;
+      order.machine_used = that.settings.rocheMachine;
+
+      if (order.results) {
+        that.orderModel.addOrderTest(order, (res) => {
+          that.logger('success', "Result Successfully Added : " + order.test_id);
+        }, (err) => {
+          that.logger('error', "Failed to add result : " + JSON.stringify(err));
+        });
+      } else {
+        that.logger('error', "Unable to store data into the database");
+      }
+
+      // order.order_id = r.sampleID;
+      // order.test_id = r.sampleID;
+      // order.test_type = r.testName;
+      // order.test_unit = r.unit;
+      // //order.createdDate = '';
+      // order.results = r.result;
+      // order.tested_by = r.operator;
+      // order.result_status = 1;
+      // order.analysed_date_time = r.timestamp;
+      // order.specimen_date_time = r.specimenDate;
+      // order.authorised_date_time = r.timestamp;
+      // order.result_accepted_date_time = r.timestamp;
+      // order.test_location = this.settings.labName;
+      // order.machine_used = this.settings.rocheMachine;
     });
-
-    t.processASTMData(t.strData)
   }
 
   handleTCPResponse(data) {
 
-    if (this.timer != null) {
-      clearTimeout(this.timer);
-    }
-
-    this.timer = setTimeout(this.forceSaveRawData, 5000, this);
-
-    // this.logger('info',this.timer);
-    //}else{
-    //  clearTimeout(this.timer);
-    //}
-
-
-
     if (this.settings.rocheProtocol === 'hl7') {
 
       this.logger('info', 'Processing HL7');
-      this.parseHl7Data(data);
+
+      let that = this;
+
+      let text = that.hex2ascii(data.toString("hex"));
+
+      that.strData += text;
+
+      // If there is a File Separator or 1C character, it means the stream has ended
+      // we can proceed with saving this data
+      if (that.strData.includes('\x1c')) {
+        // Let us store this Raw Data before we process it
+        let rData: any = {};
+        rData.data = that.strData;
+        rData.machine = this.settings.rocheMachine;
+        this.rawDataModel.addRawData(rData, (res) => {
+          that.logger('success', "Raw data successfully saved");
+        }, (err) => {
+          that.logger('error', "Not able to save raw data " + JSON.stringify(err));
+        });
+
+        that.strData = that.strData.replace(/[\x0b\x1c]/g, '');
+        that.strData = that.strData.trim();
+        that.strData = that.strData.replace(/[\r\n\x0B\x0C\u0085\u2028\u2029]+/gm, "\r");
+        this.processHL7Data(that.strData);
+        that.strData = "";
+      }
+
 
     } else if (this.settings.rocheProtocol === 'astm') {
 
@@ -346,7 +368,7 @@ export class CobasService {
         that.socketClient.write(that.ACK);
 
         this.logger('info', 'Received EOT. READY TO SEND');
-        clearTimeout(that.timer);
+        //clearTimeout(that.timer);
         //this.logger('info',that.strData);
 
         // Let us store this Raw Data before we process it
@@ -354,9 +376,9 @@ export class CobasService {
         rData.data = that.strData;
         rData.machine = that.settings.rocheMachine;
         this.rawDataModel.addRawData(rData, (res) => {
-          that.logger('success', "Raw Data successfully added");
+          that.logger('success', "Raw data successfully saved");
         }, (err) => {
-          that.logger('error', "Not able to save Raw Data : " + JSON.stringify(err));
+          that.logger('error', "Not able to save raw data : " + JSON.stringify(err));
         });
 
         that.processASTMData(that.strData);

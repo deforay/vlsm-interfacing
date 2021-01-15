@@ -8,7 +8,7 @@ serve = args.some(val => val === '--serve');
 
 function createWindow() {
 
-  const AutoLaunch = require("auto-launch");
+  //const AutoLaunch = require("auto-launch");
   const electronScreen = screen;
   const size = electronScreen.getPrimaryDisplay().workAreaSize;
 
@@ -17,7 +17,8 @@ function createWindow() {
     x: 0,
     y: 0,
     width: size.width,
-    height: size.height
+    height: size.height,
+    icon: path.join(__dirname, '/dist/icon.png')
   });
 
   if (serve) {
@@ -34,23 +35,23 @@ function createWindow() {
   }
 
 
-  //################ AUTO LAUNCHER #################
-  var aLauncher = new AutoLaunch({
-    name: app.getName(),
-    isHidden: true
-  });
+  // //################ AUTO LAUNCHER #################
+  // var aLauncher = new AutoLaunch({
+  //   name: app.getName(),
+  //   isHidden: true
+  // });
 
-  aLauncher.enable();
-  aLauncher.isEnabled()
-    .then(function (isEnabled) {
-      if (isEnabled) {
-        return;
-      }
-      aLauncher.enable();
-    })
-    .catch(function (err) {
-      console.log("AUTOLAUNCH", JSON.stringify(err));
-    });
+  // aLauncher.enable();
+  // aLauncher.isEnabled()
+  //   .then(function (isEnabled) {
+  //     if (isEnabled) {
+  //       return;
+  //     }
+  //     aLauncher.enable();
+  //   })
+  //   .catch(function (err) {
+  //     console.log("AUTOLAUNCH", JSON.stringify(err));
+  //   });
 
 
 
@@ -68,19 +69,19 @@ function createWindow() {
 
 try {
 
-  app.once('ready', () => {
-    console.log('started') // ping parent
-  })
+  // app.once('ready', () => {
+  //   console.log('started') // ping parent
+  // })
 
-  const gotTheLock = app.requestSingleInstanceLock()
+  //const gotTheLock = app.requestSingleInstanceLock()
 
-  app.on('second-instance', () => {
-    setImmediate(() => app.exit(0))
-  })
+  // app.on('second-instance', () => {
+  //   setImmediate(() => app.exit(0))
+  // })
 
-  if (!gotTheLock) {
-    app.exit(1)
-  }
+  // if (!gotTheLock) {
+  //   app.exit(1)
+  // }
 
   // This method will be called when Electron has finished
   // initialization and is ready to create browser windows.
