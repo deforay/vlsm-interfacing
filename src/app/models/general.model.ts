@@ -6,23 +6,43 @@ export class GeneralModel {
 
   private settings = null;
   private mysqlPool = null;
+  private dbConfig = null;
 
   constructor() {
 
     const store = new Store();
     this.settings = store.get('appSettings');
-
-    this.mysqlPool = mysql.createPool({
-      connectionLimit: 100,
+    this.dbConfig = {
+      connectionLimit: 1000,
+      // connectTimeout: 60 * 60 * 1000,
+      // acquireTimeout: 60 * 60 * 1000,
+      // timeout: 60 * 60 * 1000,
       host: this.settings.mysqlHost,
       user: this.settings.mysqlUser,
       password: this.settings.mysqlPassword,
       database: this.settings.mysqlDb,
       port: this.settings.mysqlPort,
       dateStrings: 'date'
-    });
+    };
 
-    this.exec("SET GLOBAL sql_mode=(SELECT REPLACE(@@sql_mode,'ONLY_FULL_GROUP_BY',''))", [], (res) => {
+    this.mysqlPool = mysql.createPool(this.dbConfig);
+
+    // this.mysqlPool.on('connection', function (connection) {
+    //   console.log('Connection %d connected', connection.threadId);
+    // });
+    // this.mysqlPool.on('acquire', function (connection) {
+    //   console.log('Connection %d acquired', connection.threadId);
+    // });
+
+    // this.mysqlPool.on('enqueue', function () {
+    //   console.log('Waiting for available connection slot');
+    // });
+
+    // this.mysqlPool.on('release', function (connection) {
+    //   console.log('Connection %d released', connection.threadId);
+    // });
+
+    this.execQuery("SET GLOBAL CONNECT_TIMEOUT=28800; SET SESSION INTERACTIVE_TIMEOUT=28800; SET SESSION WAIT_TIMEOUT=28800; SET SESSION MAX_EXECUTION_TIME=28800;  SET GLOBAL sql_mode=(SELECT REPLACE(@@sql_mode,'ONLY_FULL_GROUP_BY',''))", [], (res) => {
       console.log(res);
     }, (err) => {
       console.log(err);
@@ -30,7 +50,7 @@ export class GeneralModel {
 
   }
 
-  exec(query, data, success, errorf) {
+  execQuery(query, data, success, errorf) {
     if (this.mysqlPool != null) {
       this.mysqlPool.getConnection((err, connection) => {
         if (err) {
@@ -41,18 +61,17 @@ export class GeneralModel {
           return;
         }
 
-
         let sql = connection.query({ sql: query }, data, (errors, results, fields) => {
-          if (!errors) { success(results); connection.destroy(); } else { errorf(errors); connection.destroy(); }
+          if (!errors) { success(results); connection.release(); } else { errorf(errors); connection.release(); }
         });
 
       });
     } else {
-      errorf({ "error": "database not found" });
+      errorf({ "error": "Please check your database connection" });
     }
   }
 
-  execend(query, data, success, errorf, endResult) {
+  execWithCallback(query, data, success, errorf, callback) {
     if (this.mysqlPool != null) {
       this.mysqlPool.getConnection((err, connection) => {
         if (err) {
@@ -66,8 +85,8 @@ export class GeneralModel {
         sql.on("result", (result, index) => { success(result); });
         sql.on("error", (err) => { connection.destroy(); errorf(err) });
         sql.on("end", () => {
-          if (endResult != null)
-            endResult();
+          if (callback != null)
+            callback();
           if (connection)
             connection.destroy();
         });
@@ -77,12 +96,12 @@ export class GeneralModel {
     }
   }
 
-  testConnection(success, errord) {
-    let q = ipc.sendSync('db-conn');
-    if (q.status == 1000) {
-      success(q.data);
-    } else {
-      errord(q);
-    }
-  }
+  // testConnection(success, err) {
+  //   let q = ipc.sendSync('db-conn');
+  //   if (q.status == 1000) {
+  //     success(q.data);
+  //   } else {
+  //     err(q);
+  //   }
+  // }
 }

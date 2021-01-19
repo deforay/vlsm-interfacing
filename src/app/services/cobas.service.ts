@@ -297,7 +297,7 @@ export class CobasService {
         that.orderModel.addOrderTest(order, (res) => {
           that.logger('success', "Result Successfully Added : " + order.test_id);
         }, (err) => {
-          that.logger('error', "Failed to add result : " + JSON.stringify(err));
+          that.logger('error', "Failed to add result : " + order.test_id + " " + JSON.stringify(err));
         });
       } else {
         that.logger('error', "Unable to store data into the database");
@@ -332,8 +332,8 @@ export class CobasService {
 
       that.strData += text;
 
-      // If there is a File Separator or 1C character, it means the stream has ended
-      // we can proceed with saving this data
+      // If there is a File Separator or 1C or ASCII 28 character,
+      // it means the stream has ended and we can proceed with saving this data
       if (that.strData.includes('\x1c')) {
         // Let us store this Raw Data before we process it
         let rData: any = {};

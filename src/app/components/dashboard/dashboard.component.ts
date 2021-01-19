@@ -2,6 +2,8 @@ import { Component, OnInit, NgZone } from '@angular/core';
 import { CobasService } from '../../services/cobas.service';
 import { Router } from '@angular/router';
 
+var $  = require( 'jquery' );
+var dt = require( 'datatables.net' )();
 
 @Component({
   selector: 'app-dashboard',

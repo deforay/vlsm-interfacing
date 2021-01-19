@@ -10,7 +10,7 @@ export class RawDataModel extends GeneralModel {
         // console.log(Object.values(data));
         // console.log("=============");
         let t = "INSERT INTO raw_data (" + Object.keys(data).join(',') + ") VALUES (?,?)";
-        this.exec(t, Object.values(data), success, errorf);
+        this.execQuery(t, Object.values(data), success, errorf);
     }
 
 
