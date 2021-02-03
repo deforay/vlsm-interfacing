@@ -20,7 +20,6 @@ export class SettingsComponent implements OnInit {
     const store = new Store();
 
     let appSettings = store.get('appSettings');
-    let mysql = require('mysql');
 
     if (undefined != appSettings) {
       this.settings.labID = appSettings.labID;
@@ -102,6 +101,7 @@ export class SettingsComponent implements OnInit {
           message: "MySQL Connected successfully. Please click on SAVE SETTINGS to update these settings.",
           buttons: ["OK"]
         });
+        connection.destroy();
       }
 
     });

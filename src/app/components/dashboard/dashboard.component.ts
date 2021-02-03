@@ -2,9 +2,6 @@ import { Component, OnInit, NgZone } from '@angular/core';
 import { CobasService } from '../../services/cobas.service';
 import { Router } from '@angular/router';
 
-var $  = require( 'jquery' );
-var dt = require( 'datatables.net' )();
-
 @Component({
   selector: 'app-dashboard',
   templateUrl: './dashboard.component.html',
@@ -16,6 +13,7 @@ export class DashboardComponent implements OnInit {
   public stopTrying = false;
   public connectionInProcess = false;
   public reconnectButtonText = 'Connect';
+  public machineName = '';
   public interval: any;
   public lastOrders: any;
   public liveLogText = [];
@@ -29,7 +27,11 @@ export class DashboardComponent implements OnInit {
     const appSettings = store.get('appSettings');
     if (undefined === appSettings || !appSettings.rochePort || !appSettings.rocheProtocol || !appSettings.rocheHost) {
       this.router.navigate(['/settings']);
+    }else{
+      this.machineName = appSettings.rocheMachine;
     }
+
+
   }
 
   ngOnInit() {
@@ -92,8 +94,6 @@ export class DashboardComponent implements OnInit {
 
       });
     });
-
-
 
   }
 

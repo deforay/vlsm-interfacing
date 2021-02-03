@@ -1,7 +1,11 @@
+import {Injectable} from '@angular/core';
+
+
 const ipc = require('electron').ipcRenderer;
 const mysql = require('mysql');
 const Store = require('electron-store');
 
+@Injectable()
 export class GeneralModel {
 
   private settings = null;

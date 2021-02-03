@@ -1,6 +1,8 @@
 
+import { Injectable } from '@angular/core';
 import { GeneralModel } from './general.model'
 
+@Injectable()
 export class RawDataModel extends GeneralModel {
 
     addRawData(data, success, errorf) {

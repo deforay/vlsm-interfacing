@@ -9,16 +9,16 @@
     <div class="card-body">
 
       <div *ngIf="isConnected; else notConnected">
-        <h5 class="card-title text-success">Machine Connected.</h5>
+        <h5 class="card-title text-success"><span>{{machineName}}</span> Connected</h5>
         <!-- <p class="card-text">Disconnect to modify settings.</p> -->
         <button (click)="close()" class="btn btn-danger">
-          <span>Disconnect</span>
+          <span>Disconnect {{machineName}}</span>
         </button>
       </div>
 
 
       <ng-template #notConnected>
-        <h5 class="card-title text-danger">Machine Not Connected. </h5>
+        <h5 class="card-title text-danger"><span>{{machineName}}</span> Not Connected!</h5>
         <p class="card-text">Please try to reconnect and wait for a few moments.</p>
         <button (click)="reconnect()" class="btn btn-success" [disabled]="connectionInProcess">
           <span>{{reconnectButtonText}}</span>
