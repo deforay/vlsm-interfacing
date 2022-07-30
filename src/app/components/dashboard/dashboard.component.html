@@ -1,1 +1,103 @@
-<p>dashboard works!</p>
+<!-- Begin page content -->
+<main role="main" class="container">
+  <br>
+  <br>
+  <br>
+  <br>
+
+  <div class="card">
+    <div class="card-body">
+
+      <div *ngIf="isConnected; else notConnected">
+        <h5 class="card-title text-success"><span>{{machineName}}</span> Connected</h5>
+        <!-- <p class="card-text">Disconnect to modify settings.</p> -->
+        <button (click)="close()" class="btn btn-danger">
+          <span>Disconnect {{machineName}}</span>
+        </button>
+      </div>
+
+
+      <ng-template #notConnected>
+        <h5 class="card-title text-danger"><span>{{machineName}}</span> Not Connected!</h5>
+        <p class="card-text">Please try to reconnect and wait for a few moments.</p>
+        <button (click)="reconnect()" class="btn btn-success" [disabled]="connectionInProcess">
+          <span>{{reconnectButtonText}}</span>
+        </button>
+        &nbsp;&nbsp;
+        <button *ngIf="connectionInProcess" (click)="close()" class="btn btn-danger">
+          <span>Cancel</span>
+        </button>
+        &nbsp;&nbsp;
+        <button *ngIf="!connectionInProcess" routerLink="/settings" class="btn btn-primary">
+          <span>Settings</span>
+        </button>
+
+
+      </ng-template>
+    </div>
+    <!-- <a (click)="clearLiveLog()" class="btn btn-dark btn-xs push-right">
+      <span>Clear Log</span>
+    </a> -->
+    <div class="livelog">
+      <ng-container *ngIf="!(liveLogText?.length > 0)">
+        <span></span>
+      </ng-container>
+      <ng-container *ngFor="let x of liveLogText">
+
+        <span [innerHTML]="x"> </span>
+
+      </ng-container>
+    </div>
+  </div>
+
+  <br>
+
+  <br>
+  <h4>
+
+    Recent Results
+
+    <button (click)="fetchLastOrders('show');" class="btn btn-sm btn-primary pull-right">
+      <span>Fetch Recent Records</span>
+    </button>
+
+
+  </h4>
+  <table style="font-size: 0.9em;" id="dashtable"
+    class="table dashtable table-bordered table-striped table-hover table-responsive">
+    <tr class="thead-dark">
+      <th style="width:15%;">Sample/Order ID</th>
+      <th style="width:15%;">Result</th>
+      <th style="width:10%;">Unit</th>
+      <th style="width:15%;">Tested By</th>
+      <th style="width:15%;">Tested On</th>
+      <th style="width:5%;">LIMS Sync Status</th>
+    </tr>
+
+    <ng-container *ngIf="!(lastOrders?.length > 0)">
+      <tr>
+        <td colspan="6" class="center"> No data available in database </td>
+      </tr>
+    </ng-container>
+    <ng-container *ngFor="let rows of lastOrders">
+      <tr>
+        <td>{{rows.test_id}}</td>
+        <td>{{rows.results}}</td>
+        <td>{{rows.test_unit}}</td>
+        <td>{{rows.tested_by}}</td>
+        <td>{{rows.analysed_date_time}}</td>
+        <td>{{rows.lims_sync_status}}</td>
+      </tr>
+    </ng-container>
+  </table>
+  <br>
+  <br>
+  <br>
+  <br>
+
+
+
+
+
+
+</main>

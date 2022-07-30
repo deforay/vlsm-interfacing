@@ -27,7 +27,7 @@ export class HomeComponent implements OnInit {
       if (undefined === appSettings) {
         this.router.navigate(['/settings']);
       } else {
-        this.router.navigate(['/settings']);
+        this.router.navigate(['/dashboard']);
       }
 
     } else {

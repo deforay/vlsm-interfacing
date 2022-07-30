@@ -60,7 +60,7 @@ export class SettingsComponent implements OnInit {
       body: 'Updated VLSM interfacing settings'
     });
 
-    this.router.navigate(['/settings']);
+    this.router.navigate(['/dashboard']);
 
   }
 
