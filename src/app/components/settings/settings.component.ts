@@ -1,27 +1,21 @@
 import { Component, OnInit } from '@angular/core';
 import { Router } from '@angular/router';
+import { ElectronService } from '../../core/services';
+import { ElectronStoreService } from '../../services/electron-store.service';
 
 @Component({
   selector: 'app-settings',
   templateUrl: './settings.component.html',
   styleUrls: ['./settings.component.scss']
 })
-
 export class SettingsComponent implements OnInit {
-
   public settings: any = {};
 
+  constructor(private electronService: ElectronService, private router: Router, private store: ElectronStoreService) {
 
-  constructor(private router: Router) {
+    const appSettings = this.store.get('appSettings');
 
-
-    const Store = require('electron-store');
-
-    const store = new Store();
-
-    let appSettings = store.get('appSettings');
-
-    if (undefined != appSettings) {
+    if (undefined !== appSettings) {
       this.settings.labID = appSettings.labID;
       this.settings.labName = appSettings.labName;
 
@@ -38,20 +32,14 @@ export class SettingsComponent implements OnInit {
       this.settings.mysqlPassword = appSettings.mysqlPassword;
     }
 
-    // console.log("====================");
-    // console.log(this.settings.mysqlDb);
-    // console.log("====================");
-
-
-
   }
 
-  ngOnInit() {
+  ngOnInit(): void {
   }
 
   updateSettings() {
 
-    let appSettings = {
+    const appSettings = {
       labID: this.settings.labID,
       labName: this.settings.labName,
       rochePort: this.settings.rochePort,
@@ -64,25 +52,23 @@ export class SettingsComponent implements OnInit {
       mysqlDb: this.settings.mysqlDb,
       mysqlUser: this.settings.mysqlUser,
       mysqlPassword: this.settings.mysqlPassword,
-    }
-    const Store = require('electron-store');
-    const store = new Store();
+    };
 
-    store.set('appSettings', appSettings);
+    this.store.set('appSettings', appSettings);
 
-    let myNotification = new Notification('Success', {
+    new Notification('Success', {
       body: 'Updated VLSM interfacing settings'
-    })
+    });
 
-    this.router.navigate(['/dashboard']);
-
+    this.router.navigate(['/settings']);
 
   }
 
   checkMysqlConnection() {
 
-    let mysql = require('mysql');
-    let connection = mysql.createConnection({
+    const that = this;
+    const mysql = that.electronService.mysql;
+    const connection = mysql.createConnection({
       host: this.settings.mysqlHost,
       user: this.settings.mysqlUser,
       password: this.settings.mysqlPassword,
@@ -92,15 +78,22 @@ export class SettingsComponent implements OnInit {
     connection.connect(function (err) {
 
       if (err) {
-        const { dialog } = require('electron').remote;
-        dialog.showErrorBox('Oops! Something went wrong!', 'Unable to connect. Check if all the database connection settings are correct.');
+
+        const dialogConfig = {
+          type: 'error',
+          message: 'Oops! Something went wrong! Unable to connect to the MySQL database.',
+          detail: err + '\n\nPlease check if all the database connection settings are correct and the MySQL server is running.',
+          buttons: ['OK']
+        };
+        that.electronService.openDialog('showMessageBox', dialogConfig);
         return;
       } else {
-        const { dialog } = require('electron').remote;
-        dialog.showMessageBox({
-          message: "MySQL Connected successfully. Please click on SAVE SETTINGS to update these settings.",
-          buttons: ["OK"]
-        });
+        const dialogConfig = {
+          type: 'info',
+          message: 'MySQL Connected successfully. Please click on SAVE SETTINGS to update these settings.',
+          buttons: ['OK']
+        };
+        that.electronService.openDialog('showMessageBox', dialogConfig);
         connection.destroy();
       }
 

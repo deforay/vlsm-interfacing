@@ -1,7 +1,7 @@
 import { Component } from '@angular/core';
-import { ElectronService } from './providers/electron.service';
+import { ElectronService } from './core/services';
 import { TranslateService } from '@ngx-translate/core';
-import { AppConfig } from '../environments/environment';
+import { APP_CONFIG } from '../environments/environment';
 
 @Component({
   selector: 'app-root',
@@ -9,18 +9,20 @@ import { AppConfig } from '../environments/environment';
   styleUrls: ['./app.component.scss']
 })
 export class AppComponent {
-  constructor(public electronService: ElectronService,
-    private translate: TranslateService) {
+  constructor(
+    private electronService: ElectronService,
+    private translate: TranslateService
+  ) {
+    this.translate.setDefaultLang('en');
+    console.log('APP_CONFIG', APP_CONFIG);
 
-    translate.setDefaultLang('en');
-    console.log('AppConfig', AppConfig);
-
-    if (electronService.isElectron()) {
-      console.log('Mode electron');
-      console.log('Electron ipcRenderer', electronService.ipcRenderer);
-      console.log('NodeJS childProcess', electronService.childProcess);
+    if (electronService.isElectron) {
+      console.log(process.env);
+      console.log('Run in electron');
+      console.log('Electron ipcRenderer', this.electronService.ipcRenderer);
+      console.log('NodeJS childProcess', this.electronService.childProcess);
     } else {
-      console.log('Mode web');
+      console.log('Run in browser');
     }
   }
 }

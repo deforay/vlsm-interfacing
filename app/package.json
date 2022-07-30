@@ -1,0 +1,7 @@
+{
+  "name": "angular-electron",
+  "version": "11.0.0",
+  "main": "main.js",
+  "private": true,
+  "dependencies": {}
+}

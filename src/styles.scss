@@ -1,13 +1,5 @@
-/* You can add global styles to this file, and also import other style files */
 @import "~bootstrap/dist/css/bootstrap.css";
-@import "~font-awesome/css/font-awesome.css";
-html, body {
-  margin: 0;
-  padding: 0;
-
-  height: 100%;
-}
-
+@import "~@fortawesome/fontawesome-free/css/all.css";
 
 /* Sticky footer styles
 -------------------------------------------------- */
@@ -41,7 +33,7 @@ body {
 }
 
 .dashtable th,td{
-  vertical-align: middle; 
+  vertical-align: middle;
 }
 
 .livelog{
