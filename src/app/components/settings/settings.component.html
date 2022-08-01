@@ -7,32 +7,32 @@
 
     <div class="card-body">
       <form (submit)="updateSettings()" class="form">
-        <div class="form-row">
-          <div class="form-group col-md-4 col-sm-4">
+        <div class="row">
+          <div class="form-group col col-sm-6">
             <label for="labID" class="col-form-label-sm">Lab Code/ID</label>
             <input type="text" [(ngModel)]="settings.labID" name="labID" class="form-control form-control-sm" placeholder="Lab Code/ID" required>
           </div>
-          <div class="form-group col-md-4 col-sm-4">
+          <div class="form-group col col-sm-6">
             <label for="labName" class="col-form-label-sm">Lab Name</label>
             <input type="text" [(ngModel)]="settings.labName" name="labName" class="form-control form-control-sm" placeholder="Lab Name" required>
           </div>
         </div>
         <hr>
-        <div class="form-row">
-          <div class="form-group col-md-3 col-sm-6">
+        <div class="row">
+          <div class="form-group col col-sm-6">
             <label for="rocheMachine" class="col-form-label-sm">Machine Name</label>
             <input type="text" [(ngModel)]="settings.rocheMachine" name="rocheMachine" class="form-control form-control-sm" placeholder="eg. Roche Cobas48"
               required>
           </div>
-          <div class="form-group col-md-3 col-sm-6">
+          <div class="form-group col col-sm-6">
             <label for="rocheHost" class="col-form-label-sm">Host/IP Address/Serial Device</label>
             <input type="text" [(ngModel)]="settings.rocheHost" name="rocheHost" class="form-control form-control-sm" placeholder="eg. 198.1.1.1" required>
           </div>
-          <div class="form-group col-md-3 col-sm-6">
+          <div class="form-group col col-sm-6">
             <label for="rochePort" class="col-form-label-sm">Port no.</label>
             <input type="text" [(ngModel)]="settings.rochePort" name="rochePort" class="form-control form-control-sm" placeholder="eg. 3120" required>
           </div>
-          <div class="form-group col-md-3 col-sm-6">
+          <div class="form-group col col-sm-6">
             <label for="rocheProtocol" class="col-form-label-sm">Connection Protocol</label>
             <select [(ngModel)]="settings.rocheProtocol" name="rocheProtocol" class="form-control form-control-sm">
               <option>-- Select --</option>
@@ -40,8 +40,8 @@
               <option value="hl7">HL7</option>
             </select>
           </div>
-          <div class="form-group col-md-3 col-sm-6">
-            <label for="rocheConnectionType" class="col-form-label-sm">Connection Type</label>
+          <div class="form-group col col-sm-6">
+            <label for="rocheConnectionType" class="col-form-label-sm">This Interface Tool is a</label>
             <select [(ngModel)]="settings.rocheConnectionType" name="rocheConnectionType" class="form-control form-control-sm">
               <option>-- Select --</option>
               <option value="tcpserver">TCP/IP Server</option>
@@ -78,30 +78,30 @@
 
         </div>
         <hr>
-        <div class="form-row">
-          <div class="form-group col-md-4 col-sm-4">
+        <div class="row">
+          <div class="form-group col col-sm-6">
             <label for="mysqlHost" class="col-form-label-sm">MySQL Host</label>
             <input type="text" [(ngModel)]="settings.mysqlHost" name="mysqlHost" class="form-control form-control-sm" placeholder="MySQL Hostname" required>
           </div>
-          <div class="form-group col-md-4 col-sm-4">
+          <div class="form-group col col-sm-6">
             <label for="mysqlPort" class="col-form-label-sm">MySQL Port</label>
             <input type="text" [(ngModel)]="settings.mysqlPort" name="mysqlPort" class="form-control form-control-sm" placeholder="MySQL Port Number"
               required>
           </div>
-          <div class="form-group col-md-4 col-sm-4">
+          <div class="form-group col col-sm-6">
             <label for="mysqlDb" class="col-form-label-sm">MySQL DB Name</label>
             <input type="text" [(ngModel)]="settings.mysqlDb" name="mysqlDb" class="form-control form-control-sm" placeholder="MySQL DB Name" required>
           </div>
-          <div class="form-group col-md-4 col-sm-4">
+          <div class="form-group col col-sm-6">
             <label for="mysqlUser" class="col-form-label-sm">MySQL DB User</label>
             <input type="text" [(ngModel)]="settings.mysqlUser" name="mysqlUser" class="form-control form-control-sm" placeholder="MySQL DB User" required>
           </div>
-          <div class="form-group col-md-4 col-sm-4">
+          <div class="form-group col col-sm-6">
             <label for="mysqlPassword" class="col-form-label-sm">MySQL DB Password</label>
             <input type="text" [(ngModel)]="settings.mysqlPassword" name="mysqlPassword" class="form-control form-control-sm" placeholder="MySQL DB Password"
               required>
           </div>
-          <div class="form-group col-md-4 col-sm-4">
+          <div class="form-group col col-sm-6">
               <label for="" class="col-form-label-sm">&nbsp;&nbsp;</label><br>
               <button (click)="checkMysqlConnection()" class="btn btn-dark btn-sm" type="button">Check MySQL Connection</button>
           </div>

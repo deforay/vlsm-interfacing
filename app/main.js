@@ -4,17 +4,18 @@ const electron_1 = require("electron");
 const path = require("path");
 const fs = require("fs");
 const url = require("url");
-const store = require("electron-store");
 let win = null;
 const args = process.argv.slice(1), serve = args.some(val => val === '--serve');
 function createWindow() {
     const electronScreen = electron_1.screen;
     const size = electronScreen.getPrimaryDisplay().workAreaSize;
-    store.initRenderer();
+    const Store = require('electron-store');
+    Store.initRenderer();
     // Create the browser window.
     win = new electron_1.BrowserWindow({
         x: 0,
         y: 0,
+        fullscreenable: true,
         width: size.width,
         height: size.height,
         webPreferences: {
@@ -52,6 +53,20 @@ function createWindow() {
     return win;
 }
 try {
+    const gotTheLock = electron_1.app.requestSingleInstanceLock();
+    if (!gotTheLock) {
+        electron_1.app.quit();
+    }
+    else {
+        electron_1.app.on('second-instance', (event, commandLine, workingDirectory) => {
+            // Someone tried to run a second instance, we should focus our window.
+            if (win) {
+                if (win.isMinimized())
+                    win.restore();
+                win.focus();
+            }
+        });
+    }
     // This method will be called when Electron has finished
     // initialization and is ready to create browser windows.
     // Some APIs can only be used after this event occurs.

@@ -65,6 +65,7 @@
   </h4>
   <table style="font-size: 0.9em;" id="dashtable"
     class="table dashtable table-bordered table-striped table-hover table-responsive">
+    <thead>
     <tr class="thead-dark">
       <th style="width:15%;">Sample/Order ID</th>
       <th style="width:15%;">Result</th>
@@ -73,7 +74,8 @@
       <th style="width:15%;">Tested On</th>
       <th style="width:5%;">LIMS Sync Status</th>
     </tr>
-
+  </thead>
+  <tbody>
     <ng-container *ngIf="!(lastOrders?.length > 0)">
       <tr>
         <td colspan="6" class="center"> No data available in database </td>
@@ -89,6 +91,7 @@
         <td>{{rows.lims_sync_status}}</td>
       </tr>
     </ng-container>
+    </tbody>
   </table>
   <br>
   <br>

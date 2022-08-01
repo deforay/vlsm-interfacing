@@ -2,7 +2,6 @@ import { app, BrowserWindow, screen, ipcMain, dialog } from 'electron';
 import * as path from 'path';
 import * as fs from 'fs';
 import * as url from 'url';
-import * as store from 'electron-store';
 
 let win: BrowserWindow = null;
 const args = process.argv.slice(1),
@@ -15,12 +14,14 @@ function createWindow(): BrowserWindow {
   const electronScreen = screen;
   const size = electronScreen.getPrimaryDisplay().workAreaSize;
 
-  store.initRenderer();
+  const Store = require('electron-store');
+  Store.initRenderer();
 
   // Create the browser window.
   win = new BrowserWindow({
     x: 0,
     y: 0,
+    fullscreenable: true,
     width: size.width,
     height: size.height,
     webPreferences: {
@@ -66,37 +67,52 @@ function createWindow(): BrowserWindow {
 }
 
 try {
-  // This method will be called when Electron has finished
-  // initialization and is ready to create browser windows.
-  // Some APIs can only be used after this event occurs.
-  // Added 400 ms to fix the black background issue while using transparent window. More detais at https://github.com/electron/electron/issues/15947
-  app.on('ready', () => setTimeout(createWindow, 400));
 
-  // Quit when all windows are closed.
-  app.on('window-all-closed', () => {
-    // On OS X it is common for applications and their menu bar
-    // to stay active until the user quits explicitly with Cmd + Q
-    if (process.platform !== 'darwin') {
-      app.quit();
-    }
-  });
+  const gotTheLock = app.requestSingleInstanceLock();
 
-  app.on('activate', () => {
-    // On OS X it's common to re-create a window in the app when the
-    // dock icon is clicked and there are no other windows open.
-    if (win === null) {
-      createWindow();
-    }
-  });
-  app.whenReady().then(() => {
+  if (!gotTheLock) {
+    app.quit()
+  } else {
+    app.on('second-instance', (event, commandLine, workingDirectory) => {
+      // Someone tried to run a second instance, we should focus our window.
+      if (win) {
+        if (win.isMinimized()) win.restore()
+        win.focus();
+      }
+    });
+  }
 
-    ipcMain.handle('dialog', (event, method, params) => {
-      dialog[method](params);
+    // This method will be called when Electron has finished
+    // initialization and is ready to create browser windows.
+    // Some APIs can only be used after this event occurs.
+    // Added 400 ms to fix the black background issue while using transparent window. More detais at https://github.com/electron/electron/issues/15947
+    app.on('ready', () => setTimeout(createWindow, 400));
+
+    // Quit when all windows are closed.
+    app.on('window-all-closed', () => {
+      // On OS X it is common for applications and their menu bar
+      // to stay active until the user quits explicitly with Cmd + Q
+      if (process.platform !== 'darwin') {
+        app.quit();
+      }
     });
 
-  });
+    app.on('activate', () => {
+      // On OS X it's common to re-create a window in the app when the
+      // dock icon is clicked and there are no other windows open.
+      if (win === null) {
+        createWindow();
+      }
+    });
+    app.whenReady().then(() => {
 
-} catch (e) {
-  // Catch Error
-  // throw e;
-}
+      ipcMain.handle('dialog', (event, method, params) => {
+        dialog[method](params);
+      });
+
+    });
+
+  } catch (e) {
+    // Catch Error
+    // throw e;
+  }

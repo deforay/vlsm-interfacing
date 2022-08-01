@@ -1,7 +1,33 @@
 {
-  "name": "angular-electron",
-  "version": "11.0.0",
+  "name": "vlsm-interfacing",
+  "version": "2.0.0",
+  "description": "Interfacing Tool By VLSM",
+  "homepage": "https://github.com/deforay/vlsm-interfacing",
+  "author": {
+    "name": "Amit Dugar",
+    "email": "amit@deforay.com"
+  },
+  "keywords": [
+    "HIV",
+    "EID",
+    "Viral Load",
+    "Covid-19",
+    "Roche Cobas",
+    "Abbott m2000",
+    "GeneXpert",
+    "Interfacing",
+    "vlsm",
+    "viral load",
+    "VL LIS",
+    "Viral Load LIS",
+    "Viral Load Sample Management"
+  ],
   "main": "main.js",
   "private": true,
-  "dependencies": {}
+  "dependencies": {
+    "electron-log": "^4.4.8",
+    "electron-store": "^8.1.0",
+    "hl7parser": "^1.0.1",
+    "mysql": "2.18.1"
+  }
 }
