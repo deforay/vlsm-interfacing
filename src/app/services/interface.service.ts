@@ -3,6 +3,7 @@ import { Socket } from 'net';
 import { DatabaseService } from './database.service';
 import { BehaviorSubject, Observable } from 'rxjs';
 import { ElectronStoreService } from './electron-store.service';
+import { GeneXpertService } from './genexpert.service';
 
 @Injectable({
   providedIn: 'root'
@@ -18,52 +19,53 @@ export class InterfaceService {
   public connectionTries = 0;
   public hl7parser = require('hl7parser');
 
-  private ACK = Buffer.from('06', 'hex');
-  private ENQ = Buffer.from('05', 'hex');
-  private SOH = Buffer.from('01', 'hex');
-  private STX = Buffer.from('02', 'hex');
-  private ETX = Buffer.from('03', 'hex');
-  private EOT = Buffer.from('04', 'hex');
-  private CR = Buffer.from('13', 'hex');
-  private FS = Buffer.from('25', 'hex');
-  private LF = Buffer.from('10', 'hex');
-  private NAK = Buffer.from('21', 'hex');
-  private net = require('net');
+  protected ACK = Buffer.from('06', 'hex');
+  protected ENQ = Buffer.from('05', 'hex');
+  protected SOH = Buffer.from('01', 'hex');
+  protected STX = Buffer.from('02', 'hex');
+  protected ETX = Buffer.from('03', 'hex');
+  protected EOT = Buffer.from('04', 'hex');
+  protected CR = Buffer.from('13', 'hex');
+  protected FS = Buffer.from('25', 'hex');
+  protected LF = Buffer.from('10', 'hex');
+  protected NAK = Buffer.from('21', 'hex');
+  protected net = require('net');
 
-  private strData = '';
-  private connectopts: any = null;
-  private settings = null;
-  private timer = null;
-  private log = null;
-  private logtext = [];
+  protected strData = '';
+  protected connectopts: any = null;
+  protected settings = null;
+  protected timer = null;
+  protected log = null;
+  protected logtext = [];
 
-  // private serialConnection = null;
+  // protected serialConnection = null;
 
-  private statusSubject = new BehaviorSubject(false);
+  protected statusSubject = new BehaviorSubject(false);
   // eslint-disable-next-line @typescript-eslint/member-ordering
   currentStatus = this.statusSubject.asObservable();
 
-  private connectionTriesSubject = new BehaviorSubject(false);
+  protected connectionTriesSubject = new BehaviorSubject(false);
   // eslint-disable-next-line @typescript-eslint/member-ordering
   stopTrying = this.connectionTriesSubject.asObservable();
 
-  private lastOrdersSubject = new BehaviorSubject([]);
+  protected lastOrdersSubject = new BehaviorSubject([]);
   // eslint-disable-next-line @typescript-eslint/member-ordering
   lastOrders = this.lastOrdersSubject.asObservable();
 
-  private liveLogSubject = new BehaviorSubject([]);
+  protected liveLogSubject = new BehaviorSubject([]);
   // eslint-disable-next-line @typescript-eslint/member-ordering
   liveLog = this.liveLogSubject.asObservable();
 
-  constructor(private dbService: DatabaseService, private store: ElectronStoreService) {
+  constructor(public dbService: DatabaseService,
+    public store: ElectronStoreService) {
     this.log = require('electron-log');
     // console.log(this.log.findLogPath());
 
   }
 
   // Method used to track machine connection status
-  connectionStatus(isRocheConnected: boolean) {
-    this.statusSubject.next(isRocheConnected);
+  connectionStatus(interfaceConnected: boolean) {
+    this.statusSubject.next(interfaceConnected);
   }
 
   // Method used to track machine connection status
@@ -101,66 +103,66 @@ export class InterfaceService {
     const that = this;
     this.settings = that.store.get('appSettings');
 
-    if (that.settings.rocheConnectionType === 'tcpserver') {
+    if (that.settings.interfaceConnectionMode === 'tcpserver') {
       that.logger('info', 'Trying to create a server connection');
       that.server = that.net.createServer();
-      that.server.listen(that.settings.rochePort, that.settings.rocheHost);
+      that.server.listen(that.settings.analyzerMachinePort, that.settings.analyzerMachineHost);
 
       const sockets = [];
 
-      that.server.on('connection', function(socket) {
+      that.server.on('connection', function (socket) {
         // confirm socket connection from client
         that.logger('info', (new Date()) + ' : A remote client has connected to the Interfacing Server');
         that.connectionStatus(true);
         sockets.push(socket);
         that.socketClient = socket;
-        socket.on('data', function(data) {
+        socket.on('data', function (data) {
           that.handleTCPResponse(data);
         });
 
         // Add a 'close' event handler to this instance of socket
-        socket.on('close', function(data) {
-          const index = sockets.findIndex(function(o) {
-            return o.rocheHost === socket.rocheHost && o.rochePort === socket.rochePort;
+        socket.on('close', function (data) {
+          const index = sockets.findIndex(function (o) {
+            return o.analyzerMachineHost === socket.analyzerMachineHost && o.analyzerMachinePort === socket.analyzerMachinePort;
           })
           if (index !== -1) {
             sockets.splice(index, 1);
           }
-          console.log('CLOSED: ' + socket.rocheHost + ' ' + socket.rocheHost);
+          console.log('CLOSED: ' + socket.analyzerMachineHost + ' ' + socket.analyzerMachineHost);
         });
 
       });
 
 
-      this.server.on('error', function(e) {
+      this.server.on('error', function (e) {
         that.connectionStatus(false);
         that.stopTryingStatus(true);
         that.logger('error', 'Error while connecting ' + e.code);
       });
 
-    } else if (that.settings.rocheConnectionType === 'tcpclient') {
+    } else if (that.settings.interfaceConnectionMode === 'tcpclient') {
 
       that.socketClient = new Socket();
       this.connectopts = {
-        port: this.settings.rochePort,
-        host: this.settings.rocheHost
+        port: this.settings.analyzerMachinePort,
+        host: this.settings.analyzerMachineHost
       };
 
       this.logger('info', 'Trying to connect as client');
       this.connectionTries++; // incrementing the connection tries
 
-      that.socketClient.connect(that.connectopts, function() {
+      that.socketClient.connect(that.connectopts, function () {
         this.connectionTries = 0; // resetting connection tries to 0
         that.connectionStatus(true);
         that.logger('success', 'Connected as client successfully');
       });
 
-      that.socketClient.on('data', function(data) {
+      that.socketClient.on('data', function (data) {
         that.connectionStatus(true);
         that.handleTCPResponse(data);
       });
 
-      that.socketClient.on('close', function() {
+      that.socketClient.on('close', function () {
         that.socketClient.destroy();
         that.connectionStatus(false);
         that.logger('info', 'Client Disconnected');
@@ -185,7 +187,7 @@ export class InterfaceService {
   closeConnection() {
     this.settings = this.store.get('appSettings');
 
-    if (this.settings.rocheConnectionType === 'tcpclient') {
+    if (this.settings.interfaceConnectionMode === 'tcpclient') {
       if (this.socketClient) {
         this.socketClient.destroy();
         this.connectionStatus(false);
@@ -235,7 +237,7 @@ export class InterfaceService {
     let sampleNumber = 0;
 
     //console.log(obx[1]);
-    spm.forEach(function(singleSpm) {
+    spm.forEach(function (singleSpm) {
       sampleNumber = (singleSpm.get(1).toInteger());
       const singleObx = obx[(sampleNumber * 2) - 1]; // there are twice as many OBX .. so we take the even number - 1 OBX for each SPM
 
@@ -280,7 +282,7 @@ export class InterfaceService {
       order.authorised_date_time = that.formatRawDate(singleObx.get('OBX.19').toString());
       order.result_accepted_date_time = that.formatRawDate(singleObx.get('OBX.19').toString());
       order.test_location = that.settings.labName;
-      order.machine_used = that.settings.rocheMachine;
+      order.machine_used = that.settings.analyzerMachineName;
 
       if (order.results) {
         that.dbService.addOrderTest(order, (res) => {
@@ -305,13 +307,13 @@ export class InterfaceService {
       // order.authorised_date_time = r.timestamp;
       // order.result_accepted_date_time = r.timestamp;
       // order.test_location = this.settings.labName;
-      // order.machine_used = this.settings.rocheMachine;
+      // order.machine_used = this.settings.analyzerMachineName;
     });
   }
 
   handleTCPResponse(data) {
 
-    if (this.settings.rocheProtocol === 'hl7') {
+    if (this.settings.interfaceCommunicationProtocol === 'hl7') {
 
       this.logger('info', 'Processing HL7');
 
@@ -327,7 +329,7 @@ export class InterfaceService {
         // Let us store this Raw Data before we process it
         const rData: any = {};
         rData.data = that.strData;
-        rData.machine = this.settings.rocheMachine;
+        rData.machine = this.settings.analyzerMachineName;
         this.dbService.addRawData(rData, (res) => {
           that.logger('success', 'Raw data successfully saved');
         }, (err) => {
@@ -342,7 +344,7 @@ export class InterfaceService {
       }
 
 
-    } else if (this.settings.rocheProtocol === 'astm') {
+    } else if (this.settings.interfaceCommunicationProtocol === 'astm') {
 
       this.logger('info', 'Processing ASTM');
 
@@ -363,7 +365,7 @@ export class InterfaceService {
         // Let us store this Raw Data before we process it
         const rData: any = {};
         rData.data = that.strData;
-        rData.machine = that.settings.rocheMachine;
+        rData.machine = that.settings.analyzerMachineName;
         that.dbService.addRawData(rData, (res) => {
           that.logger('success', 'Raw data successfully saved');
         }, (err) => {
@@ -378,18 +380,9 @@ export class InterfaceService {
       } else {
 
         let text = that.hex2ascii(d);
-        if (d === '02') { text = '<STX>'; }
-        //else if (d === "05") {  text = "<ENQ>"; }
-        else if (d === '17') { text = '<ETB>'; }
-        else if (d === '0D') { text = '<CR>'; }
-        else if (d === '0A') { text = '<LF>'; }
-        else if (d === '03') { text = '<ETX>'; }
-        else if (d === '5E') { text = '::'; }
-
-        if (text.includes('H|')) {
+        if (text.match(/^\d*H/)) {
           text = '##START##' + text;
         }
-
         that.strData += text;
         that.logger('info', that.strData);
         that.socketClient.write(that.ACK);
@@ -432,120 +425,138 @@ export class InterfaceService {
     return d;
   }
 
-  processASTMData(astmData) {
+  processASTMData(astmData: string) {
 
-    //this.logger('info',astmData);
+    //this.logger('info', astmData);
 
     const that = this;
+    astmData = astmData.replace(/[\x05]/g, '');
+    astmData = astmData.replace(/\x02/g, "<STX>");
+    astmData = astmData.replace(/\x03/g, "<ETX>");
+    astmData = astmData.replace(/\x04/g, "<EOT>");
+    astmData = astmData.replace(/\x17/g, "<ETB>");
+    //astmData = astmData.replace(/\x5E/g, "::")
+
+    astmData = astmData.replace(/\n/g, "<LF>");
+    astmData = astmData.replace(/\r/g, "<CR>");
+
+    //Let us remove the transmission blocks
+    astmData = astmData.replace(/<ETB>\w{2}<CR><LF>/g, "").replace(/<STX>/g, "");
+
+
+
+
     const fullDataArray = astmData.split('##START##');
 
-    //that.logger('info',"AFTER SPLITTING USING ##START##");
-    //this.logger('info',fullDataArray);
+    // that.logger('info', "AFTER SPLITTING USING ##START##");
+    // that.logger('info', fullDataArray);
 
-    fullDataArray.forEach(function(partData) {
-      const data = partData.replace(/[\x05\x02\x03]/g, '');
-      const astmArray = data.split(/\r?\n/);
-      const dataArray = [];
 
-      astmArray.forEach(function(element) {
-        if (element !== '') {
-          if (dataArray[element.substring(1, 2)] === undefined) {
-            dataArray[element.substring(1, 2)] = element.split('|');
-          } else {
-            const arr = element.split('|');
-            arr.shift();
-            dataArray[element.substring(1, 2)] += arr;
+    fullDataArray.forEach(function (partData) {
+
+      if (partData !== '' && partData !== undefined && partData !== null) {
+
+        const astmArray = partData.split(/<CR>/);
+
+        const dataArray = [];
+
+        astmArray.forEach(function (element) {
+          if (element !== '') {
+            element = element.replace(/^\d*/, '');
+            if (dataArray[element.substring(0, 1)] === undefined) {
+              dataArray[element.substring(0, 1)] = element.split('|');
+            } else {
+              const arr = element.split('|');
+              arr.shift();
+              dataArray[element.substring(0, 1)] += arr;
+            }
+          }
+        });
+
+
+        //console.log("=== CHOTOA ===");
+        //that.logger('info', dataArray);
+        //that.logger('info',dataArray['R']);
+
+        if (dataArray === []) {
+          that.logger('info', 'dataArray blank');
+          return;
+        }
+
+        const order: any = {};
+
+        try {
+
+          if (that.arrayKeyExists('R', dataArray) && typeof dataArray['R'] == 'string') {
+            dataArray['R'] = dataArray['R'].split(',');
+          }
+
+          if (that.arrayKeyExists('O', dataArray) && typeof dataArray['O'] == 'string') {
+            dataArray['O'] = dataArray['O'].split(',');
+          }
+
+          if (that.arrayKeyExists('C', dataArray) && typeof dataArray['C'] == 'string') {
+            dataArray['C'] = dataArray['C'].split(',');
+          }
+
+
+          console.log(dataArray['R']);
+
+          if (dataArray['O'] !== undefined && dataArray['O'] !== []) {
+
+            order.order_id = dataArray['O'][2];
+            order.test_id = dataArray['O'][1];
+            if (dataArray['R'] !== undefined && dataArray['R'] !== []) {
+              order.test_type = (dataArray['R'][2]) ? dataArray['R'][2].replace('^^^', '') : dataArray['R'][2];
+              order.test_unit = dataArray['R'][4];
+              order.results = dataArray['R'][3].split("^")[0].replace(/\d+/g, "");
+              order.tested_by = dataArray['R'][10];
+              order.analysed_date_time = that.formatRawDate(dataArray['R'][12]);
+              order.authorised_date_time = that.formatRawDate(dataArray['R'][12]);
+              order.result_accepted_date_time = that.formatRawDate(dataArray['R'][12]);
+            } else {
+              order.test_type = '';
+              order.test_unit = '';
+              order.results = 'Failed';
+              order.tested_by = '';
+              order.analysed_date_time = '';
+              order.authorised_date_time = '';
+              order.result_accepted_date_time = '';
+            }
+            order.raw_text = partData;
+            order.result_status = 1;
+            order.lims_sync_status = 0;
+            order.test_location = that.settings.labName;
+            order.machine_used = that.settings.analyzerMachineName;
+
+            if (order.order_id) {
+              that.logger('info', "Trying to add order :" + JSON.stringify(order));
+              that.dbService.addOrderTest(order, (res) => {
+                that.logger('success', 'Result Successfully Added : ' + order.order_id);
+              }, (err) => {
+                that.logger('error', 'Failed to add : ' + JSON.stringify(err));
+              });
+            } else {
+              that.logger('error', "Could NOT add order :" + JSON.stringify(order));
+            }
           }
         }
-      });
-      // this.logger('info',dataArray);
-      //this.logger('info',dataArray['R']);
 
-      if (dataArray === []) {
-        that.logger('info', 'dataArray blank');
-        return;
-      }
+        catch (error) {
+          that.logger('error', error);
+          console.error(error);
+          return;
 
-      const order: any = {};
-
-      try {
-
-        if (that.arrayKeyExists('R', dataArray) && typeof dataArray['R'] == 'string') {
-          dataArray['R'] = dataArray['R'].split(',');
         }
 
-        if (that.arrayKeyExists('O', dataArray) && typeof dataArray['O'] == 'string') {
-          dataArray['O'] = dataArray['O'].split(',');
-        }
-
-        if (that.arrayKeyExists('C', dataArray) && typeof dataArray['C'] == 'string') {
-          dataArray['C'] = dataArray['C'].split(',');
-        }
-
-        console.log(dataArray);
-        // this.logger('info',typeof dataArray['O']);
-        //
-        //dataArray['O'] = dataArray['O'].split(",");
-        // this.logger('info',JSON.stringify(dataArray));
-        // this.logger('info',JSON.stringify(dataArray['R']));
-
-        // this.logger('info','Result in position 3 ' + dataArray['R'][3]);
-        // this.logger('info','Unit in position 2' + dataArray['R'][2]);
-        // this.logger('info','tested_by in position 10' + dataArray['R'][10]);
-
-
-        if (dataArray['O'] !== undefined && dataArray['O'] !== []) {
-          order.order_id = dataArray['O'][3];
-          order.test_id = dataArray['O'][2];
-          if (dataArray['R'] !== undefined && dataArray['R'] !== []) {
-            order.test_type = (dataArray['R'][2]) ? dataArray['R'][2].replace('^^^', '') : dataArray['R'][2];
-            order.test_unit = dataArray['R'][4];
-            order.results = dataArray['R'][3];
-            order.tested_by = dataArray['R'][10];
-            order.analysed_date_time = that.formatRawDate(dataArray['R'][12]);
-            order.authorised_date_time = that.formatRawDate(dataArray['R'][12]);
-            order.result_accepted_date_time = that.formatRawDate(dataArray['R'][12]);
-          } else {
-            order.test_type = '';
-            order.test_unit = '';
-            order.results = 'Failed';
-            order.tested_by = '';
-            order.analysed_date_time = '';
-            order.authorised_date_time = '';
-            order.result_accepted_date_time = '';
-          }
-          order.raw_text = partData;
-          order.result_status = 1;
-          order.lims_sync_status = 0;
-          order.test_location = that.settings.labName;
-          order.machine_used = that.settings.rocheMachine;
-
-          if (order.order_id) {
-            //that.logger('info',"Trying to add order :", JSON.stringify(order));
-            that.dbService.addOrderTest(order, (res) => {
-              that.logger('success', 'Result Successfully Added : ' + order.order_id);
-            }, (err) => {
-              that.logger('error', 'Failed to add : ' + JSON.stringify(err));
-            });
-          }
-        }
+        //if (dataArray == undefined || dataArray['0'] == undefined ||
+        //      dataArray['O'][3] == undefined || dataArray['O'][3] == null ||
+        //        dataArray['O'][3] == '') return;
+        //if (dataArray == undefined || dataArray['R'] == undefined
+        //        || dataArray['R'][2] == undefined || dataArray['R'][2] == null
+        //        || dataArray['R'][2] == '') return;
 
       }
-      catch (error) {
-        that.logger('error', error);
-        console.error(error);
-        return;
-
-      }
-
-      //if (dataArray == undefined || dataArray['0'] == undefined ||
-      //      dataArray['O'][3] == undefined || dataArray['O'][3] == null ||
-      //        dataArray['O'][3] == '') return;
-      //if (dataArray == undefined || dataArray['R'] == undefined
-      //        || dataArray['R'][2] == undefined || dataArray['R'][2] == null
-      //        || dataArray['R'][2] == '') return;
-
-
     });
 
   }

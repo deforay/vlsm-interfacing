@@ -19,11 +19,11 @@ export class SettingsComponent implements OnInit {
       this.settings.labID = appSettings.labID;
       this.settings.labName = appSettings.labName;
 
-      this.settings.rocheMachine = appSettings.rocheMachine;
-      this.settings.rochePort = appSettings.rochePort;
-      this.settings.rocheHost = appSettings.rocheHost;
-      this.settings.rocheConnectionType = appSettings.rocheConnectionType;
-      this.settings.rocheProtocol = appSettings.rocheProtocol;
+      this.settings.analyzerMachineName = appSettings.analyzerMachineName;
+      this.settings.analyzerMachinePort = appSettings.analyzerMachinePort;
+      this.settings.analyzerMachineHost = appSettings.analyzerMachineHost;
+      this.settings.interfaceConnectionMode = appSettings.interfaceConnectionMode;
+      this.settings.interfaceCommunicationProtocol = appSettings.interfaceCommunicationProtocol;
 
       this.settings.mysqlHost = appSettings.mysqlHost;
       this.settings.mysqlPort = appSettings.mysqlPort;
@@ -42,11 +42,11 @@ export class SettingsComponent implements OnInit {
     const appSettings = {
       labID: this.settings.labID,
       labName: this.settings.labName,
-      rochePort: this.settings.rochePort,
-      rocheMachine: this.settings.rocheMachine,
-      rocheHost: this.settings.rocheHost,
-      rocheConnectionType: this.settings.rocheConnectionType,
-      rocheProtocol: this.settings.rocheProtocol,
+      analyzerMachinePort: this.settings.analyzerMachinePort,
+      analyzerMachineName: this.settings.analyzerMachineName,
+      analyzerMachineHost: this.settings.analyzerMachineHost,
+      interfaceConnectionMode: this.settings.interfaceConnectionMode,
+      interfaceCommunicationProtocol: this.settings.interfaceCommunicationProtocol,
       mysqlHost: this.settings.mysqlHost,
       mysqlPort: this.settings.mysqlPort,
       mysqlDb: this.settings.mysqlDb,

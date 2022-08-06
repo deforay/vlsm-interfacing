@@ -45,7 +45,7 @@
   "linux": {
     "icon": "dist/assets/icons",
     "target": [
-      "AppImage"
+      "deb"
     ]
   }
 }

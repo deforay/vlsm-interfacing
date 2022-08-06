@@ -2,6 +2,7 @@ import { Component, OnInit, NgZone } from '@angular/core';
 import { Router } from '@angular/router';
 import { ElectronStoreService } from '../../services/electron-store.service';
 import { InterfaceService } from '../../services/interface.service';
+//import { GeneXpertService } from '../../services/genexpert.service';
 
 @Component({
   selector: 'app-dashboard',
@@ -27,10 +28,10 @@ export class DashboardComponent implements OnInit {
 
     const appSettings = that.store.get('appSettings');
 
-    if (undefined === appSettings || !appSettings.rochePort || !appSettings.rocheProtocol || !appSettings.rocheHost) {
+    if (undefined === appSettings || !appSettings.analyzerMachinePort || !appSettings.interfaceCommunicationProtocol || !appSettings.analyzerMachineHost) {
       that.router.navigate(['/settings']);
     } else {
-      that.machineName = appSettings.rocheMachine;
+      that.machineName = appSettings.analyzerMachineName;
     }
   }
 

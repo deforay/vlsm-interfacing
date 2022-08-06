@@ -68,8 +68,8 @@
     <thead>
     <tr class="thead-dark">
       <th style="width:15%;">Sample/Order ID</th>
-      <th style="width:15%;">Result</th>
-      <th style="width:10%;">Unit</th>
+      <th style="width:15%;">Test Result</th>
+      <th style="width:10%;">Result Unit</th>
       <th style="width:15%;">Tested By</th>
       <th style="width:15%;">Tested On</th>
       <th style="width:5%;">LIMS Sync Status</th>
@@ -83,7 +83,7 @@
     </ng-container>
     <ng-container *ngFor="let rows of lastOrders">
       <tr>
-        <td>{{rows.test_id}}</td>
+        <td>{{rows.order_id}}</td>
         <td>{{rows.results}}</td>
         <td>{{rows.test_unit}}</td>
         <td>{{rows.tested_by}}</td>
