@@ -36,7 +36,8 @@
             <label for="interfaceCommunicationProtocol" class="col-form-label-sm">Interface Communication Protocol</label>
             <select [(ngModel)]="settings.interfaceCommunicationProtocol" name="interfaceCommunicationProtocol" class="form-control form-control-sm">
               <option>-- Select --</option>
-              <option value="astm">ASTM</option>
+              <option value="astm-elecsys">ASTM/Elecsys (Single Record)</option>
+              <option value="astm-concatenated">ASTM (Concatenated)</option>
               <option value="hl7">HL7</option>
             </select>
           </div>

@@ -17,17 +17,17 @@ export class GeneXpertService extends InterfaceService {
   }
 
   handleTCPResponse(data: any) {
+    const that = this;
+    if (that.settings.interfaceCommunicationProtocol === 'hl7') {
 
-    if (this.settings.interfaceCommunicationProtocol === 'hl7') {
-
-      this.logger('error', 'Please connect via ASTM protocol');
+      that.logger('error', 'Please connect via ASTM protocol');
       return;
 
-    } else if (this.settings.interfaceCommunicationProtocol === 'astm') {
+    } else if (that.settings.interfaceCommunicationProtocol === 'astm-concatenated') {
 
-      this.logger('info', 'Processing ASTM in GeneXpert');
+      that.logger('info', 'Processing ASTM/Concatenated in GeneXpert');
 
-      const that = this;
+
       const d = data.toString('hex');
 
 
@@ -36,7 +36,7 @@ export class GeneXpertService extends InterfaceService {
 
         that.socketClient.write(that.ACK);
 
-        this.logger('info', 'Received EOT. READY TO SEND');
+        that.logger('info', 'Received EOT. READY TO SEND');
         //clearTimeout(that.timer);
         //this.logger('info',that.strData);
 
@@ -50,7 +50,7 @@ export class GeneXpertService extends InterfaceService {
           that.logger('error', 'Not able to save raw data : ' + JSON.stringify(err));
         });
 
-        that.processASTMData(that.strData);
+        that.processASTMConcatenatedData(that.strData);
         that.strData = "";
       } else if (d === '21') {
         that.socketClient.write(that.ACK);
@@ -69,7 +69,7 @@ export class GeneXpertService extends InterfaceService {
   }
 
 
-  processASTMData(astmData: string) {
+  processASTMConcatenatedData(astmData: string) {
 
     //this.logger('info', astmData);
 
