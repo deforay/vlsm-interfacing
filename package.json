@@ -79,6 +79,9 @@
   "engines": {
     "node": ">=14.0.0"
   },
+  "overrides": {
+    "got": "^12.1.0"
+  },
   "browserslist": [
     "chrome 100"
   ]
