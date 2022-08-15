@@ -1,8 +1,9 @@
 import { Injectable } from '@angular/core';
-import { Socket } from 'net';
 import { DatabaseService } from './database.service';
-import { BehaviorSubject, Observable } from 'rxjs';
+import { BehaviorSubject } from 'rxjs';
 import { ElectronStoreService } from './electron-store.service';
+import { ElectronService } from '../core/services';
+
 
 @Injectable({
   providedIn: 'root'
@@ -14,6 +15,7 @@ export class InterfaceService {
 
   public socketClient = null;
   public server = null;
+  public net = null;
 
   public connectionTries = 0;
   public hl7parser = require('hl7parser');
@@ -28,13 +30,12 @@ export class InterfaceService {
   protected FS = Buffer.from('25', 'hex');
   protected LF = Buffer.from('10', 'hex');
   protected NAK = Buffer.from('21', 'hex');
-  protected net = require('net');
 
+  protected log = null;
   protected strData = '';
   protected connectopts: any = null;
   protected settings = null;
   protected timer = null;
-  protected log = null;
   protected logtext = [];
 
   // protected serialConnection = null;
@@ -55,10 +56,13 @@ export class InterfaceService {
   // eslint-disable-next-line @typescript-eslint/member-ordering
   liveLog = this.liveLogSubject.asObservable();
 
-  constructor(public dbService: DatabaseService,
+
+  constructor(private electronService: ElectronService,
+    public dbService: DatabaseService,
     public store: ElectronStoreService) {
-    this.log = require('electron-log');
+    this.log = this.electronService.log;
     // console.log(this.log.findLogPath());
+    this.net = this.electronService.net;
 
   }
 
@@ -141,7 +145,7 @@ export class InterfaceService {
 
     } else if (that.settings.interfaceConnectionMode === 'tcpclient') {
 
-      that.socketClient = new Socket();
+      that.socketClient = new that.net.Socket();
       this.connectopts = {
         port: this.settings.analyzerMachinePort,
         host: this.settings.analyzerMachineHost

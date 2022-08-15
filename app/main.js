@@ -3,7 +3,6 @@ Object.defineProperty(exports, "__esModule", { value: true });
 const electron_1 = require("electron");
 const path = require("path");
 const fs = require("fs");
-const url = require("url");
 let win = null;
 const args = process.argv.slice(1), serve = args.some(val => val === '--serve');
 function createWindow() {
@@ -19,9 +18,9 @@ function createWindow() {
         width: size.width,
         height: size.height,
         webPreferences: {
-            nodeIntegration: true,
+            nodeIntegration: false,
             allowRunningInsecureContent: (serve) ? true : false,
-            contextIsolation: false, // false if you want to run e2e test with Spectron
+            contextIsolation: true, // false if you want to run e2e test with Spectron
         },
     });
     if (serve) {
@@ -37,11 +36,13 @@ function createWindow() {
             // Path when running electron in local folder
             pathIndex = '../dist/index.html';
         }
-        win.loadURL(url.format({
-            pathname: path.join(__dirname, pathIndex),
-            protocol: 'file:',
-            slashes: true
-        }));
+        // win.loadURL(url.format({
+        //   pathname: path.join(__dirname, pathIndex),
+        //   protocol: 'file:',
+        //   slashes: true
+        // }));
+        const url = new URL(path.join('file:', __dirname, pathIndex));
+        win.loadURL(url.href);
     }
     // Emitted when the window is closed.
     win.on('closed', () => {
@@ -88,6 +89,7 @@ try {
         }
     });
     electron_1.app.whenReady().then(() => {
+        // Register a 'dialog' event listener.
         electron_1.ipcMain.handle('dialog', (event, method, params) => {
             electron_1.dialog[method](params);
         });

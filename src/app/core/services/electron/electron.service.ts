@@ -2,10 +2,11 @@ import { Injectable } from '@angular/core';
 
 // If you import a module but never use any of the imported values other than as TypeScript types,
 // the resulting javascript file will look as if you never imported the module at all.
-import { ipcRenderer, webFrame } from 'electron';
+import { ipcRenderer, net, webFrame } from 'electron';
 import * as childProcess from 'child_process';
 import * as fs from 'fs';
 import * as mysql from 'mysql';
+import log from 'electron-log';
 
 
 @Injectable({
@@ -17,6 +18,8 @@ export class ElectronService {
   childProcess: typeof childProcess;
   fs: typeof fs;
   mysql: typeof mysql;
+  net: typeof net;
+  log: typeof log;
 
   constructor() {
     // Conditional imports
@@ -28,6 +31,8 @@ export class ElectronService {
       this.fs = window.require('fs');
 
       this.mysql = window.require('mysql');
+      this.net = window.require('net');
+      this.log = window.require('electron-log');
 
       // Notes :
       // * A NodeJS's dependency imported with 'window.require' MUST BE present in `dependencies` of both `app/package.json`
