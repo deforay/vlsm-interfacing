@@ -3,6 +3,8 @@ Object.defineProperty(exports, "__esModule", { value: true });
 const electron_1 = require("electron");
 const path = require("path");
 const fs = require("fs");
+const sqlite3helper_main_1 = require("../src/app/core/sqlite3helper.main");
+const { ipcMain: ipc } = require('electron-better-ipc');
 let win = null;
 const args = process.argv.slice(1), serve = args.some(val => val === '--serve');
 function createWindow() {
@@ -85,8 +87,13 @@ try {
     });
     electron_1.app.whenReady().then(() => {
         // Register a 'dialog' event listener.
-        electron_1.ipcMain.handle('dialog', (event, method, params) => {
+        ipc.answerRenderer('dialog', (event, method, params) => {
             electron_1.dialog[method](params);
+        });
+        const appUserDataPath = (electron_1.app.getPath('userData'));
+        new sqlite3helper_main_1.default(appUserDataPath);
+        ipc.answerRenderer('get-version', () => {
+            return electron_1.app.getVersion();
         });
     });
 }

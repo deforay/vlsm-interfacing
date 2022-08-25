@@ -1,11 +1,11 @@
 import { Injectable } from '@angular/core';
 import { ElectronService } from '../core/services';
-import { ElectronStoreService } from '../services/electron-store.service';
+import { ElectronStoreService } from './electron-store.service';
 
 @Injectable({
   providedIn: 'root'
 })
-export class MysqlService {
+export class DatabaseService {
   //private settings = null;
   private mysqlPool = null;
   private dbConfig = null;
@@ -31,11 +31,11 @@ export class MysqlService {
 
     this.mysqlPool = mysql.createPool(this.dbConfig);
 
-    this.execQuery('SET GLOBAL CONNECT_TIMEOUT=28800; ' +
-      'SET SESSION INTERACTIVE_TIMEOUT = 28800; ' +
-      'SET SESSION WAIT_TIMEOUT = 28800; ' +
-      'SET SESSION MAX_EXECUTION_TIME = 28800;  ' +
-      'SET GLOBAL sql_mode = (SELECT REPLACE(@@sql_mode, "ONLY_FULL_GROUP_BY", ""))',
+    this.execQuery('SET GLOBAL CONNECT_TIMEOUT=28800; \
+                  SET SESSION INTERACTIVE_TIMEOUT = 28800;  \
+                  SET SESSION WAIT_TIMEOUT = 28800;  \
+                  SET SESSION MAX_EXECUTION_TIME = 28800;   \
+    SET GLOBAL sql_mode = (SELECT REPLACE(@@sql_mode, "ONLY_FULL_GROUP_BY", ""))',
       [], (res) => {
         console.log(res);
       }, (err) => {
@@ -94,11 +94,18 @@ export class MysqlService {
     // console.log("=============");
     const t = 'INSERT INTO orders (' + Object.keys(data).join(',') + ') VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)';
     this.execQuery(t, Object.values(data), success, errorf);
+
+    (this.electronService.execSqliteQuery(t, Object.values(data))).then((results) => { success(results) });
+
+
   }
 
   fetchLastOrders(success, errorf) {
     const t = 'SELECT * FROM orders ORDER BY id DESC LIMIT 1000';
-    this.execQuery(t, null, success, errorf);
+    //this.execQuery(t, null, success, errorf);
+
+    (this.electronService.execSqliteQuery(t, null)).then(success);
+
   }
 
   addOrderTestLog(data, success, errorf) {
@@ -110,6 +117,11 @@ export class MysqlService {
       'machineUsed,testLocation,status,orderID,testType,clientID1) ' +
       'VALUES (?,?,?,?,?,?,?,?,?,?,?,?)';
     this.execQuery(t, data, success, errorf);
+
+    (this.electronService.execSqliteQuery(t, data)).then((results) => { success(results) });
+
+
+
   }
 
   addResults(data, success, errorf) {
@@ -117,6 +129,8 @@ export class MysqlService {
       ',result_accepted_date_time = ?,machine_used = ?,test_location = ?,result_status = ? ' +
       ' WHERE test_id = ? AND result_status < 1';
     this.execQuery(t, data, success, errorf);
+
+    (this.electronService.execSqliteQuery(t, data)).then((results) => { success(results) });
   }
   addRawData(data, success, errorf) {
     // console.log("======Raw Data=======");
@@ -126,6 +140,11 @@ export class MysqlService {
     // console.log("=============");
     const t = 'INSERT INTO raw_data (' + Object.keys(data).join(',') + ') VALUES (?,?)';
     this.execQuery(t, Object.values(data), success, errorf);
+
+
+    (this.electronService.execSqliteQuery(t, Object.values(data))).then((results) => { success(results) });
+
+
   }
 
 

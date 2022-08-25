@@ -1,5 +1,5 @@
 import { Injectable } from '@angular/core';
-import { MysqlService } from './mysql.service';
+import { DatabaseService } from './database.service';
 import { BehaviorSubject } from 'rxjs';
 import { ElectronStoreService } from './electron-store.service';
 import { ElectronService } from '../core/services';
@@ -58,7 +58,7 @@ export class InterfaceService {
 
 
   constructor(private electronService: ElectronService,
-    public dbService: MysqlService,
+    public dbService: DatabaseService,
     public store: ElectronStoreService) {
     this.log = this.electronService.log;
     // console.log(this.log.findLogPath());
@@ -257,15 +257,9 @@ export class InterfaceService {
       if (resultOutcome === 'Titer') {
         order.test_unit = singleObx.get('OBX.6.1').toString();
         order.results = singleObx.get('OBX.5.1').toString();
-      } else if (resultOutcome === '<20') {
-        order.test_unit = '';
-        order.results = 'Target Not Detected';
       } else if (resultOutcome === '> Titer max') {
         order.test_unit = '';
         order.results = '>10000000';
-      } else if (resultOutcome === 'Target Not Detected') {
-        order.test_unit = '';
-        order.results = 'Target Not Detected';
       } else if (resultOutcome === 'Invalid') {
         order.test_unit = '';
         order.results = 'Invalid';

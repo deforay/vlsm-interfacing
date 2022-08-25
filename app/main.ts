@@ -1,6 +1,8 @@
 import { app, BrowserWindow, screen, ipcMain, dialog } from 'electron';
 import * as path from 'path';
 import * as fs from 'fs';
+import Sqlite3Helper from '../src/app/core/sqlite3helper.main';
+
 
 let win: BrowserWindow = null;
 const args = process.argv.slice(1),
@@ -105,6 +107,9 @@ try {
     ipcMain.handle('dialog', (event, method, params) => {
       dialog[method](params);
     });
+
+    const appUserDataPath = (app.getPath('userData'));
+    new Sqlite3Helper(appUserDataPath);
 
 
   });

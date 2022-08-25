@@ -16,7 +16,7 @@ import { HomeModule } from './home/home.module';
 import { AppComponent } from './app.component';
 import { SettingsComponent } from './components/settings/settings.component';
 import { DashboardComponent } from './components/dashboard/dashboard.component';
-import { MysqlService } from './services/mysql.service';
+import { DatabaseService } from './services/database.service';
 import { ElectronService } from './core/services';
 import { InterfaceService } from './services/interface.service';
 import { ElectronStoreService } from './services/electron-store.service';
@@ -43,7 +43,7 @@ const httpLoaderFactory = (http: HttpClient): TranslateHttpLoader => new Transla
     })
   ],
   providers: [ElectronService,
-    MysqlService,
+    DatabaseService,
     InterfaceService,
     ElectronStoreService],
   bootstrap: [AppComponent]

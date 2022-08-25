@@ -58,6 +58,16 @@ export class ElectronService {
 
   openDialog(method: any, config: any): any {
     this.ipcRenderer.invoke('dialog', method, config);
-  };
+  }
+
+
+  execSqliteQuery(sql: any, args: any): any {
+    return new Promise((resolve) => {
+      this.ipcRenderer.once('sqlite3-reply', (_, arg) => {
+        resolve(arg)
+      });
+      this.ipcRenderer.send('sqlite3-query', sql, args);
+    });
+  }
 
 }
