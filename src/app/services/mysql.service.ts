@@ -5,7 +5,7 @@ import { ElectronStoreService } from '../services/electron-store.service';
 @Injectable({
   providedIn: 'root'
 })
-export class DatabaseService {
+export class MysqlService {
   //private settings = null;
   private mysqlPool = null;
   private dbConfig = null;
@@ -31,11 +31,11 @@ export class DatabaseService {
 
     this.mysqlPool = mysql.createPool(this.dbConfig);
 
-    this.execQuery('SET GLOBAL CONNECT_TIMEOUT=28800; \
-              SET SESSION INTERACTIVE_TIMEOUT = 28800; \
-              SET SESSION WAIT_TIMEOUT = 28800; \
-              SET SESSION MAX_EXECUTION_TIME = 28800;  \
-              SET GLOBAL sql_mode = (SELECT REPLACE(@@sql_mode, "ONLY_FULL_GROUP_BY", ""))',
+    this.execQuery('SET GLOBAL CONNECT_TIMEOUT=28800; ' +
+      'SET SESSION INTERACTIVE_TIMEOUT = 28800; ' +
+      'SET SESSION WAIT_TIMEOUT = 28800; ' +
+      'SET SESSION MAX_EXECUTION_TIME = 28800;  ' +
+      'SET GLOBAL sql_mode = (SELECT REPLACE(@@sql_mode, "ONLY_FULL_GROUP_BY", ""))',
       [], (res) => {
         console.log(res);
       }, (err) => {
@@ -105,17 +105,17 @@ export class DatabaseService {
     // console.log("%%%%%%%ORDERLOG%%%%%%%");
     // console.log(data);
     // console.log("%%%%%%%%%%%%%%");
-    const t = 'INSERT INTO orders_log (testedBy,units,results,analysedDateTime,\
-            specimenDateTime,acceptedDateTime, \
-            machineUsed,testLocation,status,orderID,testType,clientID1) \
-            VALUES (?,?,?,?,?,?,?,?,?,?,?,?)';
+    const t = 'INSERT INTO orders_log (testedBy,units,results,analysedDateTime, ' +
+      'specimenDateTime,acceptedDateTime, ' +
+      'machineUsed,testLocation,status,orderID,testType,clientID1) ' +
+      'VALUES (?,?,?,?,?,?,?,?,?,?,?,?)';
     this.execQuery(t, data, success, errorf);
   }
 
   addResults(data, success, errorf) {
-    const t = 'UPDATE orders SET tested_by = ?,test_unit = ?,results = ?,analysed_date_time = ?,specimen_date_time = ? \
-            ,result_accepted_date_time = ?,machine_used = ?,test_location = ?,result_status = ? \
-          WHERE test_id = ? AND result_status < 1';
+    const t = 'UPDATE orders SET tested_by = ?,test_unit = ?,results = ?,analysed_date_time = ?,specimen_date_time = ? ' +
+      ',result_accepted_date_time = ?,machine_used = ?,test_location = ?,result_status = ? ' +
+      ' WHERE test_id = ? AND result_status < 1';
     this.execQuery(t, data, success, errorf);
   }
   addRawData(data, success, errorf) {
@@ -126,7 +126,7 @@ export class DatabaseService {
     // console.log("=============");
     const t = 'INSERT INTO raw_data (' + Object.keys(data).join(',') + ') VALUES (?,?)';
     this.execQuery(t, Object.values(data), success, errorf);
-}
+  }
 
 
 }

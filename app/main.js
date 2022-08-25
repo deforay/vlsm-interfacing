@@ -18,9 +18,9 @@ function createWindow() {
         width: size.width,
         height: size.height,
         webPreferences: {
-            nodeIntegration: false,
+            nodeIntegration: true,
             allowRunningInsecureContent: (serve) ? true : false,
-            contextIsolation: true, // false if you want to run e2e test with Spectron
+            contextIsolation: false, // false if you want to run e2e test with Spectron
         },
     });
     if (serve) {
@@ -36,11 +36,6 @@ function createWindow() {
             // Path when running electron in local folder
             pathIndex = '../dist/index.html';
         }
-        // win.loadURL(url.format({
-        //   pathname: path.join(__dirname, pathIndex),
-        //   protocol: 'file:',
-        //   slashes: true
-        // }));
         const url = new URL(path.join('file:', __dirname, pathIndex));
         win.loadURL(url.href);
     }

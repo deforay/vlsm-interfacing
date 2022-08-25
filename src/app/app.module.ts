@@ -16,6 +16,10 @@ import { HomeModule } from './home/home.module';
 import { AppComponent } from './app.component';
 import { SettingsComponent } from './components/settings/settings.component';
 import { DashboardComponent } from './components/dashboard/dashboard.component';
+import { MysqlService } from './services/mysql.service';
+import { ElectronService } from './core/services';
+import { InterfaceService } from './services/interface.service';
+import { ElectronStoreService } from './services/electron-store.service';
 
 // AoT requires an exported function for factories
 const httpLoaderFactory = (http: HttpClient): TranslateHttpLoader => new TranslateHttpLoader(http, './assets/i18n/', '.json');
@@ -38,7 +42,10 @@ const httpLoaderFactory = (http: HttpClient): TranslateHttpLoader => new Transla
       }
     })
   ],
-  providers: [],
+  providers: [ElectronService,
+    MysqlService,
+    InterfaceService,
+    ElectronStoreService],
   bootstrap: [AppComponent]
 })
 export class AppModule { }

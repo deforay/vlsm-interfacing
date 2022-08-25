@@ -1,5 +1,5 @@
 import { Injectable } from '@angular/core';
-import { DatabaseService } from './database.service';
+import { MysqlService } from './mysql.service';
 import { BehaviorSubject } from 'rxjs';
 import { ElectronStoreService } from './electron-store.service';
 import { ElectronService } from '../core/services';
@@ -58,7 +58,7 @@ export class InterfaceService {
 
 
   constructor(private electronService: ElectronService,
-    public dbService: DatabaseService,
+    public dbService: MysqlService,
     public store: ElectronStoreService) {
     this.log = this.electronService.log;
     // console.log(this.log.findLogPath());
