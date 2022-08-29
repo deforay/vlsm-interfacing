@@ -1,11 +1,11 @@
 {
   "name": "vlsm-interfacing",
-  "version": "2.0.1",
+  "version": "2.0.2",
   "description": "Interfacing Tool By VLSM",
   "homepage": "https://github.com/deforay/vlsm-interfacing",
   "author": {
-    "name": "Amit Dugar",
-    "email": "amit@deforay.com"
+    "name": "VLSM",
+    "email": "support@deforay.com"
   },
   "keywords": [
     "HIV",

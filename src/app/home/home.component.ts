@@ -12,7 +12,8 @@ export class HomeComponent implements OnInit {
     login: '',
     password: ''
   };
-  constructor(private router: Router, private store: ElectronStoreService) { }
+  constructor(private router: Router, private store: ElectronStoreService) {
+  }
 
   ngOnInit(): void {
   }

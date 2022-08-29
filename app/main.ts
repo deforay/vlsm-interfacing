@@ -111,7 +111,6 @@ try {
     const appUserDataPath = (app.getPath('userData'));
     new Sqlite3Helper(appUserDataPath);
 
-
   });
 
 } catch (e) {
