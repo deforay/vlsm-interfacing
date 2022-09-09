@@ -1,5 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
+exports.Sqlite3Helper = void 0;
 class Sqlite3Helper {
     constructor(appUserDataPath) {
         this.registerIpcMain(appUserDataPath);
@@ -60,5 +61,5 @@ class Sqlite3Helper {
         });
     }
 }
-exports.default = Sqlite3Helper;
+exports.Sqlite3Helper = Sqlite3Helper;
 //# sourceMappingURL=sqlite3helper.main.js.map

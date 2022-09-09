@@ -3,14 +3,21 @@ Object.defineProperty(exports, "__esModule", { value: true });
 const electron_1 = require("electron");
 const path = require("path");
 const fs = require("fs");
-const sqlite3helper_main_1 = require("../src/app/core/sqlite3helper.main");
+const Store = require("electron-store");
+//import { Sqlite3Helper } from '../src/app/core/sqlite3helper.main';
 let win = null;
+let store = null;
+let sqlitePath = null;
+let sqliteDbName = 'interface.db';
 const args = process.argv.slice(1), serve = args.some(val => val === '--serve');
 function createWindow() {
     const electronScreen = electron_1.screen;
     const size = electronScreen.getPrimaryDisplay().workAreaSize;
-    const Store = require('electron-store');
+    //const Store = require('electron-store');
     Store.initRenderer();
+    store = new Store();
+    sqlitePath = path.join(electron_1.app.getPath('userData'), '/', sqliteDbName);
+    store.set('appPath', sqlitePath);
     // Create the browser window.
     win = new electron_1.BrowserWindow({
         x: 0,
@@ -89,8 +96,65 @@ try {
         electron_1.ipcMain.handle('dialog', (event, method, params) => {
             electron_1.dialog[method](params);
         });
-        const appUserDataPath = (electron_1.app.getPath('userData'));
-        new sqlite3helper_main_1.default(appUserDataPath);
+        //new Sqlite3Helper(appUserDataPath);
+        const sqlite3 = require('sqlite3');
+        let log = require('electron-log');
+        sqlitePath = path.join(electron_1.app.getPath('userData'), '/', sqliteDbName);
+        log.error("OOOOPSASASAS " + sqlitePath);
+        const database = new sqlite3.Database(sqlitePath, (err) => {
+            if (err) {
+                store.set('appPath', JSON.stringify(err));
+                log.error('Database opening error: ', err);
+            }
+        });
+        database.run('CREATE TABLE IF NOT EXISTS `orders` ( \
+      `id` INTEGER NOT NULL, \
+      `order_id` TEXT NOT NULL, \
+      `test_id` TEXT DEFAULT NULL, \
+      `test_type` TEXT NOT NULL, \
+      `created_date` date DEFAULT NULL, \
+      `test_unit` TEXT DEFAULT NULL, \
+      `results` TEXT DEFAULT NULL, \
+      `tested_by` TEXT DEFAULT NULL, \
+      `analysed_date_time` datetime DEFAULT NULL, \
+      `specimen_date_time` datetime DEFAULT NULL, \
+      `authorised_date_time` datetime DEFAULT NULL, \
+      `result_accepted_date_time` datetime DEFAULT NULL, \
+      `machine_used` TEXT DEFAULT NULL, \
+      `test_location` TEXT DEFAULT NULL, \
+      `created_at` INTEGER NOT NULL DEFAULT "0", \
+      `result_status` INTEGER NOT NULL DEFAULT "0", \
+      `lims_sync_status` INTEGER DEFAULT "0", \
+      `lims_sync_date_time` datetime DEFAULT NULL, \
+      `repeated` INTEGER DEFAULT "0", \
+      `test_description` TEXT DEFAULT NULL, \
+      `is_printed` INTEGER DEFAULT NULL, \
+      `printed_at` INTEGER DEFAULT NULL, \
+      `raw_text` mediumtext, \
+      `added_on` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP, \
+      PRIMARY KEY("id" AUTOINCREMENT) \
+      );');
+        database.run('CREATE TABLE IF NOT EXISTS `raw_data` ( \
+      `id` INTEGER NOT NULL, \
+      `data` mediumtext NOT NULL, \
+      `machine` TEXT NOT NULL, \
+      `added_on` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP, \
+      PRIMARY KEY("id" AUTOINCREMENT) \
+      );');
+        electron_1.ipcMain.on('sqlite3-query', (event, sql, args) => {
+            event.reply('sqlite3-reply', sql);
+            event.reply('sqlite3-reply', database);
+            if (args === null || args === undefined) {
+                database.all(sql, (err, rows) => {
+                    event.reply('sqlite3-reply', (err && err.message) || rows);
+                });
+            }
+            else {
+                database.all(sql, args, (err, rows) => {
+                    event.reply('sqlite3-reply', (err && err.message) || rows);
+                });
+            }
+        });
     });
 }
 catch (e) {

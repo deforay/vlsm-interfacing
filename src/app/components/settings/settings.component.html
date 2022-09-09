@@ -50,6 +50,10 @@
               <!-- <option value="serial">RS232 (Serial)</option> -->
             </select>
           </div>
+          <div class="form-group col col-sm-6">
+            <label for="appPath" class="col-form-label-sm">App Path</label>
+            <input type="text" [(ngModel)]="appPath" name="appPath" class="form-control form-control-sm" readonly>
+          </div>
 
           <!-- <div class="form-group col-md-3 col-sm-6">
             <label for="flowControl" class="col-form-label-sm">Flow Control</label>
@@ -99,7 +103,7 @@
           </div>
           <div class="form-group col col-sm-6">
             <label for="mysqlPassword" class="col-form-label-sm">MySQL DB Password</label>
-            <input type="password" [(ngModel)]="settings.mysqlPassword" name="mysqlPassword" class="form-control form-control-sm" placeholder="MySQL DB Password"
+            <input type="text" [(ngModel)]="settings.mysqlPassword" name="mysqlPassword" class="form-control form-control-sm" placeholder="MySQL DB Password"
               required>
           </div>
           <div class="form-group col col-sm-6">

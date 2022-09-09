@@ -1,4 +1,4 @@
-export default class Sqlite3Helper {
+export class Sqlite3Helper {
   constructor(appUserDataPath) {
     this.registerIpcMain(appUserDataPath);
   }

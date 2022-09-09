@@ -83,7 +83,7 @@ export class InterfaceService {
     }
 
     const moment = require('moment');
-    const date = moment(new Date()).format('YYYYMMDDHHmmss');;
+    const date = moment(new Date()).format('YYYYMMDDHHmmss');
 
     let ack = String.fromCharCode(11)
       + 'MSH|^~\&|LIS||COBAS6800/8800||'
@@ -241,8 +241,9 @@ export class InterfaceService {
 
     //console.log(obx[1]);
     spm.forEach(function (singleSpm) {
-      sampleNumber = (singleSpm.get(1).toInteger());
-      const singleObx = obx[(sampleNumber * 2) - 1]; // there are twice as many OBX .. so we take the even number - 1 OBX for each SPM
+      //sampleNumber = (singleSpm.get(1).toInteger());
+      //const singleObx = obx[(sampleNumber * 2) - 1]; // there are twice as many OBX .. so we take the even number - 1 OBX for each SPM
+      const singleObx = obx[0]; // there are twice as many OBX .. so we take the even number - 1 OBX for each SPM
 
       //console.log(singleObx.get('OBX.19').toString());
 
@@ -438,22 +439,22 @@ export class InterfaceService {
   }
 
   formatRawDate(rawDate) {
-    let d = rawDate;
-    if (!rawDate) {
-      const len = rawDate.length;
 
-      const year = rawDate.substring(0, 4);
-      const month = rawDate.substring(4, 6);
-      const day = rawDate.substring(6, 8);
-      d = year + '-' + month + '-' + day;
-      if (len > 9) {
-        const h = rawDate.substring(8, 10);
-        const m = rawDate.substring(10, 12);
-        let s = '00';
-        if (len > 11) { s = rawDate.substring(12, 14); }
-        d += ' ' + h + ':' + m + ':' + s;
-      }
+    if (rawDate === false || rawDate === null || rawDate === '' || rawDate === undefined || rawDate.length === 0) {
+      return null;
+    }
 
+    const len = rawDate.length;
+    const year = rawDate.substring(0, 4);
+    const month = rawDate.substring(4, 6);
+    const day = rawDate.substring(6, 8);
+    let d = year + '-' + month + '-' + day;
+    if (len > 9) {
+      const h = rawDate.substring(8, 10);
+      const m = rawDate.substring(10, 12);
+      let s = '00';
+      if (len > 11) { s = rawDate.substring(12, 14); }
+      d += ' ' + h + ':' + m + ':' + s;
     }
     return d;
   }

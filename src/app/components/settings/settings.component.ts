@@ -10,10 +10,12 @@ import { ElectronStoreService } from '../../services/electron-store.service';
 })
 export class SettingsComponent implements OnInit {
   public settings: any = {};
+  public appPath: string = "";
 
   constructor(private electronService: ElectronService, private router: Router, private store: ElectronStoreService) {
 
     const appSettings = this.store.get('appSettings');
+    this.appPath = this.store.get('appPath');
 
     if (undefined !== appSettings) {
       this.settings.labID = appSettings.labID;
@@ -51,7 +53,7 @@ export class SettingsComponent implements OnInit {
       mysqlPort: this.settings.mysqlPort,
       mysqlDb: this.settings.mysqlDb,
       mysqlUser: this.settings.mysqlUser,
-      mysqlPassword: this.settings.mysqlPassword,
+      mysqlPassword: this.settings.mysqlPassword
     };
 
     this.store.set('appSettings', appSettings);
