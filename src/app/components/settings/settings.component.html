@@ -9,11 +9,11 @@
       <form (submit)="updateSettings()" class="form">
         <div class="row">
           <div class="form-group col col-sm-6">
-            <label for="labID" class="col-form-label-sm">Lab Code/ID</label>
+            <label for="labID" class="col-form-label-sm">Testing Lab Code/ID</label>
             <input type="text" [(ngModel)]="settings.labID" name="labID" class="form-control form-control-sm" placeholder="Lab Code/ID" required>
           </div>
           <div class="form-group col col-sm-6">
-            <label for="labName" class="col-form-label-sm">Lab Name</label>
+            <label for="labName" class="col-form-label-sm">Testing Lab Name</label>
             <input type="text" [(ngModel)]="settings.labName" name="labName" class="form-control form-control-sm" placeholder="Lab Name" required>
           </div>
         </div>
@@ -51,7 +51,7 @@
             </select>
           </div>
           <div class="form-group col col-sm-6">
-            <label for="appPath" class="col-form-label-sm">App Path</label>
+            <label for="appPath" class="col-form-label-sm">Sqlite3 Path</label>
             <input type="text" [(ngModel)]="appPath" name="appPath" class="form-control form-control-sm" readonly>
           </div>
 

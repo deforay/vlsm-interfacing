@@ -20,6 +20,7 @@ export class ElectronService {
   mysql: typeof mysql;
   net: typeof net;
   log: typeof log;
+  sqlite: any;
 
   constructor() {
     // Conditional imports
@@ -33,6 +34,7 @@ export class ElectronService {
       this.mysql = window.require('mysql');
       this.net = window.require('net');
       this.log = window.require('electron-log');
+      this.sqlite = window.require('sqlite3');
 
       // Notes :
       // * A NodeJS's dependency imported with 'window.require' MUST BE present in `dependencies` of both `app/package.json`

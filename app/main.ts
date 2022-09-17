@@ -119,16 +119,12 @@ try {
     });
     //new Sqlite3Helper(appUserDataPath);
     const sqlite3 = require('sqlite3');
-    let log = require('electron-log');
-
-
 
     sqlitePath = path.join(app.getPath('userData'), '/', sqliteDbName);
-    log.error("OOOOPSASASAS " + sqlitePath);
     const database = new sqlite3.Database(sqlitePath, (err) => {
       if (err) {
         store.set('appPath', JSON.stringify(err));
-        log.error('Database opening error: ', err);
+        console.error('Database opening error: ', err);
       }
 
     });
@@ -169,9 +165,11 @@ try {
       PRIMARY KEY("id" AUTOINCREMENT) \
       );');
 
+    database.run('PRAGMA journal_mode = WAL;');
+
     ipcMain.on('sqlite3-query', (event, sql, args) => {
-      event.reply('sqlite3-reply', sql);
-      event.reply('sqlite3-reply', database);
+      // event.reply('sqlite3-reply', sql);
+      // event.reply('sqlite3-reply', database);
       if (args === null || args === undefined) {
         database.all(sql, (err, rows) => {
           event.reply('sqlite3-reply', (err && err.message) || rows);

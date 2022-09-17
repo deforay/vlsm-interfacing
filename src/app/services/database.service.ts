@@ -16,31 +16,35 @@ export class DatabaseService {
     const mysql = this.electronService.mysql;
     const settings = this.store.get('appSettings');
 
-    this.dbConfig = {
-      connectionLimit: 1000,
-      // connectTimeout: 60 * 60 * 1000,
-      // acquireTimeout: 60 * 60 * 1000,
-      // timeout: 60 * 60 * 1000,
-      host: settings.mysqlHost,
-      user: settings.mysqlUser,
-      password: settings.mysqlPassword,
-      database: settings.mysqlDb,
-      port: settings.mysqlPort,
-      dateStrings: 'date'
-    };
+    // Initialize mysql connection pool only if settings are available
+    if (settings.mysqlHost != null && settings.mysqlHost != ''
+      && settings.mysqlUser != null && settings.mysqlUser != ''
+      && settings.mysqlDb != null && settings.mysqlDb != '') {
 
-    this.mysqlPool = mysql.createPool(this.dbConfig);
+      this.dbConfig = {
+        connectionLimit: 1000,
+        // connectTimeout: 60 * 60 * 1000,
+        // acquireTimeout: 60 * 60 * 1000,
+        // timeout: 60 * 60 * 1000,
+        host: settings.mysqlHost,
+        user: settings.mysqlUser,
+        password: settings.mysqlPassword,
+        database: settings.mysqlDb,
+        port: settings.mysqlPort,
+        dateStrings: 'date'
+      };
 
-    this.execQuery('SET GLOBAL CONNECT_TIMEOUT=28800; \
-                  SET SESSION INTERACTIVE_TIMEOUT = 28800;  \
-                  SET SESSION WAIT_TIMEOUT = 28800;  \
-                  SET SESSION MAX_EXECUTION_TIME = 28800;   \
-    SET GLOBAL sql_mode = (SELECT REPLACE(@@sql_mode, "ONLY_FULL_GROUP_BY", ""))',
-      [], (res) => {
-        console.log(res);
-      }, (err) => {
-        console.log(err);
-      });
+      this.mysqlPool = mysql.createPool(this.dbConfig);
+
+      this.execQuery('SET GLOBAL sql_mode = \
+                        (SELECT REPLACE(@@sql_mode, "ONLY_FULL_GROUP_BY", ""))', [], (res) => { console.log(res) }, (err) => { console.error(err) });
+      this.execQuery('SET GLOBAL CONNECT_TIMEOUT=28800', [], (res) => { console.log(res) }, (err) => { console.error(err) });
+      this.execQuery('SET SESSION INTERACTIVE_TIMEOUT = 28800', [], (res) => { console.log(res) }, (err) => { console.error(err) });
+      this.execQuery('SET SESSION WAIT_TIMEOUT = 28800', [], (res) => { console.log(res) }, (err) => { console.error(err) });
+      this.execQuery('SET SESSION MAX_EXECUTION_TIME = 28800', [], (res) => { console.log(res) }, (err) => { console.error(err) });
+
+    }
+
   }
 
   execQuery(query, data, success, errorf) {
@@ -87,40 +91,35 @@ export class DatabaseService {
   }
 
   addOrderTest(data, success, errorf) {
-    // console.log("======ORDER=======");
-    // console.log(data);
-    // console.log(Object.keys(data));
-    // console.log(Object.values(data));
-    // console.log("=============");
     const t = 'INSERT INTO orders (' + Object.keys(data).join(',') + ') VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)';
-    this.execQuery(t, Object.values(data), success, errorf);
+    if (this.mysqlPool != null) {
+      this.execQuery(t, Object.values(data), success, errorf);
+    }
 
     (this.electronService.execSqliteQuery(t, Object.values(data))).then((results) => { success(results) });
-
 
   }
 
   fetchLastOrders(success, errorf) {
-    const t = 'SELECT * FROM orders ORDER BY id DESC LIMIT 1000';
+    const t = 'SELECT * FROM orders ORDER BY added_on DESC LIMIT 1000';
     //this.execQuery(t, null, success, errorf);
 
-    (this.electronService.execSqliteQuery(t, null)).then(success);
+
+    // Fetching from SQLITE
+    (this.electronService.execSqliteQuery(t, null)).then((results) => { success(results) });
 
   }
 
   addOrderTestLog(data, success, errorf) {
-    // console.log("%%%%%%%ORDERLOG%%%%%%%");
-    // console.log(data);
-    // console.log("%%%%%%%%%%%%%%");
     const t = 'INSERT INTO orders_log (testedBy,units,results,analysedDateTime, ' +
       'specimenDateTime,acceptedDateTime, ' +
       'machineUsed,testLocation,status,orderID,testType,clientID1) ' +
       'VALUES (?,?,?,?,?,?,?,?,?,?,?,?)';
-    this.execQuery(t, data, success, errorf);
+    if (this.mysqlPool != null) {
+      this.execQuery(t, data, success, errorf);
+    }
 
     (this.electronService.execSqliteQuery(t, data)).then((results) => { success(results) });
-
-
 
   }
 
@@ -128,7 +127,9 @@ export class DatabaseService {
     const t = 'UPDATE orders SET tested_by = ?,test_unit = ?,results = ?,analysed_date_time = ?,specimen_date_time = ? ' +
       ',result_accepted_date_time = ?,machine_used = ?,test_location = ?,result_status = ? ' +
       ' WHERE test_id = ? AND result_status < 1';
-    this.execQuery(t, data, success, errorf);
+    if (this.mysqlPool != null) {
+      this.execQuery(t, data, success, errorf);
+    }
 
     (this.electronService.execSqliteQuery(t, data)).then((results) => { success(results) });
   }
@@ -139,7 +140,10 @@ export class DatabaseService {
     // console.log(Object.values(data));
     // console.log("=============");
     const t = 'INSERT INTO raw_data (' + Object.keys(data).join(',') + ') VALUES (?,?)';
-    this.execQuery(t, Object.values(data), success, errorf);
+
+    if (this.mysqlPool != null) {
+      this.execQuery(t, Object.values(data), success, errorf);
+    }
 
 
     (this.electronService.execSqliteQuery(t, Object.values(data))).then((results) => { success(results) });

@@ -57,7 +57,7 @@ export class InterfaceService {
   liveLog = this.liveLogSubject.asObservable();
 
 
-  constructor(private electronService: ElectronService,
+  constructor(public electronService: ElectronService,
     public dbService: DatabaseService,
     public store: ElectronStoreService) {
     this.log = this.electronService.log;
@@ -86,7 +86,7 @@ export class InterfaceService {
     const date = moment(new Date()).format('YYYYMMDDHHmmss');
 
     let ack = String.fromCharCode(11)
-      + 'MSH|^~\&|LIS||COBAS6800/8800||'
+      + 'MSH|^~\&|VLSM||VLSM||'
       + date + '||ACK^R22|ACK-R22-'
       + date + '||2.5||||||8859/1'
       + String.fromCharCode(13);
@@ -109,7 +109,7 @@ export class InterfaceService {
     if (that.settings.interfaceConnectionMode === 'tcpserver') {
       that.logger('info', 'Trying to create a server connection');
       that.server = that.net.createServer();
-      that.server.listen(that.settings.analyzerMachinePort, that.settings.analyzerMachineHost);
+      that.server.listen(that.settings.analyzerMachinePort);
 
       const sockets = [];
 
@@ -222,11 +222,12 @@ export class InterfaceService {
 
   processHL7Data(rawText) {
 
+
+
     const that = this;
     const message = this.hl7parser.create(rawText);
     const msgID = message.get('MSH.10').toString();
     this.socketClient.write(this.hl7ACK(msgID));
-
     // let result = null;
     //console.log(message.get('OBX'));
 
@@ -251,8 +252,8 @@ export class InterfaceService {
 
       const order: any = {};
       order.raw_text = rawText;
-      order.order_id = singleSpm.get('SPM.2').toString().replace('&ROCHE', '');
-      order.test_id = singleSpm.get('SPM.2').toString().replace('&ROCHE', '');;
+      order.order_id = singleSpm.get('SPM.3').toString().replace('&ROCHE', '');
+      order.test_id = singleSpm.get('SPM.3').toString().replace('&ROCHE', '');;
       order.test_type = 'HIVVL';
 
       if (resultOutcome === 'Titer') {
@@ -331,9 +332,12 @@ export class InterfaceService {
           that.logger('error', 'Not able to save raw data ' + JSON.stringify(err));
         });
 
+        that.logger('info', that.strData);
+
         that.strData = that.strData.replace(/[\x0b\x1c]/g, '');
         that.strData = that.strData.trim();
         that.strData = that.strData.replace(/[\r\n\x0B\x0C\u0085\u2028\u2029]+/gm, '\r');
+
         that.processHL7Data(that.strData);
         that.strData = '';
       }
