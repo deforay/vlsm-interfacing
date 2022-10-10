@@ -107,7 +107,7 @@ export class InterfaceService {
     this.settings = that.store.get('appSettings');
 
     if (that.settings.interfaceConnectionMode === 'tcpserver') {
-      that.logger('info', 'Trying to create a server connection');
+      that.logger('info', 'Listening for connection on port ' + that.settings.interfacePort);
       that.server = that.net.createServer();
       that.server.listen(that.settings.analyzerMachinePort);
 
@@ -225,9 +225,9 @@ export class InterfaceService {
 
 
     const that = this;
-    const message = this.hl7parser.create(rawText);
+    const message = that.hl7parser.create(rawText);
     const msgID = message.get('MSH.10').toString();
-    this.socketClient.write(this.hl7ACK(msgID));
+    that.socketClient.write(that.hl7ACK(msgID));
     // let result = null;
     //console.log(message.get('OBX'));
 
@@ -253,7 +253,14 @@ export class InterfaceService {
       const order: any = {};
       order.raw_text = rawText;
       order.order_id = singleSpm.get('SPM.3').toString().replace('&ROCHE', '');
-      order.test_id = singleSpm.get('SPM.3').toString().replace('&ROCHE', '');;
+      order.test_id = singleSpm.get('SPM.3').toString().replace('&ROCHE', '');
+
+      if (order.order_id === "") {
+        //Let us use the Sample Container ID as the Order ID
+        order.order_id = singleSpm.get('SAC.3').toString();
+        order.test_id = singleSpm.get('SAC.3').toString();
+      }
+
       order.test_type = 'HIVVL';
 
       if (resultOutcome === 'Titer') {
