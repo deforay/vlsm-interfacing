@@ -222,8 +222,6 @@ export class InterfaceService {
 
   processHL7Data(rawText) {
 
-
-
     const that = this;
     const message = that.hl7parser.create(rawText);
     const msgID = message.get('MSH.10').toString();
@@ -256,9 +254,11 @@ export class InterfaceService {
       order.test_id = singleSpm.get('SPM.3').toString().replace('&ROCHE', '');
 
       if (order.order_id === "") {
+        const sac = message.get('SAC').toArray();
+        const singleSAC = sac[0];
         //Let us use the Sample Container ID as the Order ID
-        order.order_id = singleSpm.get('SAC.3').toString();
-        order.test_id = singleSpm.get('SAC.3').toString();
+        order.order_id = singleSAC.get('SAC.3').toString();
+        order.test_id = singleSAC.get('SAC.3').toString();
       }
 
       order.test_type = 'HIVVL';

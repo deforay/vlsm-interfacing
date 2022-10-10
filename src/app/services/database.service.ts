@@ -102,11 +102,15 @@ export class DatabaseService {
 
   fetchLastOrders(success, errorf) {
     const t = 'SELECT * FROM orders ORDER BY added_on DESC LIMIT 1000';
-    //this.execQuery(t, null, success, errorf);
+    if (this.mysqlPool != null) {
+      this.execQuery(t, null, success, errorf);
+    } else {
+      // Fetching from SQLITE
+      (this.electronService.execSqliteQuery(t, null)).then((results) => { success(results) });
+    }
 
 
-    // Fetching from SQLITE
-    (this.electronService.execSqliteQuery(t, null)).then((results) => { success(results) });
+
 
   }
 
