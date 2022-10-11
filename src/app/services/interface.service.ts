@@ -78,6 +78,8 @@ export class InterfaceService {
 
   hl7ACK(messageID) {
 
+    const that = this;
+
     if (!messageID || messageID === '') {
       messageID = Math.random();
     }
@@ -86,9 +88,9 @@ export class InterfaceService {
     const date = moment(new Date()).format('YYYYMMDDHHmmss');
 
     let ack = String.fromCharCode(11)
-      + 'MSH|^~\&|VLSM||VLSM||'
-      + date + '||ACK^R22|ACK-R22-'
-      + date + '||2.5||||||8859/1'
+      + 'MSH|^~\\&|VLSM|VLSM|VLSM|VLSM|'
+      + date + '||ACK^R22^ACK|'
+      + self.crypto.randomUUID() + '||2.5||||||UNICODE UTF-8'
       + String.fromCharCode(13);
 
     ack += 'MSA|AA|' + messageID
@@ -96,6 +98,8 @@ export class InterfaceService {
       + String.fromCharCode(28)
       + String.fromCharCode(13);
 
+    that.logger('info', 'Sending HL7 ACK');
+    that.logger('info', ack);
     return ack;
   }
 
@@ -104,7 +108,7 @@ export class InterfaceService {
   connect() {
 
     const that = this;
-    this.settings = that.store.get('appSettings');
+    that.settings = that.store.get('appSettings');
 
     if (that.settings.interfaceConnectionMode === 'tcpserver') {
       that.logger('info', 'Listening for connection on port ' + that.settings.interfacePort);
@@ -146,16 +150,16 @@ export class InterfaceService {
     } else if (that.settings.interfaceConnectionMode === 'tcpclient') {
 
       that.socketClient = new that.net.Socket();
-      this.connectopts = {
-        port: this.settings.analyzerMachinePort,
-        host: this.settings.analyzerMachineHost
+      that.connectopts = {
+        port: that.settings.analyzerMachinePort,
+        host: that.settings.analyzerMachineHost
       };
 
-      this.logger('info', 'Trying to connect as client');
-      this.connectionTries++; // incrementing the connection tries
+      that.logger('info', 'Trying to connect as client');
+      that.connectionTries++; // incrementing the connection tries
 
       that.socketClient.connect(that.connectopts, function () {
-        this.connectionTries = 0; // resetting connection tries to 0
+        that.connectionTries = 0; // resetting connection tries to 0
         that.connectionStatus(true);
         that.logger('success', 'Connected as client successfully');
       });
@@ -254,11 +258,11 @@ export class InterfaceService {
       order.test_id = singleSpm.get('SPM.3').toString().replace('&ROCHE', '');
 
       if (order.order_id === "") {
-        const sac = message.get('SAC').toArray();
-        const singleSAC = sac[0];
+        // const sac = message.get('SAC').toArray();
+        // const singleSAC = sac[0];
         //Let us use the Sample Container ID as the Order ID
-        order.order_id = singleSAC.get('SAC.3').toString();
-        order.test_id = singleSAC.get('SAC.3').toString();
+        order.order_id = message.get('SAC.3').toString();
+        order.test_id = message.get('SAC.3').toString();
       }
 
       order.test_type = 'HIVVL';
@@ -333,7 +337,7 @@ export class InterfaceService {
         const rData: any = {};
         rData.data = that.strData;
         rData.machine = that.settings.analyzerMachineName;
-        this.dbService.addRawData(rData, (res) => {
+        that.dbService.addRawData(rData, (res) => {
           that.logger('success', 'Raw data successfully saved');
         }, (err) => {
           that.logger('error', 'Not able to save raw data ' + JSON.stringify(err));
