@@ -14,6 +14,8 @@ export class DashboardComponent implements OnInit {
   public stopTrying = false;
   public connectionInProcess = false;
   public reconnectButtonText = 'Connect';
+  public lastLimsSync = '';
+  public lastResultReceived = '';
   public machineName = '';
   public interval: any;
   public lastOrders: any;
@@ -45,8 +47,6 @@ export class DashboardComponent implements OnInit {
       });
     });
 
-
-
     that.interfaceService.liveLog.subscribe(mesg => {
       that._ngZone.run(() => {
         that.liveLogText = mesg;
@@ -54,15 +54,15 @@ export class DashboardComponent implements OnInit {
     });
 
     // Let us fetch last few Orders on load
-    that.fetchLastOrders('hide');
+    that.fetchLastOrders();
+
+    that.fetchRecentLogs();
 
     // let us call the function every 5 minutes
-    that.interval = setInterval(() => { that.fetchLastOrders('hide'); }, 1000 * 300);
+    that.interval = setInterval(() => { that.fetchLastOrders(); }, 1000 * 300);
 
-
-
-    that.interfaceService.stopTrying.subscribe(status => {
-      that._ngZone.run(() => {
+    // that.interfaceService.stopTrying.subscribe(status => {
+    //   that._ngZone.run(() => {
 
         // console.log(status);
         // that.stopTrying = status;
@@ -70,35 +70,36 @@ export class DashboardComponent implements OnInit {
         // that.cobasService.logger('error', 'Unable to connect to machine. Check Settings');
         // that.close();
         // }
-      });
-    });
+    //   });
+    // });
 
   }
 
-  fetchLastOrders(showNotification) {
+  fetchLastOrders() {
     const that = this;
     that.interfaceService.fetchLastOrders();
+
+    that.interfaceService.fetchLastSyncTimes(function (data) {
+      that.lastLimsSync = data.lastLimsSync;
+      that.lastResultReceived = data.lastResultReceived;
+    });
 
     that.interfaceService.lastOrders.subscribe(lastFewOrders => {
       that._ngZone.run(() => {
         that.lastOrders = lastFewOrders[0];
-        //console.log(showNotification);
-        if (showNotification !== 'hide') {
-          showNotification = 'hide';
-          // return new Notification('VLSM Interfacing', {
-          //   body: 'Fetched recent orders'
-          // });
-          //that.cobasService.logger('info', 'Fetched recent records from database');
-        }
-
-
       });
     });
 
   }
 
+  fetchRecentLogs() {
+    const that = this;
+    that.interfaceService.fetchRecentLogs();
+  }
+
   clearLiveLog() {
     this.liveLogText = null;
+    this.interfaceService.clearLiveLog();
   }
 
   reconnect() {

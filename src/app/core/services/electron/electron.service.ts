@@ -34,6 +34,10 @@ export class ElectronService {
       this.mysql = window.require('mysql');
       this.net = window.require('net');
       this.log = window.require('electron-log');
+
+      this.log.transports.file.level = 'info';
+      this.log.transports.console.level = 'info';
+
       this.sqlite = window.require('sqlite3');
 
       // Notes :

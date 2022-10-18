@@ -165,6 +165,13 @@ try {
       PRIMARY KEY("id" AUTOINCREMENT) \
       );');
 
+    database.run('CREATE TABLE IF NOT EXISTS `app_log` ( \
+      `id` INTEGER NOT NULL, \
+      `log` TEXT NOT NULL, \
+      `added_on` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP, \
+      PRIMARY KEY("id" AUTOINCREMENT) \
+      );');
+
     database.run('PRAGMA journal_mode = WAL;');
 
     ipcMain.on('sqlite3-query', (event, sql, args) => {

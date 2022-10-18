@@ -44,9 +44,9 @@ export class InterfaceService {
   // eslint-disable-next-line @typescript-eslint/member-ordering
   currentStatus = this.statusSubject.asObservable();
 
-  protected connectionTriesSubject = new BehaviorSubject(false);
+  //protected connectionTriesSubject = new BehaviorSubject(false);
   // eslint-disable-next-line @typescript-eslint/member-ordering
-  stopTrying = this.connectionTriesSubject.asObservable();
+  //stopTrying = this.connectionTriesSubject.asObservable();
 
   protected lastOrdersSubject = new BehaviorSubject([]);
   // eslint-disable-next-line @typescript-eslint/member-ordering
@@ -72,9 +72,9 @@ export class InterfaceService {
   }
 
   // Method used to track machine connection status
-  stopTryingStatus(stopTrying: boolean) {
-    this.connectionTriesSubject.next(stopTrying);
-  }
+  // stopTryingStatus(stopTrying: boolean) {
+  //   this.connectionTriesSubject.next(stopTrying);
+  // }
 
   hl7ACK(messageID) {
 
@@ -98,8 +98,7 @@ export class InterfaceService {
       + String.fromCharCode(28)
       + String.fromCharCode(13);
 
-    that.logger('info', 'Sending HL7 ACK');
-    that.logger('info', ack);
+    that.logger('info', 'Sending HL7 ACK : ' + ack);
     return ack;
   }
 
@@ -143,7 +142,7 @@ export class InterfaceService {
 
       this.server.on('error', function (e) {
         that.connectionStatus(false);
-        that.stopTryingStatus(true);
+        //that.stopTryingStatus(true);
         that.logger('error', 'Error while connecting ' + e.code);
       });
 
@@ -177,7 +176,7 @@ export class InterfaceService {
 
       that.socketClient.on('error', (e) => {
         that.connectionStatus(false);
-        that.stopTryingStatus(true);
+        //that.stopTryingStatus(true);
         that.logger('error', e);
       });
     } else {
@@ -326,24 +325,27 @@ export class InterfaceService {
 
     if (that.settings.interfaceCommunicationProtocol === 'hl7') {
 
-      that.logger('info', 'Processing HL7');
-      const text = that.hex2ascii(data.toString('hex'));
-      that.strData += text;
+      that.logger('info', 'Receiving HL7 data');
+      const hl7Text = that.hex2ascii(data.toString('hex'));
+      that.strData += hl7Text;
+
+      that.logger('info', hl7Text);
 
       // If there is a File Separator or 1C or ASCII 28 character,
       // it means the stream has ended and we can proceed with saving this data
       if (that.strData.includes('\x1c')) {
         // Let us store this Raw Data before we process it
+
+        that.logger('info', 'Received File Separator Character. Ready to process HL7 data');
         const rData: any = {};
         rData.data = that.strData;
         rData.machine = that.settings.analyzerMachineName;
+
         that.dbService.addRawData(rData, (res) => {
           that.logger('success', 'Raw data successfully saved');
         }, (err) => {
           that.logger('error', 'Not able to save raw data ' + JSON.stringify(err));
         });
-
-        that.logger('info', that.strData);
 
         that.strData = that.strData.replace(/[\x0b\x1c]/g, '');
         that.strData = that.strData.trim();
@@ -356,7 +358,7 @@ export class InterfaceService {
 
     } else if (that.settings.interfaceCommunicationProtocol === 'astm-elecsys') {
 
-      that.logger('info', 'Processing ASTM/Elecsys');
+      that.logger('info', 'Processing ASTM Elecsys');
 
       const d = data.toString('hex');
 
@@ -366,8 +368,7 @@ export class InterfaceService {
       if (d === '04') {
 
         that.socketClient.write(that.ACK);
-
-        that.logger('info', 'Received EOT. READY TO SEND');
+        that.logger('info', 'Received EOT. Ready to Process');
         //clearTimeout(that.timer);
         //this.logger('info',that.strData);
 
@@ -399,7 +400,7 @@ export class InterfaceService {
       }
     } else if (that.settings.interfaceCommunicationProtocol === 'astm-concatenated') {
 
-      that.logger('info', 'Processing ASTM/Concatenated');
+      that.logger('info', 'Processing ASTM Concatenated');
 
       const d = data.toString('hex');
 
@@ -407,7 +408,7 @@ export class InterfaceService {
 
         that.socketClient.write(that.ACK);
 
-        that.logger('info', 'Received EOT. READY TO SEND');
+        that.logger('info', 'Received EOT. Ready to Process');
         //clearTimeout(that.timer);
         //this.logger('info',that.strData);
 
@@ -614,14 +615,10 @@ export class InterfaceService {
     //Let us remove the transmission blocks
     astmData = astmData.replace(/<ETB>\w{2}<CR><LF>/g, "").replace(/<STX>/g, "");
 
-
-
-
     const fullDataArray = astmData.split('##START##');
 
     // that.logger('info', "AFTER SPLITTING USING ##START##");
     // that.logger('info', fullDataArray);
-
 
     fullDataArray.forEach(function (partData) {
 
@@ -742,22 +739,69 @@ export class InterfaceService {
     });
   }
 
+  fetchRecentLogs() {
+    const that = this;
+    that.dbService.fetchRecentLogs((res) => {
+
+      res.forEach(function (r) {
+        that.logtext.push(r.log);
+        that.liveLogSubject.next(that.logtext);
+      });
+
+    }, (err) => {
+      that.logger('error', 'Failed to fetch data ' + JSON.stringify(err));
+    });
+  }
+
+  fetchLastSyncTimes(callback): any {
+    const that = this;
+    that.dbService.fetchLastSyncTimes((res) => {
+      // data.lastLimsSync = (res[0].lastLimsSync);
+      // data.lastResultReceived = (res[0].lastResultReceived);
+      // return data;
+
+      callback(res[0]);
+    }, (err) => {
+      that.logger('error', 'Failed to fetch data ' + JSON.stringify(err));
+    });
+  }
+
+  clearLiveLog() {
+    const that = this;
+    that.logtext = []
+    that.liveLogSubject.next(that.logtext);
+  }
+
 
   logger(logType, message) {
     const that = this;
     const moment = require('moment');
     const date = moment(new Date()).format('DD-MMM-YYYY HH:mm:ss');
+
+    let logMessage = '';
+
+    that.log.transports.file.fileName = `${moment().format('YYYY-MM-DD')}.log`;
+
     if (logType === 'info') {
       that.log.info(message);
-      that.logtext[that.logtext.length] = '<span class="text-info">[info]</span> [' + date + '] ' + message + '<br>';
+      logMessage = '<span class="text-info">[info]</span> [' + date + '] ' + message + '<br>';
     } else if (logType === 'error') {
       that.log.error(message);
-      that.logtext[that.logtext.length] = '<span class="text-danger">[error]</span> [' + date + '] ' + message + '<br>';
+      logMessage = '<span class="text-danger">[error]</span> [' + date + '] ' + message + '<br>';
     } else if (logType === 'success') {
       that.log.info(message);
-      that.logtext[that.logtext.length] = '<span class="text-success">[success]</span> [' + date + '] ' + message + '<br>';
+      logMessage = '<span class="text-success">[success]</span> [' + date + '] ' + message + '<br>';
     }
+
+    //that.logtext[that.logtext.length] = logMessage;
+    that.logtext.unshift(logMessage);
     that.liveLogSubject.next(that.logtext);
+
+    const dbLog: any = {};
+    dbLog.log = logMessage;
+
+    that.dbService.addApplicationLog(dbLog, (res) => { }, (err) => { });
+
   }
 
 }

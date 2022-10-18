@@ -59,7 +59,13 @@ export class DatabaseService {
         }
 
         connection.query({ sql: query }, data, (errors, results, fields) => {
-          if (!errors) { success(results); connection.release(); } else { errorf(errors); connection.release(); }
+          if (!errors) {
+            success(results);
+            connection.release();
+          } else {
+            errorf(errors);
+            connection.release();
+          }
         });
 
       });
@@ -108,23 +114,17 @@ export class DatabaseService {
       // Fetching from SQLITE
       (this.electronService.execSqliteQuery(t, null)).then((results) => { success(results) });
     }
-
-
-
-
   }
 
-  addOrderTestLog(data, success, errorf) {
-    const t = 'INSERT INTO orders_log (testedBy,units,results,analysedDateTime, ' +
-      'specimenDateTime,acceptedDateTime, ' +
-      'machineUsed,testLocation,status,orderID,testType,clientID1) ' +
-      'VALUES (?,?,?,?,?,?,?,?,?,?,?,?)';
+  fetchLastSyncTimes(success, errorf) {
+    const t = 'SELECT MAX(lims_sync_date_time) as lastLimsSync, MAX(added_on) as lastResultReceived FROM `orders`';
+
     if (this.mysqlPool != null) {
-      this.execQuery(t, data, success, errorf);
+      this.execQuery(t, null, success, errorf);
+    } else {
+      // Fetching from SQLITE
+      (this.electronService.execSqliteQuery(t, null)).then((results) => { success(results) });
     }
-
-    (this.electronService.execSqliteQuery(t, data)).then((results) => { success(results) });
-
   }
 
   addResults(data, success, errorf) {
@@ -137,6 +137,7 @@ export class DatabaseService {
 
     (this.electronService.execSqliteQuery(t, data)).then((results) => { success(results) });
   }
+
   addRawData(data, success, errorf) {
     // console.log("======Raw Data=======");
     // console.log(data);
@@ -148,12 +149,25 @@ export class DatabaseService {
     if (this.mysqlPool != null) {
       this.execQuery(t, Object.values(data), success, errorf);
     }
-
-
     (this.electronService.execSqliteQuery(t, Object.values(data))).then((results) => { success(results) });
-
-
   }
 
+  addApplicationLog(data, success, errorf) {
+    const t = 'INSERT INTO app_log (' + Object.keys(data).join(',') + ') VALUES (?)';
+    if (this.mysqlPool != null) {
+      this.execQuery(t, Object.values(data), success, errorf);
+    }
+    (this.electronService.execSqliteQuery(t, Object.values(data))).then((results) => { success(results) });
+  }
+
+  fetchRecentLogs(success, errorf) {
+    const t = 'SELECT * FROM app_log ORDER BY added_on DESC, id DESC LIMIT 500';
+    if (this.mysqlPool != null) {
+      this.execQuery(t, null, success, errorf);
+    } else {
+      // Fetching from SQLITE
+      (this.electronService.execSqliteQuery(t, null)).then((results) => { success(results) });
+    }
+  }
 
 }
