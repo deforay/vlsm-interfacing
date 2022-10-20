@@ -90,7 +90,7 @@ export class InterfaceService {
     let ack = String.fromCharCode(11)
       + 'MSH|^~\\&|VLSM|VLSM|VLSM|VLSM|'
       + date + '||ACK^R22^ACK|'
-      + self.crypto.randomUUID() + '||2.5||||||UNICODE UTF-8'
+      + self.crypto.randomUUID() + '|P|2.5.1||||||UNICODE UTF-8'
       + String.fromCharCode(13);
 
     ack += 'MSA|AA|' + messageID
