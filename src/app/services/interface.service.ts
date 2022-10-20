@@ -110,7 +110,7 @@ export class InterfaceService {
     that.settings = that.store.get('appSettings');
 
     if (that.settings.interfaceConnectionMode === 'tcpserver') {
-      that.logger('info', 'Listening for connection on port ' + that.settings.interfacePort);
+      that.logger('info', 'Listening for connection on port ' + that.settings.analyzerMachinePort);
       that.server = that.net.createServer();
       that.server.listen(that.settings.analyzerMachinePort);
 
@@ -280,6 +280,12 @@ export class InterfaceService {
         order.results = 'Failed';
       } else {
         order.test_unit = singleObx.get('OBX.6.1').toString();
+        if (!order.test_unit) {
+          order.test_unit = singleObx.get('OBX.6.2').toString();
+        }
+        if (!order.test_unit) {
+          order.test_unit = singleObx.get('OBX.6').toString();
+        }
         order.results = resultOutcome;
       }
 
