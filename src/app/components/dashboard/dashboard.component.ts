@@ -11,7 +11,7 @@ import { InterfaceService } from '../../services/interface.service';
 })
 export class DashboardComponent implements OnInit {
   public isConnected = false;
-  public stopTrying = false;
+  public appSettings = null;
   public connectionInProcess = false;
   public reconnectButtonText = 'Connect';
   public lastLimsSync = '';
@@ -26,29 +26,39 @@ export class DashboardComponent implements OnInit {
     public interfaceService: InterfaceService,
     private router: Router) {
 
-    const that = this;
-
-    const appSettings = that.store.get('appSettings');
-
-    if (undefined === appSettings || !appSettings.analyzerMachinePort || !appSettings.interfaceCommunicationProtocol || !appSettings.analyzerMachineHost) {
-      that.router.navigate(['/settings']);
-    } else {
-      that.machineName = appSettings.analyzerMachineName;
-    }
-
-    if(appSettings.interfaceAutoConnect === 'yes') {
-      that.reconnect();
-    }
-
   }
 
   ngOnInit() {
 
     const that = this;
 
+    that.appSettings = that.store.get('appSettings');
+
+    if (null === that.appSettings || undefined === that.appSettings || !that.appSettings.analyzerMachinePort || !that.appSettings.interfaceCommunicationProtocol || !that.appSettings.analyzerMachineHost) {
+      that.router.navigate(['/settings']);
+    } else {
+      that.machineName = that.appSettings.analyzerMachineName;
+    }
+
+    if (that.appSettings.interfaceAutoConnect === 'yes') {
+      setTimeout(() => { that.reconnect() }, 1000);
+    }
+
     that.interfaceService.currentStatus.subscribe(status => {
       that._ngZone.run(() => {
         that.isConnected = status;
+      });
+    });
+
+    that.interfaceService.connectionAttemptStatus.subscribe(status => {
+      that._ngZone.run(() => {
+        if (status === false) {
+          that.connectionInProcess = false;
+          that.reconnectButtonText = 'Connect';
+        } else {
+          that.connectionInProcess = true;
+          that.reconnectButtonText = 'Please wait ...';
+        }
       });
     });
 
@@ -58,25 +68,17 @@ export class DashboardComponent implements OnInit {
       });
     });
 
-    // Let us fetch last few Orders on load
-    that.fetchLastOrders();
 
-    that.fetchRecentLogs();
+    setTimeout(() => {
+      // Let us fetch last few Orders and Logs on load
+      that.fetchLastOrders();
 
-    // let us call the function every 5 minutes
-    that.interval = setInterval(() => { that.fetchLastOrders(); }, 1000 * 300);
+      that.fetchRecentLogs();
 
-    // that.interfaceService.stopTrying.subscribe(status => {
-    //   that._ngZone.run(() => {
+    }, 400);
 
-        // console.log(status);
-        // that.stopTrying = status;
-        // if (that.stopTrying) {
-        // that.cobasService.logger('error', 'Unable to connect to machine. Check Settings');
-        // that.close();
-        // }
-    //   });
-    // });
+    // let us refresh last orders every 5 minutes
+    that.interval = setInterval(() => { that.fetchLastOrders(); }, 1000 * 60 * 5);
 
   }
 
@@ -98,8 +100,7 @@ export class DashboardComponent implements OnInit {
   }
 
   fetchRecentLogs() {
-    const that = this;
-    that.interfaceService.fetchRecentLogs();
+    this.interfaceService.fetchRecentLogs();
   }
 
   clearLiveLog() {
@@ -108,23 +109,16 @@ export class DashboardComponent implements OnInit {
   }
 
   reconnect() {
-    this.connectionInProcess = true;
-    this.reconnectButtonText = 'Please wait ... ';
     this.interfaceService.reconnect();
   }
 
   close() {
-    this.connectionInProcess = false;
-    this.reconnectButtonText = 'Connect';
     this.interfaceService.closeConnection();
   }
 
   ngOnDestroy() {
     clearInterval(this.interval);
   }
-
-
-
 
 }
 

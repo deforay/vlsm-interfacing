@@ -34,7 +34,7 @@ export class InterfaceService {
   protected log = null;
   protected strData = '';
   protected connectopts: any = null;
-  protected settings = null;
+  protected appSettings = null;
   protected timer = null;
   protected logtext = [];
 
@@ -43,6 +43,10 @@ export class InterfaceService {
   protected statusSubject = new BehaviorSubject(false);
   // eslint-disable-next-line @typescript-eslint/member-ordering
   currentStatus = this.statusSubject.asObservable();
+
+  protected connectionAttemptStatusSubject = new BehaviorSubject(false);
+  // eslint-disable-next-line @typescript-eslint/member-ordering
+  connectionAttemptStatus = this.connectionAttemptStatusSubject.asObservable();
 
   //protected connectionTriesSubject = new BehaviorSubject(false);
   // eslint-disable-next-line @typescript-eslint/member-ordering
@@ -69,6 +73,11 @@ export class InterfaceService {
   // Method used to track machine connection status
   connectionStatus(interfaceConnected: boolean) {
     this.statusSubject.next(interfaceConnected);
+  }
+
+  // Method used to track machine connection status
+  connectionAttempt(interfaceAttempt: boolean) {
+    this.connectionAttemptStatusSubject.next(interfaceAttempt);
   }
 
   // Method used to track machine connection status
@@ -107,12 +116,14 @@ export class InterfaceService {
   connect() {
 
     const that = this;
-    that.settings = that.store.get('appSettings');
+    that.appSettings = that.store.get('appSettings');
 
-    if (that.settings.interfaceConnectionMode === 'tcpserver') {
-      that.logger('info', 'Listening for connection on port ' + that.settings.analyzerMachinePort);
+    that.connectionAttempt(true);
+
+    if (that.appSettings.interfaceConnectionMode === 'tcpserver') {
+      that.logger('info', 'Listening for connection on port ' + that.appSettings.analyzerMachinePort);
       that.server = that.net.createServer();
-      that.server.listen(that.settings.analyzerMachinePort);
+      that.server.listen(that.appSettings.analyzerMachinePort);
 
       const sockets = [];
 
@@ -141,17 +152,24 @@ export class InterfaceService {
 
 
       this.server.on('error', function (e) {
-        that.connectionStatus(false);
+        //that.connectionStatus(false);
         //that.stopTryingStatus(true);
         that.logger('error', 'Error while connecting ' + e.code);
+        that.closeConnection();
+
+        if (that.appSettings.interfaceAutoConnect === 'yes') {
+          that.logger('error', "Interface AutoConnect is enabled: Will restart server in 30 seconds");
+          setTimeout(() => { that.reconnect() }, 30000);
+        }
+
       });
 
-    } else if (that.settings.interfaceConnectionMode === 'tcpclient') {
+    } else if (that.appSettings.interfaceConnectionMode === 'tcpclient') {
 
       that.socketClient = new that.net.Socket();
       that.connectopts = {
-        port: that.settings.analyzerMachinePort,
-        host: that.settings.analyzerMachineHost
+        port: that.appSettings.analyzerMachinePort,
+        host: that.appSettings.analyzerMachineHost
       };
 
       that.logger('info', 'Trying to connect as client');
@@ -169,15 +187,23 @@ export class InterfaceService {
       });
 
       that.socketClient.on('close', function () {
-        that.socketClient.destroy();
-        that.connectionStatus(false);
-        that.logger('info', 'Client Disconnected');
+        // that.socketClient.destroy();
+        // that.connectionStatus(false);
+        // that.logger('info', 'Client Disconnected');
+        // that.closeConnection();
       });
 
       that.socketClient.on('error', (e) => {
-        that.connectionStatus(false);
+        //that.connectionStatus(false);
         //that.stopTryingStatus(true);
         that.logger('error', e);
+        that.closeConnection();
+
+        if (that.appSettings.interfaceAutoConnect === 'yes') {
+          that.logger('error', "Interface AutoConnect is enabled: Will re-attempt connection in 30 seconds");
+          setTimeout(() => { that.reconnect() }, 30000);
+        }
+
       });
     } else {
 
@@ -191,21 +217,25 @@ export class InterfaceService {
   }
 
   closeConnection() {
-    this.settings = this.store.get('appSettings');
 
-    if (this.settings.interfaceConnectionMode === 'tcpclient') {
-      if (this.socketClient) {
-        this.socketClient.destroy();
-        this.connectionStatus(false);
-        this.logger('info', 'Disconnected');
+    const that = this;
+    that.appSettings = that.store.get('appSettings');
+
+    if (that.appSettings.interfaceConnectionMode === 'tcpclient') {
+      if (that.socketClient) {
+        that.socketClient.destroy();
+        that.connectionStatus(false);
+        that.connectionAttempt(false);
+        that.logger('info', 'Client Disconnected');
       }
 
     } else {
-      if (this.server) {
-        this.socketClient.destroy();
-        this.server.close();
-        this.connectionStatus(false);
-        this.logger('info', 'Disconnected');
+      if (that.server) {
+        that.socketClient.destroy();
+        that.server.close();
+        that.connectionStatus(false);
+        that.connectionAttempt(false);
+        that.logger('info', 'Server Stopped');
       }
     }
   }
@@ -296,8 +326,8 @@ export class InterfaceService {
       //order.specimen_date_time = this.formatRawDate(message.get('OBX').get(0).get('OBX.19').toString());
       order.authorised_date_time = that.formatRawDate(singleObx.get('OBX.19').toString());
       order.result_accepted_date_time = that.formatRawDate(singleObx.get('OBX.19').toString());
-      order.test_location = that.settings.labName;
-      order.machine_used = that.settings.analyzerMachineName;
+      order.test_location = that.appSettings.labName;
+      order.machine_used = that.appSettings.analyzerMachineName;
 
       if (order.results) {
         that.dbService.addOrderTest(order, (res) => {
@@ -321,15 +351,15 @@ export class InterfaceService {
       // order.specimen_date_time = r.specimenDate;
       // order.authorised_date_time = r.timestamp;
       // order.result_accepted_date_time = r.timestamp;
-      // order.test_location = this.settings.labName;
-      // order.machine_used = this.settings.analyzerMachineName;
+      // order.test_location = this.appSettings.labName;
+      // order.machine_used = this.appSettings.analyzerMachineName;
     });
   }
 
   handleTCPResponse(data) {
     const that = this;
 
-    if (that.settings.interfaceCommunicationProtocol === 'hl7') {
+    if (that.appSettings.interfaceCommunicationProtocol === 'hl7') {
 
       that.logger('info', 'Receiving HL7 data');
       const hl7Text = that.hex2ascii(data.toString('hex'));
@@ -345,7 +375,7 @@ export class InterfaceService {
         that.logger('info', 'Received File Separator Character. Ready to process HL7 data');
         const rData: any = {};
         rData.data = that.strData;
-        rData.machine = that.settings.analyzerMachineName;
+        rData.machine = that.appSettings.analyzerMachineName;
 
         that.dbService.addRawData(rData, (res) => {
           that.logger('success', 'Raw data successfully saved');
@@ -362,7 +392,7 @@ export class InterfaceService {
       }
 
 
-    } else if (that.settings.interfaceCommunicationProtocol === 'astm-elecsys') {
+    } else if (that.appSettings.interfaceCommunicationProtocol === 'astm-elecsys') {
 
       that.logger('info', 'Processing ASTM Elecsys');
 
@@ -381,7 +411,7 @@ export class InterfaceService {
         // Let us store this Raw Data before we process it
         const rData: any = {};
         rData.data = that.strData;
-        rData.machine = that.settings.analyzerMachineName;
+        rData.machine = that.appSettings.analyzerMachineName;
         that.dbService.addRawData(rData, (res) => {
           that.logger('success', 'Raw data successfully saved');
         }, (err) => {
@@ -404,7 +434,7 @@ export class InterfaceService {
         that.logger('info', 'Receiving....');
         that.socketClient.write(that.ACK);
       }
-    } else if (that.settings.interfaceCommunicationProtocol === 'astm-concatenated') {
+    } else if (that.appSettings.interfaceCommunicationProtocol === 'astm-concatenated') {
 
       that.logger('info', 'Processing ASTM Concatenated');
 
@@ -421,7 +451,7 @@ export class InterfaceService {
         // Let us store this Raw Data before we process it
         const rData: any = {};
         rData.data = that.strData;
-        rData.machine = that.settings.analyzerMachineName;
+        rData.machine = that.appSettings.analyzerMachineName;
         that.dbService.addRawData(rData, (res) => {
           that.logger('success', 'Raw data successfully saved');
         }, (err) => {
@@ -567,8 +597,8 @@ export class InterfaceService {
             order.raw_text = partData;
             order.result_status = 1;
             order.lims_sync_status = 0;
-            order.test_location = that.settings.labName;
-            order.machine_used = that.settings.analyzerMachineName;
+            order.test_location = that.appSettings.labName;
+            order.machine_used = that.appSettings.analyzerMachineName;
 
             if (order.order_id) {
               that.logger('info', "Trying to add order :" + JSON.stringify(order));
@@ -699,8 +729,8 @@ export class InterfaceService {
             order.raw_text = partData;
             order.result_status = 1;
             order.lims_sync_status = 0;
-            order.test_location = that.settings.labName;
-            order.machine_used = that.settings.analyzerMachineName;
+            order.test_location = that.appSettings.labName;
+            order.machine_used = that.appSettings.analyzerMachineName;
 
             if (order.order_id) {
               that.logger('info', "Trying to add order :" + JSON.stringify(order));
