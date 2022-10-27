@@ -1,6 +1,6 @@
 {
   "name": "vlsm-interfacing",
-  "version": "2.0.5",
+  "version": "2.0.6",
   "description": "Interfacing Tool By VLSM",
   "homepage": "https://github.com/deforay/vlsm-interfacing",
   "author": {
@@ -29,6 +29,6 @@
     "electron-store": "^8.1.0",
     "hl7parser": "^1.0.1",
     "mysql": "2.18.1",
-    "sqlite3": "^5.1.1"
+    "sqlite3": "^5.1.2"
   }
 }

@@ -25,6 +25,7 @@ export class SettingsComponent implements OnInit {
       this.settings.analyzerMachinePort = appSettings.analyzerMachinePort;
       this.settings.analyzerMachineHost = appSettings.analyzerMachineHost;
       this.settings.interfaceConnectionMode = appSettings.interfaceConnectionMode;
+      this.settings.interfaceAutoConnect = appSettings.interfaceAutoConnect;
       this.settings.interfaceCommunicationProtocol = appSettings.interfaceCommunicationProtocol;
 
       this.settings.mysqlHost = appSettings.mysqlHost;
@@ -48,6 +49,7 @@ export class SettingsComponent implements OnInit {
       analyzerMachineName: this.settings.analyzerMachineName,
       analyzerMachineHost: this.settings.analyzerMachineHost,
       interfaceConnectionMode: this.settings.interfaceConnectionMode,
+      interfaceAutoConnect: this.settings.interfaceAutoConnect,
       interfaceCommunicationProtocol: this.settings.interfaceCommunicationProtocol,
       mysqlHost: this.settings.mysqlHost,
       mysqlPort: this.settings.mysqlPort,

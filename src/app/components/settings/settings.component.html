@@ -2,7 +2,7 @@
 <main role="main" class="container mt-5">
   <div class="card">
     <div class="card-header">
-        <strong>System Settings</strong>
+      <strong>System Settings</strong>
     </div>
 
     <div class="card-body">
@@ -10,31 +10,37 @@
         <div class="row">
           <div class="form-group col col-sm-6">
             <label for="labID" class="col-form-label-sm">Testing Lab Code/ID</label>
-            <input type="text" [(ngModel)]="settings.labID" name="labID" class="form-control form-control-sm" placeholder="Lab Code/ID" required>
+            <input type="text" [(ngModel)]="settings.labID" name="labID" class="form-control form-control-sm"
+              placeholder="Lab Code/ID" required>
           </div>
           <div class="form-group col col-sm-6">
             <label for="labName" class="col-form-label-sm">Testing Lab Name</label>
-            <input type="text" [(ngModel)]="settings.labName" name="labName" class="form-control form-control-sm" placeholder="Lab Name" required>
+            <input type="text" [(ngModel)]="settings.labName" name="labName" class="form-control form-control-sm"
+              placeholder="Lab Name" required>
           </div>
         </div>
         <hr>
         <div class="row">
           <div class="form-group col col-sm-6">
             <label for="analyzerMachineName" class="col-form-label-sm">Analyzer/Machine Name</label>
-            <input type="text" [(ngModel)]="settings.analyzerMachineName" name="analyzerMachineName" class="form-control form-control-sm" placeholder="eg. Roche Cobas48"
-              required>
+            <input type="text" [(ngModel)]="settings.analyzerMachineName" name="analyzerMachineName"
+              class="form-control form-control-sm" placeholder="eg. Roche Cobas48" required>
           </div>
           <div class="form-group col col-sm-6">
             <label for="analyzerMachineHost" class="col-form-label-sm">Analyzer/Machine IP Address</label>
-            <input type="text" [(ngModel)]="settings.analyzerMachineHost" name="analyzerMachineHost" class="form-control form-control-sm" placeholder="eg. 198.1.1.1" required>
+            <input type="text" [(ngModel)]="settings.analyzerMachineHost" name="analyzerMachineHost"
+              class="form-control form-control-sm" placeholder="eg. 198.1.1.1" required>
           </div>
           <div class="form-group col col-sm-6">
             <label for="analyzerMachinePort" class="col-form-label-sm">Analyzer/Machine Port no.</label>
-            <input type="text" [(ngModel)]="settings.analyzerMachinePort" name="analyzerMachinePort" class="form-control form-control-sm" placeholder="eg. 3120" required>
+            <input type="text" [(ngModel)]="settings.analyzerMachinePort" name="analyzerMachinePort"
+              class="form-control form-control-sm" placeholder="eg. 3120" required>
           </div>
           <div class="form-group col col-sm-6">
-            <label for="interfaceCommunicationProtocol" class="col-form-label-sm">Interface Communication Protocol</label>
-            <select [(ngModel)]="settings.interfaceCommunicationProtocol" name="interfaceCommunicationProtocol" class="form-control form-control-sm">
+            <label for="interfaceCommunicationProtocol" class="col-form-label-sm">Interface Communication
+              Protocol</label>
+            <select [(ngModel)]="settings.interfaceCommunicationProtocol" name="interfaceCommunicationProtocol"
+              class="form-control form-control-sm">
               <option>-- Select --</option>
               <option value="astm-elecsys">ASTM/Elecsys (Single Record)</option>
               <option value="astm-concatenated">ASTM (Concatenated)</option>
@@ -43,15 +49,24 @@
           </div>
           <div class="form-group col col-sm-6">
             <label for="interfaceConnectionMode" class="col-form-label-sm">This Interface Tool is a</label>
-            <select [(ngModel)]="settings.interfaceConnectionMode" name="interfaceConnectionMode" class="form-control form-control-sm">
+            <select [(ngModel)]="settings.interfaceConnectionMode" name="interfaceConnectionMode"
+              class="form-control form-control-sm">
               <option>-- Select --</option>
-              <option value="tcpserver">TCP/IP Server</option>
-              <option value="tcpclient">TCP/IP Client</option>
-              <!-- <option value="serial">RS232 (Serial)</option> -->
+              <option value="tcpserver">Server (TCP/IP)</option>
+              <option value="tcpclient">Client (TCP/IP)</option>
             </select>
           </div>
           <div class="form-group col col-sm-6">
-            <label for="appPath" class="col-form-label-sm">Sqlite3 Path</label>
+            <label for="interfaceAutoConnect" class="col-form-label-sm">Should the interface attempt to autoconnect?</label>
+            <select [(ngModel)]="settings.interfaceAutoConnect" name="interfaceAutoConnect"
+              class="form-control form-control-sm">
+              <option>-- Select --</option>
+              <option value="yes">Yes</option>
+              <option value="no">No</option>
+            </select>
+          </div>
+          <div class="form-group col col-sm-6">
+            <label for="appPath" class="col-form-label-sm">SQLite DB Path</label>
             <input type="text" [(ngModel)]="appPath" name="appPath" class="form-control form-control-sm" readonly>
           </div>
 
@@ -86,29 +101,33 @@
         <div class="row">
           <div class="form-group col col-sm-6">
             <label for="mysqlHost" class="col-form-label-sm">MySQL Host</label>
-            <input type="text" [(ngModel)]="settings.mysqlHost" name="mysqlHost" class="form-control form-control-sm" placeholder="MySQL Hostname" required>
+            <input type="text" [(ngModel)]="settings.mysqlHost" name="mysqlHost" class="form-control form-control-sm"
+              placeholder="MySQL Hostname" required>
           </div>
           <div class="form-group col col-sm-6">
             <label for="mysqlPort" class="col-form-label-sm">MySQL Port</label>
-            <input type="text" [(ngModel)]="settings.mysqlPort" name="mysqlPort" class="form-control form-control-sm" placeholder="MySQL Port Number"
-              required>
+            <input type="text" [(ngModel)]="settings.mysqlPort" name="mysqlPort" class="form-control form-control-sm"
+              placeholder="MySQL Port Number" required>
           </div>
           <div class="form-group col col-sm-6">
             <label for="mysqlDb" class="col-form-label-sm">MySQL DB Name</label>
-            <input type="text" [(ngModel)]="settings.mysqlDb" name="mysqlDb" class="form-control form-control-sm" placeholder="MySQL DB Name" required>
+            <input type="text" [(ngModel)]="settings.mysqlDb" name="mysqlDb" class="form-control form-control-sm"
+              placeholder="MySQL DB Name" required>
           </div>
           <div class="form-group col col-sm-6">
             <label for="mysqlUser" class="col-form-label-sm">MySQL DB User</label>
-            <input type="text" [(ngModel)]="settings.mysqlUser" name="mysqlUser" class="form-control form-control-sm" placeholder="MySQL DB User" required>
+            <input type="text" [(ngModel)]="settings.mysqlUser" name="mysqlUser" class="form-control form-control-sm"
+              placeholder="MySQL DB User" required>
           </div>
           <div class="form-group col col-sm-6">
             <label for="mysqlPassword" class="col-form-label-sm">MySQL DB Password</label>
-            <input type="text" [(ngModel)]="settings.mysqlPassword" name="mysqlPassword" class="form-control form-control-sm" placeholder="MySQL DB Password"
-              required>
+            <input type="text" [(ngModel)]="settings.mysqlPassword" name="mysqlPassword"
+              class="form-control form-control-sm" placeholder="MySQL DB Password" required>
           </div>
           <div class="form-group col col-sm-6">
-              <label for="" class="col-form-label-sm">&nbsp;&nbsp;</label><br>
-              <button (click)="checkMysqlConnection()" class="btn btn-dark btn-sm" type="button">Check MySQL Connection</button>
+            <label for="" class="col-form-label-sm">&nbsp;&nbsp;</label><br>
+            <button (click)="checkMysqlConnection()" class="btn btn-dark btn-sm" type="button">Check MySQL
+              Connection</button>
           </div>
         </div>
         <hr>

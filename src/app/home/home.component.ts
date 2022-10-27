@@ -8,24 +8,30 @@ import { ElectronStoreService } from '../services/electron-store.service';
   styleUrls: ['./home.component.scss']
 })
 export class HomeComponent implements OnInit {
+  public settings: any = {};
   public user: { login: string; password: string } = {
     login: '',
     password: ''
   };
   constructor(private router: Router, private store: ElectronStoreService) {
+    this.settings = this.store.get('appSettings');
+
+    console.error(this.settings.interfaceAutoConnect);
+
+    if (this.settings.interfaceAutoConnect === 'yes') {
+      this.doLogin();
+    }
   }
 
   ngOnInit(): void {
   }
 
   public doLogin() {
-    if (this.user.login === 'admin' && this.user.password === 'admin') {
+    if (this.settings.interfaceAutoConnect === 'yes' || (this.user.login === 'admin' && this.user.password === 'admin')) {
 
       this.store.set('loggedin', true);
 
-      const appSettings = this.store.get('appSettings');
-
-      if (undefined === appSettings) {
+      if (undefined === this.settings) {
         this.router.navigate(['/settings']);
       } else {
         this.router.navigate(['/dashboard']);

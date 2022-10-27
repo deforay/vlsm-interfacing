@@ -518,7 +518,7 @@ export class InterfaceService {
         //that.logger('info', dataArray);
         //that.logger('info',dataArray['R']);
 
-        if (dataArray === []) {
+        if (dataArray === null || dataArray === undefined || dataArray['R'] === undefined) {
           that.logger('info', 'dataArray blank');
           return;
         }
@@ -543,11 +543,11 @@ export class InterfaceService {
           console.warn(dataArray['O']);
           console.warn(dataArray['R']);
 
-          if (dataArray['O'] !== undefined && dataArray['O'] !== []) {
+          if (dataArray['O'] !== undefined && dataArray['O'] !== null) {
 
             order.order_id = dataArray['O'][2];
             order.test_id = dataArray['O'][1];
-            if (dataArray['R'] !== undefined && dataArray['R'] !== []) {
+            if (dataArray['R'] !== undefined && dataArray['R'] !== null) {
               order.test_type = (dataArray['R'][2]) ? dataArray['R'][2].replace('^^^', '') : dataArray['R'][2];
               order.test_unit = dataArray['R'][4];
               order.results = dataArray['R'][3];
@@ -652,7 +652,7 @@ export class InterfaceService {
         //that.logger('info', dataArray);
         //that.logger('info',dataArray['R']);
 
-        if (dataArray === []) {
+        if (dataArray === null || dataArray === undefined || dataArray['R'] === undefined) {
           that.logger('info', 'dataArray blank');
           return;
         }
@@ -675,11 +675,11 @@ export class InterfaceService {
 
 
 
-          if (dataArray['O'] !== undefined && dataArray['O'] !== []) {
+          if (dataArray['O'] !== undefined && dataArray['O'] !== null) {
 
             order.order_id = dataArray['O'][2];
             order.test_id = dataArray['O'][1];
-            if (dataArray['R'] !== undefined && dataArray['R'] !== []) {
+            if (dataArray['R'] !== undefined && dataArray['R'] !== null) {
               order.test_type = (dataArray['R'][2]) ? dataArray['R'][2].replace('^^^', '') : dataArray['R'][2];
               order.test_unit = dataArray['R'][4];
               order.results = dataArray['R'][3];

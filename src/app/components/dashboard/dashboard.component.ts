@@ -35,6 +35,11 @@ export class DashboardComponent implements OnInit {
     } else {
       that.machineName = appSettings.analyzerMachineName;
     }
+
+    if(appSettings.interfaceAutoConnect === 'yes') {
+      that.reconnect();
+    }
+
   }
 
   ngOnInit() {
