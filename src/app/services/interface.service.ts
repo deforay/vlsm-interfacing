@@ -222,15 +222,15 @@ export class InterfaceService {
     that.appSettings = that.store.get('appSettings');
 
     if (that.appSettings.interfaceConnectionMode === 'tcpclient') {
-      if (that.socketClient !== null && that.socketClient !== false && that.socketClient !== undefined) {
+      if (that.socketClient) {
         that.socketClient.destroy();
         that.connectionStatus(false);
         that.connectionAttempt(false);
         that.logger('info', 'Client Disconnected');
       }
+
     } else {
-      if (that.server !== null && that.server !== false && that.server !== undefined) {
-        that.socketClient.destroy();
+      if (that.server) {
         that.server.close();
         that.connectionStatus(false);
         that.connectionAttempt(false);
