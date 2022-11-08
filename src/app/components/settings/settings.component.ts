@@ -42,23 +42,25 @@ export class SettingsComponent implements OnInit {
 
   updateSettings() {
 
+    const that = this;
+
     const appSettings = {
-      labID: this.settings.labID,
-      labName: this.settings.labName,
-      analyzerMachinePort: this.settings.analyzerMachinePort,
-      analyzerMachineName: this.settings.analyzerMachineName,
-      analyzerMachineHost: this.settings.analyzerMachineHost,
-      interfaceConnectionMode: this.settings.interfaceConnectionMode,
-      interfaceAutoConnect: this.settings.interfaceAutoConnect,
-      interfaceCommunicationProtocol: this.settings.interfaceCommunicationProtocol,
-      mysqlHost: this.settings.mysqlHost,
-      mysqlPort: this.settings.mysqlPort,
-      mysqlDb: this.settings.mysqlDb,
-      mysqlUser: this.settings.mysqlUser,
-      mysqlPassword: this.settings.mysqlPassword
+      labID: that.settings.labID,
+      labName: that.settings.labName,
+      analyzerMachinePort: that.settings.analyzerMachinePort,
+      analyzerMachineName: that.settings.analyzerMachineName,
+      analyzerMachineHost: that.settings.analyzerMachineHost,
+      interfaceConnectionMode: that.settings.interfaceConnectionMode,
+      interfaceAutoConnect: that.settings.interfaceAutoConnect,
+      interfaceCommunicationProtocol: that.settings.interfaceCommunicationProtocol,
+      mysqlHost: that.settings.mysqlHost,
+      mysqlPort: that.settings.mysqlPort,
+      mysqlDb: that.settings.mysqlDb,
+      mysqlUser: that.settings.mysqlUser,
+      mysqlPassword: that.settings.mysqlPassword
     };
 
-    this.store.set('appSettings', appSettings);
+    that.store.set('appSettings', appSettings);
 
     new Notification('Success', {
       body: 'Updated VLSM interfacing settings'
@@ -73,10 +75,10 @@ export class SettingsComponent implements OnInit {
     const that = this;
     const mysql = that.electronService.mysql;
     const connection = mysql.createConnection({
-      host: this.settings.mysqlHost,
-      user: this.settings.mysqlUser,
-      password: this.settings.mysqlPassword,
-      port: this.settings.mysqlPort
+      host: that.settings.mysqlHost,
+      user: that.settings.mysqlUser,
+      password: that.settings.mysqlPassword,
+      port: that.settings.mysqlPort
     });
 
     connection.connect(function (err) {
@@ -85,12 +87,11 @@ export class SettingsComponent implements OnInit {
 
         const dialogConfig = {
           type: 'error',
-          message: 'Oops! Something went wrong! Unable to connect to the MySQL database.',
+          message: 'Oops! Something went wrong! Unable to connect to the MySQL database on host ' + that.settings.mysqlHost,
           detail: err + '\n\nPlease check if all the database connection settings are correct and the MySQL server is running.',
           buttons: ['OK']
         };
         that.electronService.openDialog('showMessageBox', dialogConfig);
-        return;
       } else {
         const dialogConfig = {
           type: 'info',

@@ -6,42 +6,44 @@ import { ElectronStoreService } from './electron-store.service';
   providedIn: 'root'
 })
 export class DatabaseService {
-  //private settings = null;
+
   private mysqlPool = null;
   private dbConfig = null;
+  public appSettings = null;
 
   constructor(private electronService: ElectronService,
     private store: ElectronStoreService) {
 
     const mysql = this.electronService.mysql;
-    const settings = this.store.get('appSettings');
+    const that = this;
+    that.appSettings = that.store.get('appSettings');
 
     // Initialize mysql connection pool only if settings are available
-    if (settings.mysqlHost != null && settings.mysqlHost != ''
-      && settings.mysqlUser != null && settings.mysqlUser != ''
-      && settings.mysqlDb != null && settings.mysqlDb != '') {
+    if (that.appSettings.mysqlHost != null && that.appSettings.mysqlHost != ''
+      && that.appSettings.mysqlUser != null && that.appSettings.mysqlUser != ''
+      && that.appSettings.mysqlDb != null && that.appSettings.mysqlDb != '') {
 
       this.dbConfig = {
         connectionLimit: 1000,
         // connectTimeout: 60 * 60 * 1000,
         // acquireTimeout: 60 * 60 * 1000,
         // timeout: 60 * 60 * 1000,
-        host: settings.mysqlHost,
-        user: settings.mysqlUser,
-        password: settings.mysqlPassword,
-        database: settings.mysqlDb,
-        port: settings.mysqlPort,
+        host: that.appSettings.mysqlHost,
+        user: that.appSettings.mysqlUser,
+        password: that.appSettings.mysqlPassword,
+        database: that.appSettings.mysqlDb,
+        port: that.appSettings.mysqlPort,
         dateStrings: 'date'
       };
 
-      this.mysqlPool = mysql.createPool(this.dbConfig);
+      that.mysqlPool = mysql.createPool(that.dbConfig);
 
-      this.execQuery('SET GLOBAL sql_mode = \
+      that.execQuery('SET GLOBAL sql_mode = \
                         (SELECT REPLACE(@@sql_mode, "ONLY_FULL_GROUP_BY", ""))', [], (res) => { console.log(res) }, (err) => { console.error(err) });
-      this.execQuery('SET GLOBAL CONNECT_TIMEOUT=28800', [], (res) => { console.log(res) }, (err) => { console.error(err) });
-      this.execQuery('SET SESSION INTERACTIVE_TIMEOUT = 28800', [], (res) => { console.log(res) }, (err) => { console.error(err) });
-      this.execQuery('SET SESSION WAIT_TIMEOUT = 28800', [], (res) => { console.log(res) }, (err) => { console.error(err) });
-      this.execQuery('SET SESSION MAX_EXECUTION_TIME = 28800', [], (res) => { console.log(res) }, (err) => { console.error(err) });
+      that.execQuery('SET GLOBAL CONNECT_TIMEOUT=28800', [], (res) => { console.log(res) }, (err) => { console.error(err) });
+      that.execQuery('SET SESSION INTERACTIVE_TIMEOUT = 28800', [], (res) => { console.log(res) }, (err) => { console.error(err) });
+      that.execQuery('SET SESSION WAIT_TIMEOUT = 28800', [], (res) => { console.log(res) }, (err) => { console.error(err) });
+      that.execQuery('SET SESSION MAX_EXECUTION_TIME = 28800', [], (res) => { console.log(res) }, (err) => { console.error(err) });
 
     }
 
