@@ -16,8 +16,9 @@ export class HomeComponent implements OnInit {
   constructor(private router: Router, private store: ElectronStoreService) {
     this.settings = this.store.get('appSettings');
 
-    if (this.settings.interfaceAutoConnect !== undefined && this.settings.interfaceAutoConnect !== null && this.settings.interfaceAutoConnect === 'yes') {
-      this.doLogin();
+    if (undefined !== this.settings && null !== this.settings && undefined !== this.settings.interfaceAutoConnect && null !== this.settings.interfaceAutoConnect && 'yes' === this.settings.interfaceAutoConnect) {
+      this.store.set('loggedin', true);
+      this.router.navigate(['/dashboard']);
     }
   }
 
@@ -25,7 +26,7 @@ export class HomeComponent implements OnInit {
   }
 
   public doLogin() {
-    if ((this.settings.interfaceAutoConnect !== undefined && this.settings.interfaceAutoConnect !== null && this.settings.interfaceAutoConnect === 'yes') || (this.user.login === 'admin' && this.user.password === 'admin')) {
+    if ((this.user.login === 'admin' && this.user.password === 'admin')) {
 
       this.store.set('loggedin', true);
 
