@@ -40,7 +40,7 @@ export class DashboardComponent implements OnInit {
       that.machineName = that.appSettings.analyzerMachineName;
     }
 
-    if (that.appSettings.interfaceAutoConnect === 'yes') {
+    if (that.appSettings.interfaceAutoConnect !== undefined && that.appSettings.interfaceAutoConnect !== null && that.appSettings.interfaceAutoConnect === 'yes') {
       setTimeout(() => { that.reconnect() }, 1000);
     }
 
