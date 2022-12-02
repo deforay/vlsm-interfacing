@@ -252,7 +252,7 @@ export class InterfaceService {
   }
 
 
-  processHL7DataGeneXpert(rawText) {
+  processHL7DataAlinity(rawText) {
 
     const that = this;
     const message = that.hl7parser.create(rawText);
@@ -276,7 +276,7 @@ export class InterfaceService {
       //const singleObx = obx[(sampleNumber * 2) - 1]; // there are twice as many OBX .. so we take the even number - 1 OBX for each SPM
       const singleObx = obx[0]; // there are twice as many OBX .. so we take the even number - 1 OBX for each SPM
 
-      //console.log(singleObx.get('OBX.19').toString());
+      //console.log(singleObx.get('OBX.19').toString())
 
       const resultOutcome = singleObx.get('OBX.5.1').toString();
 
@@ -487,7 +487,15 @@ export class InterfaceService {
         that.strData = that.strData.trim();
         that.strData = that.strData.replace(/[\r\n\x0B\x0C\u0085\u2028\u2029]+/gm, '\r');
 
-        that.processHL7Data(that.strData);
+        if (that.appSettings.analyzerMachineType !== undefined
+          && that.appSettings.analyzerMachineType !== null
+          && that.appSettings.analyzerMachineType !== ""
+          && that.appSettings.analyzerMachineType === 'abbott-alinity-m') {
+          that.processHL7DataAlinity(that.strData);
+        } else {
+          that.processHL7Data(that.strData);
+        }
+
         that.strData = '';
       }
 

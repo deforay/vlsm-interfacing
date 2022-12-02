@@ -18,6 +18,7 @@ function createWindow() {
     store = new Store();
     sqlitePath = path.join(electron_1.app.getPath('userData'), '/', sqliteDbName);
     store.set('appPath', sqlitePath);
+    store.set('appVersion', electron_1.app.getVersion());
     // Create the browser window.
     win = new electron_1.BrowserWindow({
         x: 0,

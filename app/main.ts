@@ -26,6 +26,7 @@ function createWindow(): BrowserWindow {
 
   sqlitePath = path.join(app.getPath('userData'), '/', sqliteDbName);
   store.set('appPath', sqlitePath);
+  store.set('appVersion', app.getVersion());
 
 
   // Create the browser window.

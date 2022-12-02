@@ -11,16 +11,19 @@ import { ElectronStoreService } from '../../services/electron-store.service';
 export class SettingsComponent implements OnInit {
   public settings: any = {};
   public appPath: string = "";
+  public appVersion: string = null;
 
   constructor(private electronService: ElectronService, private router: Router, private store: ElectronStoreService) {
 
     const appSettings = this.store.get('appSettings');
     this.appPath = this.store.get('appPath');
+    this.appVersion = this.store.get('appVersion');
 
     if (undefined !== appSettings) {
       this.settings.labID = appSettings.labID;
       this.settings.labName = appSettings.labName;
 
+      this.settings.analyzerMachineType = appSettings.analyzerMachineType;
       this.settings.analyzerMachineName = appSettings.analyzerMachineName;
       this.settings.analyzerMachinePort = appSettings.analyzerMachinePort;
       this.settings.analyzerMachineHost = appSettings.analyzerMachineHost;
@@ -49,6 +52,7 @@ export class SettingsComponent implements OnInit {
       labName: that.settings.labName,
       analyzerMachinePort: that.settings.analyzerMachinePort,
       analyzerMachineName: that.settings.analyzerMachineName,
+      analyzerMachineType: that.settings.analyzerMachineType,
       analyzerMachineHost: that.settings.analyzerMachineHost,
       interfaceConnectionMode: that.settings.interfaceConnectionMode,
       interfaceAutoConnect: that.settings.interfaceAutoConnect,

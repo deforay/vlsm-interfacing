@@ -12,6 +12,7 @@ import { InterfaceService } from '../../services/interface.service';
 export class DashboardComponent implements OnInit {
   public isConnected = false;
   public appSettings = null;
+  public appVersion: string = null;
   public connectionInProcess = false;
   public reconnectButtonText = 'Connect';
   public lastLimsSync = '';
@@ -33,6 +34,7 @@ export class DashboardComponent implements OnInit {
     const that = this;
 
     that.appSettings = that.store.get('appSettings');
+    that.appVersion = that.store.get('appVersion');
 
     if (null === that.appSettings || undefined === that.appSettings || !that.appSettings.analyzerMachinePort || !that.appSettings.interfaceCommunicationProtocol || !that.appSettings.analyzerMachineHost) {
       that.router.navigate(['/settings']);
