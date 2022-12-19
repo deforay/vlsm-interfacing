@@ -478,9 +478,13 @@ export class InterfaceService {
       let resultOutcome = '';
       let singleObx = null;
       obxArray.forEach(function (obx) {
-        if(obx.get('OBX.4').toString() === '1/2'){
+        if (obx.get('OBX.4').toString() === '1/2') {
           resultOutcome = obx.get('OBX.5.1').toString();
           singleObx = obx;
+          if (resultOutcome === 'Titer') {
+            singleObx = obx = obxArray[0];
+            resultOutcome = obx.get('OBX.5.1').toString();
+          }
         }
       });
 
