@@ -13,6 +13,14 @@ body {
   margin-bottom: 60px;
 }
 
+input:invalid, select:invalid, textarea:invalid {
+  border: 2px solid rgba(255, 122, 122, 0.748);
+}
+
+input:focus:invalid, select:focus:invalid, textarea:focus:invalid {
+  box-shadow: none;
+}
+
 .footer {
   position: fixed;
   margin-top: 20px;

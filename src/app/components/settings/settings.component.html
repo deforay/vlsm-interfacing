@@ -6,17 +6,17 @@
     </div>
 
     <div class="card-body">
-      <form (submit)="updateSettings()" class="form">
+      <form (submit)="updateSettings()" class="form" ngNativeValidate>
         <div class="row">
           <div class="form-group col col-sm-6">
             <label for="labID" class="col-form-label-sm">Testing Lab Code/ID</label>
             <input type="text" [(ngModel)]="settings.labID" name="labID" class="form-control form-control-sm"
-              placeholder="Lab Code/ID" required>
+              placeholder="Lab Code/ID" required />
           </div>
           <div class="form-group col col-sm-6">
             <label for="labName" class="col-form-label-sm">Testing Lab Name</label>
             <input type="text" [(ngModel)]="settings.labName" name="labName" class="form-control form-control-sm"
-              placeholder="Lab Name" required>
+              placeholder="Lab Name" required />
           </div>
         </div>
         <br>
@@ -28,11 +28,10 @@
                 <label for="analyzerMachineType" class="col-form-label-sm">Analyzer/Machine Type</label>
                 <select [(ngModel)]="settings.analyzerMachineType" name="analyzerMachineType"
                   class="form-control form-control-sm" required>
-                  <option>-- Select --</option>
                   <optgroup label="Roche">
                     <option value="roche-cobas-taqman">Roche Cobas Taqman</option>
                     <option value="roche-cobas-4800">Roche Cobas 4800</option>
-                    <option value="roche-cobas-6800">Roche Cobas 6800</option>
+                    <option value="roche-cobas-6800">Roche Cobas 6800/8800</option>
                   </optgroup>
                   <optgroup label="Abbott">
                     <option value="abbott-m2000">Abbott m2000</option>
@@ -53,8 +52,7 @@
                 <label for="interfaceCommunicationProtocol" class="col-form-label-sm">Interface Communication
                   Protocol</label>
                 <select [(ngModel)]="settings.interfaceCommunicationProtocol" name="interfaceCommunicationProtocol"
-                  class="form-control form-control-sm">
-                  <option>-- Select --</option>
+                  class="form-control form-control-sm" required>
                   <option value="astm-elecsys">ASTM/Elecsys (Single Record)</option>
                   <option value="astm-concatenated">ASTM (Concatenated)</option>
                   <option value="hl7">HL7</option>
@@ -79,8 +77,7 @@
               <div class="form-group col col-sm-6">
                 <label for="interfaceConnectionMode" class="col-form-label-sm">This Interface Tool is a</label>
                 <select [(ngModel)]="settings.interfaceConnectionMode" name="interfaceConnectionMode"
-                  class="form-control form-control-sm">
-                  <option>-- Select --</option>
+                  class="form-control form-control-sm" required>
                   <option value="tcpserver">Server (TCP/IP)</option>
                   <option value="tcpclient">Client (TCP/IP)</option>
                 </select>
@@ -89,8 +86,7 @@
                 <label for="interfaceAutoConnect" class="col-form-label-sm">Should the interface attempt to
                   autoconnect?</label>
                 <select [(ngModel)]="settings.interfaceAutoConnect" name="interfaceAutoConnect"
-                  class="form-control form-control-sm">
-                  <option>-- Select --</option>
+                  class="form-control form-control-sm" required>
                   <option value="yes">Yes</option>
                   <option value="no">No</option>
                 </select>
@@ -99,33 +95,6 @@
                 <label for="appPath" class="col-form-label-sm">SQLite DB Path</label>
                 <p class="form-control-static small text-muted">{{appPath}}</p>
               </div>
-
-              <!-- <div class="form-group col-md-3 col-sm-6">
-            <label for="flowControl" class="col-form-label-sm">Flow Control</label>
-            <select [(ngModel)]="settings.flowControl" name="flowControl" class="form-control form-control-sm">
-              <option>-- Select --</option>
-              <option value="true">True</option>
-              <option value="false">False</option>
-            </select>
-          </div> -->
-              <!-- <div class="form-group col-md-3 col-sm-6">
-            <label for="baudRate" class="col-form-label-sm">Baud Rate</label>
-            <input type="text" [(ngModel)]="settings.baudRate" name="baudRate" class="form-control form-control-sm" placeholder="eg. 9600">
-          </div> -->
-              <!-- <div class="form-group col-md-3 col-sm-6">
-            <label for="dataBits" class="col-form-label-sm">No. of Data Bits</label>
-            <input type="text" [(ngModel)]="settings.dataBits" name="dataBits" class="form-control form-control-sm" placeholder="7 or 8">
-          </div> -->
-              <!-- <div class="form-group col-md-3 col-sm-6">
-            <label for="stopBits" class="col-form-label-sm">No. of Stop Bits</label>
-            <input type="text" [(ngModel)]="settings.stopBits" name="stopBits" class="form-control form-control-sm" placeholder="1 or 2">
-          </div> -->
-              <!-- <div class="form-group col-md-3 col-sm-6">
-            <label for="parity" class="col-form-label-sm">Parity</label>
-            <input type="text" [(ngModel)]="settings.parity" name="parity" class="form-control form-control-sm" placeholder="None / Odd / Even">
-          </div> -->
-
-
             </div>
           </div>
         </div>
@@ -140,27 +109,27 @@
               <div class="form-group col col-sm-6">
                 <label for="mysqlHost" class="col-form-label-sm">MySQL Host</label>
                 <input type="text" [(ngModel)]="settings.mysqlHost" name="mysqlHost"
-                  class="form-control form-control-sm" placeholder="MySQL Hostname" required>
+                  class="form-control form-control-sm" placeholder="MySQL Hostname">
               </div>
               <div class="form-group col col-sm-6">
                 <label for="mysqlPort" class="col-form-label-sm">MySQL Port</label>
                 <input type="text" [(ngModel)]="settings.mysqlPort" name="mysqlPort"
-                  class="form-control form-control-sm" placeholder="MySQL Port Number" required>
+                  class="form-control form-control-sm" placeholder="MySQL Port Number">
               </div>
               <div class="form-group col col-sm-6">
                 <label for="mysqlDb" class="col-form-label-sm">MySQL DB Name</label>
                 <input type="text" [(ngModel)]="settings.mysqlDb" name="mysqlDb" class="form-control form-control-sm"
-                  placeholder="MySQL DB Name" required>
+                  placeholder="MySQL DB Name">
               </div>
               <div class="form-group col col-sm-6">
                 <label for="mysqlUser" class="col-form-label-sm">MySQL DB User</label>
                 <input type="text" [(ngModel)]="settings.mysqlUser" name="mysqlUser"
-                  class="form-control form-control-sm" placeholder="MySQL DB User" required>
+                  class="form-control form-control-sm" placeholder="MySQL DB User">
               </div>
               <div class="form-group col col-sm-6">
                 <label for="mysqlPassword" class="col-form-label-sm">MySQL DB Password</label>
                 <input type="text" [(ngModel)]="settings.mysqlPassword" name="mysqlPassword"
-                  class="form-control form-control-sm" placeholder="MySQL DB Password" required>
+                  class="form-control form-control-sm" placeholder="MySQL DB Password">
               </div>
               <div class="form-group col col-sm-6">
                 <label for="" class="col-form-label-sm">&nbsp;&nbsp;</label><br>
