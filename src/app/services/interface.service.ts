@@ -794,8 +794,8 @@ export class InterfaceService {
           }
 
 
-          console.warn(dataArray['O']);
-          console.warn(dataArray['R']);
+          // console.warn(dataArray['O']);
+          // console.warn(dataArray['R']);
 
           if (dataArray['O'] !== undefined && dataArray['O'] !== null) {
 

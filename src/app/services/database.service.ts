@@ -24,7 +24,7 @@ export class DatabaseService {
       && that.appSettings.mysqlDb != null && that.appSettings.mysqlDb != '') {
 
       this.dbConfig = {
-        connectionLimit: 1000,
+        connectionLimit: 100,
         // connectTimeout: 60 * 60 * 1000,
         // acquireTimeout: 60 * 60 * 1000,
         // timeout: 60 * 60 * 1000,
