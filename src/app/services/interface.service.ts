@@ -151,7 +151,7 @@ export class InterfaceService {
       });
 
 
-      this.server.on('error', function (e) {
+      that.server.on('error', function (e) {
         //that.connectionStatus(false);
         //that.stopTryingStatus(true);
         that.logger('error', 'Error while connecting ' + e.code);
@@ -330,12 +330,12 @@ export class InterfaceService {
 
       if (order.results) {
         that.dbService.addOrderTest(order, (res) => {
-          that.logger('success', 'Result Successfully Added : ' + order.test_id);
+          that.logger('success', 'Successfully saved result : ' + order.test_id);
         }, (err) => {
-          that.logger('error', 'Failed to add result : ' + order.test_id + ' ' + JSON.stringify(err));
+          that.logger('error', 'Failed to save result : ' + order.test_id + ' ' + JSON.stringify(err));
         });
       } else {
-        that.logger('error', 'Unable to store data into the database');
+        that.logger('error', 'Failed to store data into the database');
       }
 
       // order.order_id = r.sampleID;
@@ -434,12 +434,12 @@ export class InterfaceService {
 
       if (order.results) {
         that.dbService.addOrderTest(order, (res) => {
-          that.logger('success', 'Result Successfully Added : ' + order.test_id);
+          that.logger('success', 'Successfully saved result : ' + order.test_id);
         }, (err) => {
-          that.logger('error', 'Failed to add result : ' + order.test_id + ' ' + JSON.stringify(err));
+          that.logger('error', 'Failed to save result : ' + order.test_id + ' ' + JSON.stringify(err));
         });
       } else {
-        that.logger('error', 'Unable to store data into the database');
+        that.logger('error', 'Failed to store data into the database');
       }
 
       // order.order_id = r.sampleID;
@@ -540,12 +540,12 @@ export class InterfaceService {
 
       if (order.results) {
         that.dbService.addOrderTest(order, (res) => {
-          that.logger('success', 'Result Successfully Added : ' + order.test_id);
+          that.logger('success', 'Successfully saved result : ' + order.test_id);
         }, (err) => {
-          that.logger('error', 'Failed to add result : ' + order.test_id + ' ' + JSON.stringify(err));
+          that.logger('error', 'Failed to save result : ' + order.test_id + ' ' + JSON.stringify(err));
         });
       } else {
-        that.logger('error', 'Unable to store data into the database');
+        that.logger('error', 'Failed to store data into the database');
       }
 
       // order.order_id = r.sampleID;
@@ -587,9 +587,9 @@ export class InterfaceService {
         rData.machine = that.appSettings.analyzerMachineName;
 
         that.dbService.addRawData(rData, (res) => {
-          that.logger('success', 'Raw data successfully saved');
+          that.logger('success', 'Successfully saved raw data');
         }, (err) => {
-          that.logger('error', 'Not able to save raw data ' + JSON.stringify(err));
+          that.logger('error', 'Failed to save raw data ' + JSON.stringify(err));
         });
 
         that.strData = that.strData.replace(/[\x0b\x1c]/g, '');
@@ -618,7 +618,7 @@ export class InterfaceService {
 
     } else if (that.appSettings.interfaceCommunicationProtocol === 'astm-elecsys') {
 
-      that.logger('info', 'Processing ASTM Elecsys');
+      that.logger('info', 'Receiving ASTM Elecsys');
 
       const d = data.toString('hex');
 
@@ -628,7 +628,8 @@ export class InterfaceService {
       if (d === '04') {
 
         that.socketClient.write(that.ACK);
-        that.logger('info', 'Received EOT. Ready to Process');
+        that.logger('info', 'Received EOT. Sending ACK.');
+        that.logger('info', 'Processing ASTM Elecsys');
         //clearTimeout(that.timer);
         //this.logger('info',that.strData);
 
@@ -637,9 +638,9 @@ export class InterfaceService {
         rData.data = that.strData;
         rData.machine = that.appSettings.analyzerMachineName;
         that.dbService.addRawData(rData, (res) => {
-          that.logger('success', 'Raw data successfully saved');
+          that.logger('success', 'Successfully saved raw data');
         }, (err) => {
-          that.logger('error', 'Not able to save raw data : ' + JSON.stringify(err));
+          that.logger('error', 'Failed to save raw data : ' + JSON.stringify(err));
         });
 
         that.logger('info', that.strData);
@@ -648,6 +649,7 @@ export class InterfaceService {
       } else if (d === '21') {
         that.socketClient.write(that.ACK);
         that.logger('error', 'NAK Received');
+        that.logger('info', 'Sending ACK');
       } else {
 
         let text = that.hex2ascii(d);
@@ -657,10 +659,14 @@ export class InterfaceService {
         that.strData += text;
         that.logger('info', 'Receiving....');
         that.socketClient.write(that.ACK);
+        that.logger('info', 'Sending ACK');
       }
     } else if (that.appSettings.interfaceCommunicationProtocol === 'astm-concatenated') {
 
-      that.logger('info', 'Processing ASTM Concatenated');
+      that.logger('info', 'Receiving ASTM Concatenated');
+
+      that.socketClient.write(that.ACK);
+      that.logger('info', 'Sending ACK');
 
       const d = data.toString('hex');
 
@@ -668,7 +674,8 @@ export class InterfaceService {
 
         that.socketClient.write(that.ACK);
 
-        that.logger('info', 'Received EOT. Ready to Process');
+        that.logger('info', 'Received EOT. Sending ACK.');
+        that.logger('info', 'Processing ASTM Concatenated');
         //clearTimeout(that.timer);
         //this.logger('info',that.strData);
 
@@ -677,9 +684,9 @@ export class InterfaceService {
         rData.data = that.strData;
         rData.machine = that.appSettings.analyzerMachineName;
         that.dbService.addRawData(rData, (res) => {
-          that.logger('success', 'Raw data successfully saved');
+          that.logger('success', 'Successfully saved raw data');
         }, (err) => {
-          that.logger('error', 'Not able to save raw data : ' + JSON.stringify(err));
+          that.logger('error', 'Failed to save raw data : ' + JSON.stringify(err));
         });
 
         that.processASTMConcatenatedData(that.strData);
@@ -687,6 +694,7 @@ export class InterfaceService {
       } else if (d === '21') {
         that.socketClient.write(that.ACK);
         that.logger('error', 'NAK Received');
+        that.logger('info', 'Sending ACK');
       } else {
 
         let text = that.hex2ascii(d);
@@ -696,6 +704,7 @@ export class InterfaceService {
         that.strData += text;
         that.logger('info', that.strData);
         that.socketClient.write(that.ACK);
+        that.logger('info', 'Sending ACK');
       }
     }
   }
@@ -773,7 +782,7 @@ export class InterfaceService {
         //that.logger('info',dataArray['R']);
 
         if (dataArray === null || dataArray === undefined || dataArray['R'] === undefined) {
-          that.logger('info', 'dataArray blank');
+          that.logger('info', 'No data received');
           return;
         }
 
@@ -827,12 +836,12 @@ export class InterfaceService {
             if (order.order_id) {
               that.logger('info', "Trying to add order :" + JSON.stringify(order));
               that.dbService.addOrderTest(order, (res) => {
-                that.logger('success', 'Result Successfully Added : ' + order.order_id);
+                that.logger('success', 'Successfully saved result : ' + order.order_id);
               }, (err) => {
-                that.logger('error', 'Failed to add : ' + JSON.stringify(err));
+                that.logger('error', 'Failed to save : ' + JSON.stringify(err));
               });
             } else {
-              that.logger('error', "Could NOT add order :" + JSON.stringify(order));
+              that.logger('error', "Failed to save :" + JSON.stringify(order));
             }
           }
         }
@@ -851,7 +860,7 @@ export class InterfaceService {
         //        || dataArray['R'][2] == '') return;
 
       } else {
-        that.logger('error', "Could NOT add order :" + JSON.stringify(astmData));
+        that.logger('error', "Failed to save :" + JSON.stringify(astmData));
       }
     });
 
@@ -959,12 +968,12 @@ export class InterfaceService {
             if (order.order_id) {
               that.logger('info', "Trying to add order :" + JSON.stringify(order));
               that.dbService.addOrderTest(order, (res) => {
-                that.logger('success', 'Result Successfully Added : ' + order.order_id);
+                that.logger('success', 'Successfully saved result : ' + order.order_id);
               }, (err) => {
-                that.logger('error', 'Failed to add : ' + JSON.stringify(err));
+                that.logger('error', 'Failed to save : ' + JSON.stringify(err));
               });
             } else {
-              that.logger('error', "Could NOT add order :" + JSON.stringify(order));
+              that.logger('error', "Failed to save :" + JSON.stringify(order));
             }
           }
         }
