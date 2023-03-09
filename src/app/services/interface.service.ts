@@ -252,301 +252,323 @@ export class InterfaceService {
   }
 
 
-  processHL7DataAlinity(rawText) {
+  processHL7DataAlinity(rawHl7Text: string) {
 
     const that = this;
-    const message = that.hl7parser.create(rawText);
+    const message = that.hl7parser.create(rawHl7Text.trim());
     const msgID = message.get('MSH.10').toString();
     that.socketClient.write(that.hl7ACK(msgID));
     // let result = null;
     //console.log(message.get('OBX'));
 
-    const obx = message.get('OBX').toArray();
+    const hl7DataArray = rawHl7Text.split('MSH|');
 
-    //obx.forEach(function (singleObx) {
-    //  console.log(singleObx);
-    //});
+    hl7DataArray.forEach(function (rawText: string) {
 
-    const spm = message.get('SPM');
-    let sampleNumber = 0;
+      if (rawText.trim() === '') { return; }
 
-    //console.log(obx[1]);
-    spm.forEach(function (singleSpm) {
-      //sampleNumber = (singleSpm.get(1).toInteger());
-      //const singleObx = obx[(sampleNumber * 2) - 1]; // there are twice as many OBX .. so we take the even number - 1 OBX for each SPM
-      const singleObx = obx[0]; // there are twice as many OBX .. so we take the even number - 1 OBX for each SPM
+      rawText = 'MSH|' + rawText.trim();
+      const message = that.hl7parser.create(rawText);
 
-      //console.log(singleObx.get('OBX.19').toString())
-
-      const resultOutcome = singleObx.get('OBX.5.1').toString();
-
-      const order: any = {};
-      order.raw_text = rawText;
-      order.order_id = singleSpm.get('SPM.3').toString().replace('&ROCHE', '');
-      order.test_id = singleSpm.get('SPM.3').toString().replace('&ROCHE', '');
-
-      if (order.order_id === "") {
-        // const sac = message.get('SAC').toArray();
-        // const singleSAC = sac[0];
-        //Let us use the Sample Container ID as the Order ID
-        order.order_id = message.get('SAC.3').toString();
-        order.test_id = message.get('SAC.3').toString();
+      if (message === '' || message === null || message.get('SPM') === null || message.get('OBX') === null) {
+        return;
       }
 
-      order.test_type = 'HIVVL';
+      const obx = message.get('OBX').toArray();
 
-      if (resultOutcome === 'Titer') {
-        order.test_unit = singleObx.get('OBX.6.1').toString();
-        order.results = singleObx.get('OBX.5.1').toString();
-      } else if (resultOutcome === '> Titer max') {
-        order.test_unit = '';
-        order.results = '>10000000';
-      } else if (resultOutcome === 'Invalid') {
-        order.test_unit = '';
-        order.results = 'Invalid';
-      } else if (resultOutcome === 'Failed') {
-        order.test_unit = '';
-        order.results = 'Failed';
-      } else {
-        order.test_unit = singleObx.get('OBX.6.1').toString();
-        if (!order.test_unit) {
-          order.test_unit = singleObx.get('OBX.6.2').toString();
+      //obx.forEach(function (singleObx) {
+      //  console.log(singleObx);
+      //});
+
+      const spm = message.get('SPM');
+
+      //console.log(obx[1]);
+      spm.forEach(function (singleSpm) {
+        //sampleNumber = (singleSpm.get(1).toInteger());
+        //const singleObx = obx[(sampleNumber * 2) - 1]; // there are twice as many OBX .. so we take the even number - 1 OBX for each SPM
+        const singleObx = obx[0]; // there are twice as many OBX .. so we take the even number - 1 OBX for each SPM
+
+        //console.log(singleObx.get('OBX.19').toString())
+
+        const resultOutcome = singleObx.get('OBX.5.1').toString();
+
+        const order: any = {};
+        order.raw_text = rawText;
+        order.order_id = singleSpm.get('SPM.3').toString().replace('&ROCHE', '');
+        order.test_id = singleSpm.get('SPM.3').toString().replace('&ROCHE', '');
+
+        if (order.order_id === "") {
+          // const sac = message.get('SAC').toArray();
+          // const singleSAC = sac[0];
+          //Let us use the Sample Container ID as the Order ID
+          order.order_id = message.get('SAC.3').toString();
+          order.test_id = message.get('SAC.3').toString();
         }
-        if (!order.test_unit) {
-          order.test_unit = singleObx.get('OBX.6').toString();
-        }
-        order.results = resultOutcome;
-      }
 
-      order.tested_by = singleObx.get('OBX.16').toString();
-      order.result_status = 1;
-      order.lims_sync_status = 0;
-      order.analysed_date_time = that.formatRawDate(singleObx.get('OBX.19').toString());
-      //order.specimen_date_time = this.formatRawDate(message.get('OBX').get(0).get('OBX.19').toString());
-      order.authorised_date_time = that.formatRawDate(singleObx.get('OBX.19').toString());
-      order.result_accepted_date_time = that.formatRawDate(singleObx.get('OBX.19').toString());
-      order.test_location = that.appSettings.labName;
-      order.machine_used = that.appSettings.analyzerMachineName;
+        order.test_type = 'HIVVL';
 
-      if (order.results) {
-        that.dbService.addOrderTest(order, (res) => {
-          that.logger('success', 'Successfully saved result : ' + order.test_id);
-        }, (err) => {
-          that.logger('error', 'Failed to save result : ' + order.test_id + ' ' + JSON.stringify(err));
-        });
-      } else {
-        that.logger('error', 'Failed to store data into the database');
-      }
-
-      // order.order_id = r.sampleID;
-      // order.test_id = r.sampleID;
-      // order.test_type = r.testName;
-      // order.test_unit = r.unit;
-      // //order.createdDate = '';
-      // order.results = r.result;
-      // order.tested_by = r.operator;
-      // order.result_status = 1;
-      // order.analysed_date_time = r.timestamp;
-      // order.specimen_date_time = r.specimenDate;
-      // order.authorised_date_time = r.timestamp;
-      // order.result_accepted_date_time = r.timestamp;
-      // order.test_location = this.appSettings.labName;
-      // order.machine_used = this.appSettings.analyzerMachineName;
-    });
-  }
-  processHL7Data(rawText) {
-
-    const that = this;
-    const message = that.hl7parser.create(rawText);
-    const msgID = message.get('MSH.10').toString();
-    that.socketClient.write(that.hl7ACK(msgID));
-    // let result = null;
-    //console.log(message.get('OBX'));
-
-    const obx = message.get('OBX').toArray();
-
-    //obx.forEach(function (singleObx) {
-    //  console.log(singleObx);
-    //});
-
-    const spm = message.get('SPM');
-    let sampleNumber = 0;
-
-    //console.log(obx[1]);
-    spm.forEach(function (singleSpm) {
-      sampleNumber = (singleSpm.get(1).toInteger());
-      if (isNaN(sampleNumber)) {
-        sampleNumber = 1;
-      }
-      let singleObx = obx[(sampleNumber * 2) - 1]; // there are twice as many OBX .. so we take the even number - 1 OBX for each SPM
-
-      //console.log(singleObx.get('OBX.19').toString());
-
-      let resultOutcome = singleObx.get('OBX.5.1').toString();
-
-      const order: any = {};
-      order.raw_text = rawText;
-      order.order_id = singleSpm.get('SPM.2').toString().replace("&ROCHE", "");
-      order.test_id = singleSpm.get('SPM.2').toString().replace("&ROCHE", "");;
-
-      if (order.order_id === "") {
-        // const sac = message.get('SAC').toArray();
-        // const singleSAC = sac[0];
-        //Let us use the Sample Container ID as the Order ID
-        order.order_id = message.get('SAC.3').toString();
-        order.test_id = message.get('SAC.3').toString();
-      }
-
-      order.test_type = 'HIVVL';
-
-      if (resultOutcome == 'Titer') {
-        order.test_unit = singleObx.get('OBX.6.1').toString();
-        order.results = singleObx.get('OBX.5.1').toString();
-      } else if (resultOutcome == '<20') {
-        order.test_unit = '';
-        order.results = 'Target Not Detected';
-      } else if (resultOutcome == '> Titer max') {
-        order.test_unit = '';
-        order.results = '>10000000';
-      } else if (resultOutcome == 'Target Not Detected') {
-        order.test_unit = '';
-        order.results = 'Target Not Detected';
-      } else if (resultOutcome == 'Invalid') {
-        order.test_unit = '';
-        order.results = 'Invalid';
-      } else if (resultOutcome == 'Failed') {
-        order.test_unit = '';
-        order.results = 'Failed';
-      } else {
-        order.test_unit = singleObx.get('OBX.6.1').toString();
-        order.results = resultOutcome;
-      }
-
-      order.tested_by = singleObx.get('OBX.16').toString();
-      order.result_status = 1;
-      order.lims_sync_status = 0;
-      order.analysed_date_time = that.formatRawDate(singleObx.get('OBX.19').toString());
-      //order.specimen_date_time = this.formatRawDate(message.get('OBX').get(0).get('OBX.19').toString());
-      order.authorised_date_time = that.formatRawDate(singleObx.get('OBX.19').toString());
-      order.result_accepted_date_time = that.formatRawDate(singleObx.get('OBX.19').toString());
-      order.test_location = that.appSettings.labName;
-      order.machine_used = that.appSettings.analyzerMachineName;
-
-      if (order.results) {
-        that.dbService.addOrderTest(order, (res) => {
-          that.logger('success', 'Successfully saved result : ' + order.test_id);
-        }, (err) => {
-          that.logger('error', 'Failed to save result : ' + order.test_id + ' ' + JSON.stringify(err));
-        });
-      } else {
-        that.logger('error', 'Failed to store data into the database');
-      }
-
-      // order.order_id = r.sampleID;
-      // order.test_id = r.sampleID;
-      // order.test_type = r.testName;
-      // order.test_unit = r.unit;
-      // //order.createdDate = '';
-      // order.results = r.result;
-      // order.tested_by = r.operator;
-      // order.result_status = 1;
-      // order.analysed_date_time = r.timestamp;
-      // order.specimen_date_time = r.specimenDate;
-      // order.authorised_date_time = r.timestamp;
-      // order.result_accepted_date_time = r.timestamp;
-      // order.test_location = this.appSettings.labName;
-      // order.machine_used = this.appSettings.analyzerMachineName;
-    });
-  }
-  processHL7DataRoche68008800(rawText) {
-
-    const that = this;
-    const message = that.hl7parser.create(rawText);
-    const msgID = message.get('MSH.10').toString();
-    that.socketClient.write(that.hl7ACK(msgID));
-    // let result = null;
-    //console.log(message.get('OBX'));
-
-    const obxArray = message.get('OBX').toArray();
-
-    const spm = message.get('SPM');
-    let sampleNumber = 0;
-
-    //console.log(obx[1]);
-    spm.forEach(function (singleSpm) {
-
-      let resultOutcome = '';
-      let singleObx = null;
-      obxArray.forEach(function (obx) {
-        if (obx.get('OBX.4').toString() === '1/2') {
-          resultOutcome = obx.get('OBX.5.1').toString();
-          singleObx = obx;
-          if (resultOutcome === 'Titer') {
-            singleObx = obx = obxArray[0];
-            resultOutcome = obx.get('OBX.5.1').toString();
+        if (resultOutcome === 'Titer') {
+          order.test_unit = singleObx.get('OBX.6.1').toString();
+          order.results = singleObx.get('OBX.5.1').toString();
+        } else if (resultOutcome === '> Titer max') {
+          order.test_unit = '';
+          order.results = '>10000000';
+        } else if (resultOutcome === 'Invalid') {
+          order.test_unit = '';
+          order.results = 'Invalid';
+        } else if (resultOutcome === 'Failed') {
+          order.test_unit = '';
+          order.results = 'Failed';
+        } else {
+          order.test_unit = singleObx.get('OBX.6.1').toString();
+          if (!order.test_unit) {
+            order.test_unit = singleObx.get('OBX.6.2').toString();
           }
+          if (!order.test_unit) {
+            order.test_unit = singleObx.get('OBX.6').toString();
+          }
+          order.results = resultOutcome;
+        }
+
+        order.tested_by = singleObx.get('OBX.16').toString();
+        order.result_status = 1;
+        order.lims_sync_status = 0;
+        order.analysed_date_time = that.formatRawDate(singleObx.get('OBX.19').toString());
+        //order.specimen_date_time = this.formatRawDate(message.get('OBX').get(0).get('OBX.19').toString());
+        order.authorised_date_time = that.formatRawDate(singleObx.get('OBX.19').toString());
+        order.result_accepted_date_time = that.formatRawDate(singleObx.get('OBX.19').toString());
+        order.test_location = that.appSettings.labName;
+        order.machine_used = that.appSettings.analyzerMachineName;
+
+        if (order.results) {
+          that.dbService.addOrderTest(order, (res) => {
+            that.logger('success', 'Successfully saved result : ' + order.test_id);
+          }, (err) => {
+            that.logger('error', 'Failed to save result : ' + order.test_id + ' ' + JSON.stringify(err));
+          });
+        } else {
+          that.logger('error', 'Failed to store data into the database');
+        }
+
+        // order.order_id = r.sampleID;
+        // order.test_id = r.sampleID;
+        // order.test_type = r.testName;
+        // order.test_unit = r.unit;
+        // //order.createdDate = '';
+        // order.results = r.result;
+        // order.tested_by = r.operator;
+        // order.result_status = 1;
+        // order.analysed_date_time = r.timestamp;
+        // order.specimen_date_time = r.specimenDate;
+        // order.authorised_date_time = r.timestamp;
+        // order.result_accepted_date_time = r.timestamp;
+        // order.test_location = this.appSettings.labName;
+        // order.machine_used = this.appSettings.analyzerMachineName;
+      });
+    });
+  }
+  processHL7Data(rawHl7Text: string) {
+
+    const that = this;
+    const message = that.hl7parser.create(rawHl7Text.trim());
+    const msgID = message.get('MSH.10').toString();
+    that.socketClient.write(that.hl7ACK(msgID));
+    // let result = null;
+    //console.log(message.get('OBX'));
+
+    const hl7DataArray = rawHl7Text.split('MSH|');
+
+    hl7DataArray.forEach(function (rawText: string) {
+
+      if (rawText.trim() === '') { return; }
+
+      rawText = 'MSH|' + rawText.trim();
+      const message = that.hl7parser.create(rawText);
+
+      if (message === '' || message === null || message.get('SPM') === null || message.get('OBX') === null) {
+        return;
+      }
+
+      const obx = message.get('OBX').toArray();
+
+      //obx.forEach(function (singleObx) {
+      //  console.log(singleObx);
+      //});
+
+      const spm = message.get('SPM');
+      let sampleNumber = 0;
+
+      //console.log(obx[1]);
+      spm.forEach(function (singleSpm) {
+        sampleNumber = (singleSpm.get(1).toInteger());
+        if (isNaN(sampleNumber)) {
+          sampleNumber = 1;
+        }
+        let singleObx = obx[(sampleNumber * 2) - 1]; // there are twice as many OBX .. so we take the even number - 1 OBX for each SPM
+
+        //console.log(singleObx.get('OBX.19').toString());
+
+        let resultOutcome = singleObx.get('OBX.5.1').toString();
+
+        const order: any = {};
+        order.raw_text = rawText;
+        order.order_id = singleSpm.get('SPM.2').toString().replace("&ROCHE", "");
+        order.test_id = singleSpm.get('SPM.2').toString().replace("&ROCHE", "");;
+
+        if (order.order_id === "") {
+          // const sac = message.get('SAC').toArray();
+          // const singleSAC = sac[0];
+          //Let us use the Sample Container ID as the Order ID
+          order.order_id = message.get('SAC.3').toString();
+          order.test_id = message.get('SAC.3').toString();
+        }
+
+        order.test_type = 'HIVVL';
+
+        if (resultOutcome == 'Titer') {
+          order.test_unit = singleObx.get('OBX.6.1').toString();
+          order.results = singleObx.get('OBX.5.1').toString();
+        } else if (resultOutcome == '<20') {
+          order.test_unit = '';
+          order.results = 'Target Not Detected';
+        } else if (resultOutcome == '> Titer max') {
+          order.test_unit = '';
+          order.results = '>10000000';
+        } else if (resultOutcome == 'Target Not Detected') {
+          order.test_unit = '';
+          order.results = 'Target Not Detected';
+        } else if (resultOutcome == 'Invalid') {
+          order.test_unit = '';
+          order.results = 'Invalid';
+        } else if (resultOutcome == 'Failed') {
+          order.test_unit = '';
+          order.results = 'Failed';
+        } else {
+          order.test_unit = singleObx.get('OBX.6.1').toString();
+          order.results = resultOutcome;
+        }
+
+        order.tested_by = singleObx.get('OBX.16').toString();
+        order.result_status = 1;
+        order.lims_sync_status = 0;
+        order.analysed_date_time = that.formatRawDate(singleObx.get('OBX.19').toString());
+        //order.specimen_date_time = this.formatRawDate(message.get('OBX').get(0).get('OBX.19').toString());
+        order.authorised_date_time = that.formatRawDate(singleObx.get('OBX.19').toString());
+        order.result_accepted_date_time = that.formatRawDate(singleObx.get('OBX.19').toString());
+        order.test_location = that.appSettings.labName;
+        order.machine_used = that.appSettings.analyzerMachineName;
+
+        if (order.results) {
+          that.dbService.addOrderTest(order, (res) => {
+            that.logger('success', 'Successfully saved result : ' + order.test_id);
+          }, (err) => {
+            that.logger('error', 'Failed to save result : ' + order.test_id + ' ' + JSON.stringify(err));
+          });
+        } else {
+          that.logger('error', 'Failed to store data into the database');
+        }
+      });
+    });
+  }
+  processHL7DataRoche68008800(rawHl7Text: string) {
+
+    const that = this;
+    const message = that.hl7parser.create(rawHl7Text.trim());
+    const msgID = message.get('MSH.10').toString();
+    that.socketClient.write(that.hl7ACK(msgID));
+
+    const hl7DataArray = rawHl7Text.split('MSH|');
+
+    hl7DataArray.forEach(function (rawText: string) {
+
+      if (rawText.trim() === '') { return; }
+
+      rawText = 'MSH|' + rawText.trim();
+      const message = that.hl7parser.create(rawText);
+
+      if (message === '' || message === null || message.get('SPM') === null || message.get('OBX') === null) {
+        return;
+      }
+
+      const obxArray = message.get('OBX').toArray();
+      const spm = message.get('SPM');
+
+      //console.log(obx[1]);
+      spm.forEach(function (singleSpm: any) {
+
+        let resultOutcome = '';
+        let singleObx = null;
+        obxArray.forEach(function (obx: any) {
+          if (obx.get('OBX.4').toString() === '1/2') {
+            resultOutcome = obx.get('OBX.5.1').toString();
+            singleObx = obx;
+            if (resultOutcome === 'Titer') {
+              singleObx = obx = obxArray[0];
+              resultOutcome = obx.get('OBX.5.1').toString();
+            }
+          }
+        });
+
+        const order: any = {};
+        order.raw_text = rawText;
+        order.order_id = singleSpm.get('SPM.2').toString().replace("&ROCHE", "");
+        order.test_id = singleSpm.get('SPM.2').toString().replace("&ROCHE", "");;
+
+        if (order.order_id === "") {
+          // const sac = message.get('SAC').toArray();
+          // const singleSAC = sac[0];
+          //Let us use the Sample Container ID as the Order ID
+          order.order_id = message.get('SAC.3').toString();
+          order.test_id = message.get('SAC.3').toString();
+        }
+
+        order.test_type = 'HIVVL';
+
+        if (resultOutcome == 'Titer') {
+          order.test_unit = singleObx.get('OBX.6.1').toString();
+          order.results = singleObx.get('OBX.5.1').toString();
+        } else if (resultOutcome == '<20') {
+          order.test_unit = '';
+          order.results = 'Target Not Detected';
+        } else if (resultOutcome == '> Titer max') {
+          order.test_unit = '';
+          order.results = '>10000000';
+        } else if (resultOutcome == 'Target Not Detected') {
+          order.test_unit = '';
+          order.results = 'Target Not Detected';
+        } else if (resultOutcome == 'Invalid') {
+          order.test_unit = '';
+          order.results = 'Invalid';
+        } else if (resultOutcome == 'Failed') {
+          order.test_unit = '';
+          order.results = 'Failed';
+        } else {
+          order.test_unit = singleObx.get('OBX.6.1').toString();
+          order.results = resultOutcome;
+        }
+
+        order.tested_by = singleObx.get('OBX.16').toString();
+        order.result_status = 1;
+        order.lims_sync_status = 0;
+        order.analysed_date_time = that.formatRawDate(singleObx.get('OBX.19').toString());
+        //order.specimen_date_time = this.formatRawDate(message.get('OBX').get(0).get('OBX.19').toString());
+        order.authorised_date_time = that.formatRawDate(singleObx.get('OBX.19').toString());
+        order.result_accepted_date_time = that.formatRawDate(singleObx.get('OBX.19').toString());
+        order.test_location = that.appSettings.labName;
+        order.machine_used = that.appSettings.analyzerMachineName;
+
+        if (order.results) {
+          that.dbService.addOrderTest(order, (res) => {
+            that.logger('success', 'Successfully saved result : ' + order.test_id);
+          }, (err) => {
+            that.logger('error', 'Failed to save result : ' + order.test_id + ' ' + JSON.stringify(err));
+          });
+        } else {
+          that.logger('error', 'Failed to store data into the database');
         }
       });
 
 
-
-      const order: any = {};
-      order.raw_text = rawText;
-      order.order_id = singleSpm.get('SPM.2').toString().replace("&ROCHE", "");
-      order.test_id = singleSpm.get('SPM.2').toString().replace("&ROCHE", "");;
-
-      if (order.order_id === "") {
-        // const sac = message.get('SAC').toArray();
-        // const singleSAC = sac[0];
-        //Let us use the Sample Container ID as the Order ID
-        order.order_id = message.get('SAC.3').toString();
-        order.test_id = message.get('SAC.3').toString();
-      }
-
-      order.test_type = 'HIVVL';
-
-      if (resultOutcome == 'Titer') {
-        order.test_unit = singleObx.get('OBX.6.1').toString();
-        order.results = singleObx.get('OBX.5.1').toString();
-      } else if (resultOutcome == '<20') {
-        order.test_unit = '';
-        order.results = 'Target Not Detected';
-      } else if (resultOutcome == '> Titer max') {
-        order.test_unit = '';
-        order.results = '>10000000';
-      } else if (resultOutcome == 'Target Not Detected') {
-        order.test_unit = '';
-        order.results = 'Target Not Detected';
-      } else if (resultOutcome == 'Invalid') {
-        order.test_unit = '';
-        order.results = 'Invalid';
-      } else if (resultOutcome == 'Failed') {
-        order.test_unit = '';
-        order.results = 'Failed';
-      } else {
-        order.test_unit = singleObx.get('OBX.6.1').toString();
-        order.results = resultOutcome;
-      }
-
-      order.tested_by = singleObx.get('OBX.16').toString();
-      order.result_status = 1;
-      order.lims_sync_status = 0;
-      order.analysed_date_time = that.formatRawDate(singleObx.get('OBX.19').toString());
-      //order.specimen_date_time = this.formatRawDate(message.get('OBX').get(0).get('OBX.19').toString());
-      order.authorised_date_time = that.formatRawDate(singleObx.get('OBX.19').toString());
-      order.result_accepted_date_time = that.formatRawDate(singleObx.get('OBX.19').toString());
-      order.test_location = that.appSettings.labName;
-      order.machine_used = that.appSettings.analyzerMachineName;
-
-      if (order.results) {
-        that.dbService.addOrderTest(order, (res) => {
-          that.logger('success', 'Successfully saved result : ' + order.test_id);
-        }, (err) => {
-          that.logger('error', 'Failed to save result : ' + order.test_id + ' ' + JSON.stringify(err));
-        });
-      } else {
-        that.logger('error', 'Failed to store data into the database');
-      }
 
       // order.order_id = r.sampleID;
       // order.test_id = r.sampleID;
