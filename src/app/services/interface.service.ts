@@ -85,12 +85,19 @@ export class InterfaceService {
   //   this.connectionTriesSubject.next(stopTrying);
   // }
 
-  hl7ACK(messageID) {
+  hl7ACK(messageID, characterSet, messageProfileIdentifier) {
 
     const that = this;
 
     if (!messageID || messageID === '') {
       messageID = Math.random();
+    }
+
+    if (!characterSet || characterSet === '') {
+      characterSet = 'UNICODE UTF-8';
+    }
+    if (!messageProfileIdentifier || messageProfileIdentifier === '') {
+      messageProfileIdentifier = '';
     }
 
     const moment = require('moment');
@@ -99,7 +106,9 @@ export class InterfaceService {
     let ack = String.fromCharCode(11)
       + 'MSH|^~\\&|VLSM|VLSM|VLSM|VLSM|'
       + date + '||ACK^R22^ACK|'
-      + self.crypto.randomUUID() + '|P|2.5.1||||||UNICODE UTF-8'
+      + self.crypto.randomUUID() + '|P|2.5.1|||||'
+      + "|" + characterSet
+      + "|" + messageProfileIdentifier
       + String.fromCharCode(13);
 
     ack += 'MSA|AA|' + messageID
@@ -257,7 +266,9 @@ export class InterfaceService {
     const that = this;
     const message = that.hl7parser.create(rawHl7Text.trim());
     const msgID = message.get('MSH.10').toString();
-    that.socketClient.write(that.hl7ACK(msgID));
+    const characterSet = message.get('MSH.18').toString();
+    const messageProfileIdentifier = message.get('MSH.21').toString();
+    that.socketClient.write(that.hl7ACK(msgID, characterSet, messageProfileIdentifier));
     // let result = null;
     //console.log(message.get('OBX'));
 
@@ -372,7 +383,9 @@ export class InterfaceService {
     const that = this;
     const message = that.hl7parser.create(rawHl7Text.trim());
     const msgID = message.get('MSH.10').toString();
-    that.socketClient.write(that.hl7ACK(msgID));
+    const characterSet = message.get('MSH.18').toString();
+    const messageProfileIdentifier = message.get('MSH.21').toString();
+    that.socketClient.write(that.hl7ACK(msgID, characterSet, messageProfileIdentifier));
     // let result = null;
     //console.log(message.get('OBX'));
 
@@ -475,7 +488,9 @@ export class InterfaceService {
     const that = this;
     const message = that.hl7parser.create(rawHl7Text.trim());
     const msgID = message.get('MSH.10').toString();
-    that.socketClient.write(that.hl7ACK(msgID));
+    const characterSet = message.get('MSH.18').toString();
+    const messageProfileIdentifier = message.get('MSH.21').toString();
+    that.socketClient.write(that.hl7ACK(msgID, characterSet, messageProfileIdentifier));
 
     const hl7DataArray = rawHl7Text.split('MSH|');
 
