@@ -183,6 +183,5 @@
         }
       }
     }
-  },
-  "defaultProject": "angular-electron"
+  }
 }

@@ -4,6 +4,10 @@ import { BehaviorSubject } from 'rxjs';
 import { ElectronStoreService } from './electron-store.service';
 import { ElectronService } from '../core/services';
 
+interface RawData {
+  data: string;
+  machine: string;
+}
 
 @Injectable({
   providedIn: 'root'
@@ -21,15 +25,8 @@ export class InterfaceService {
   public hl7parser = require('hl7parser');
 
   protected ACK = Buffer.from('06', 'hex');
-  protected ENQ = Buffer.from('05', 'hex');
-  protected SOH = Buffer.from('01', 'hex');
-  protected STX = Buffer.from('02', 'hex');
-  protected ETX = Buffer.from('03', 'hex');
-  protected EOT = Buffer.from('04', 'hex');
-  protected CR = Buffer.from('13', 'hex');
-  protected FS = Buffer.from('25', 'hex');
-  protected LF = Buffer.from('10', 'hex');
-  protected NAK = Buffer.from('21', 'hex');
+  protected EOT = '04';
+  protected NAK = '21';
 
   protected log = null;
   protected strData = '';
@@ -360,21 +357,6 @@ export class InterfaceService {
         } else {
           that.logger('error', 'Failed to store data into the database');
         }
-
-        // order.order_id = r.sampleID;
-        // order.test_id = r.sampleID;
-        // order.test_type = r.testName;
-        // order.test_unit = r.unit;
-        // //order.createdDate = '';
-        // order.results = r.result;
-        // order.tested_by = r.operator;
-        // order.result_status = 1;
-        // order.analysed_date_time = r.timestamp;
-        // order.specimen_date_time = r.specimenDate;
-        // order.authorised_date_time = r.timestamp;
-        // order.result_accepted_date_time = r.timestamp;
-        // order.test_location = this.appSettings.labName;
-        // order.machine_used = this.appSettings.analyzerMachineName;
       });
     });
   }
@@ -602,147 +584,115 @@ export class InterfaceService {
     });
   }
 
-  handleTCPResponse(data) {
-    const that = this;
 
-    if (that.appSettings.interfaceCommunicationProtocol === 'hl7') {
+  private receiveASTM(protocol: string, data: Buffer) {
+    let that = this;
+    that.logger('info', 'Receiving ' + protocol);
 
-      that.logger('info', 'Receiving HL7 data');
-      const hl7Text = that.hex2ascii(data.toString('hex'));
-      that.strData += hl7Text;
+    const hexData = data.toString('hex');
 
-      that.logger('info', hl7Text);
+    if (hexData === that.EOT) {
+      that.socketClient.write(that.ACK);
+      that.logger('info', 'Received EOT. Sending ACK.');
+      that.logger('info', 'Processing ' + protocol);
+      that.logger('info', 'Data ' + that.strData);
 
-      // If there is a File Separator or 1C or ASCII 28 character,
-      // it means the stream has ended and we can proceed with saving this data
-      if (that.strData.includes('\x1c')) {
-        // Let us store this Raw Data before we process it
+      const rawData: RawData = {
+        data: that.strData,
+        machine: that.appSettings.analyzerMachineName,
+      };
 
-        that.logger('info', 'Received File Separator Character. Ready to process HL7 data');
-        const rData: any = {};
-        rData.data = that.strData;
-        rData.machine = that.appSettings.analyzerMachineName;
+      that.dbService.addRawData(rawData, (res) => {
+        that.logger('success', 'Successfully saved raw data');
+      }, (err) => {
+        that.logger('error', 'Failed to save raw data : ' + JSON.stringify(err));
+      });
 
-        that.dbService.addRawData(rData, (res) => {
-          that.logger('success', 'Successfully saved raw data');
-        }, (err) => {
-          that.logger('error', 'Failed to save raw data ' + JSON.stringify(err));
-        });
-
-        that.strData = that.strData.replace(/[\x0b\x1c]/g, '');
-        that.strData = that.strData.trim();
-        that.strData = that.strData.replace(/[\r\n\x0B\x0C\u0085\u2028\u2029]+/gm, '\r');
-
-        if (that.appSettings.analyzerMachineType !== undefined
-          && that.appSettings.analyzerMachineType !== null
-          && that.appSettings.analyzerMachineType !== ""
-          && that.appSettings.analyzerMachineType === 'abbott-alinity-m') {
-          that.processHL7DataAlinity(that.strData);
-        }
-        else if (that.appSettings.analyzerMachineType !== undefined
-          && that.appSettings.analyzerMachineType !== null
-          && that.appSettings.analyzerMachineType !== ""
-          && that.appSettings.analyzerMachineType === 'roche-cobas-6800') {
-          that.processHL7DataRoche68008800(that.strData);
-        }
-        else {
-          that.processHL7Data(that.strData);
-        }
-
-        that.strData = '';
+      switch (protocol) {
+        case 'astm-elecsys':
+          that.processASTMElecsysData(that.strData);
+          break;
+        case 'astm-concatenated':
+          that.processASTMConcatenatedData(that.strData);
+          break;
+        default:
+          // Handle unexpected protocol
+          break;
       }
-
-
-    } else if (that.appSettings.interfaceCommunicationProtocol === 'astm-elecsys') {
-
-      that.logger('info', 'Receiving ASTM Elecsys');
-
-      const d = data.toString('hex');
-
-      //this.logger('info',"HEX :" + d);
-      //this.logger('info', "TEXT :" + that.hex2ascii(d));
-
-      if (d === '04') {
-
-        that.socketClient.write(that.ACK);
-        that.logger('info', 'Received EOT. Sending ACK.');
-        that.logger('info', 'Processing ASTM Elecsys');
-        //clearTimeout(that.timer);
-        //this.logger('info',that.strData);
-
-        // Let us store this Raw Data before we process it
-        const rData: any = {};
-        rData.data = that.strData;
-        rData.machine = that.appSettings.analyzerMachineName;
-        that.dbService.addRawData(rData, (res) => {
-          that.logger('success', 'Successfully saved raw data');
-        }, (err) => {
-          that.logger('error', 'Failed to save raw data : ' + JSON.stringify(err));
-        });
-
-        that.logger('info', that.strData);
-        that.processASTMElecsysData(that.strData);
-        that.strData = "";
-      } else if (d === '21') {
-        that.socketClient.write(that.ACK);
-        that.logger('error', 'NAK Received');
-        that.logger('info', 'Sending ACK');
-      } else {
-
-        let text = that.hex2ascii(d);
-        if (text.match(/^\d*H/)) {
-          text = '##START##' + text;
-        }
-        that.strData += text;
-        that.logger('info', 'Receiving....');
-        that.socketClient.write(that.ACK);
-        that.logger('info', 'Sending ACK');
+      that.strData = "";
+    } else if (hexData === that.NAK) {
+      that.socketClient.write(that.ACK);
+      that.logger('error', 'NAK Received');
+      that.logger('info', 'Sending ACK');
+    } else {
+      let text = that.hex2ascii(hexData);
+      if (text.match(/^\d*H/)) {
+        text = '##START##' + text;
       }
-    } else if (that.appSettings.interfaceCommunicationProtocol === 'astm-concatenated') {
-
-      that.logger('info', 'Receiving ASTM Concatenated');
-
+      that.strData += text;
+      that.logger('info', 'Receiving....');
       that.socketClient.write(that.ACK);
       that.logger('info', 'Sending ACK');
+    }
+  }
 
-      const d = data.toString('hex');
+  private receiveHL7(data: Buffer) {
+    let that = this;
+    that.logger('info', 'Receiving HL7 data');
+    const hl7Text = that.hex2ascii(data.toString('hex'));
+    that.strData += hl7Text;
 
-      if (d === '04') {
+    that.logger('info', hl7Text);
 
-        that.socketClient.write(that.ACK);
+    // If there is a File Separator or 1C or ASCII 28 character,
+    // it means the stream has ended and we can proceed with saving this data
+    if (that.strData.includes('\x1c')) {
+      // Let us store this Raw Data before we process it
 
-        that.logger('info', 'Received EOT. Sending ACK.');
-        that.logger('info', 'Processing ASTM Concatenated');
-        //clearTimeout(that.timer);
-        //this.logger('info',that.strData);
+      that.logger('info', 'Received File Separator Character. Ready to process HL7 data');
+      const rData: any = {};
+      rData.data = that.strData;
+      rData.machine = that.appSettings.analyzerMachineName;
 
-        // Let us store this Raw Data before we process it
-        const rData: any = {};
-        rData.data = that.strData;
-        rData.machine = that.appSettings.analyzerMachineName;
-        that.dbService.addRawData(rData, (res) => {
-          that.logger('success', 'Successfully saved raw data');
-        }, (err) => {
-          that.logger('error', 'Failed to save raw data : ' + JSON.stringify(err));
-        });
+      that.dbService.addRawData(rData, (res) => {
+        that.logger('success', 'Successfully saved raw data');
+      }, (err) => {
+        that.logger('error', 'Failed to save raw data ' + JSON.stringify(err));
+      });
 
-        that.processASTMConcatenatedData(that.strData);
-        that.strData = "";
-      } else if (d === '21') {
-        that.socketClient.write(that.ACK);
-        that.logger('error', 'NAK Received');
-        that.logger('info', 'Sending ACK');
-      } else {
+      that.strData = that.strData.replace(/[\x0b\x1c]/g, '');
+      that.strData = that.strData.trim();
+      that.strData = that.strData.replace(/[\r\n\x0B\x0C\u0085\u2028\u2029]+/gm, '\r');
 
-        let text = that.hex2ascii(d);
-        if (text.match(/^\d*H/)) {
-          text = '##START##' + text;
-        }
-        that.strData += text;
-        that.logger('info', that.strData);
-        that.socketClient.write(that.ACK);
-        that.logger('info', 'Sending ACK');
+      if (that.appSettings.analyzerMachineType !== undefined
+        && that.appSettings.analyzerMachineType !== null
+        && that.appSettings.analyzerMachineType !== ""
+        && that.appSettings.analyzerMachineType === 'abbott-alinity-m') {
+        that.processHL7DataAlinity(that.strData);
       }
+      else if (that.appSettings.analyzerMachineType !== undefined
+        && that.appSettings.analyzerMachineType !== null
+        && that.appSettings.analyzerMachineType !== ""
+        && that.appSettings.analyzerMachineType === 'roche-cobas-6800') {
+        that.processHL7DataRoche68008800(that.strData);
+      }
+      else {
+        that.processHL7Data(that.strData);
+      }
+
+      that.strData = '';
+    }
+  }
+
+
+  handleTCPResponse(data) {
+    const that = this;
+    if (that.appSettings.interfaceCommunicationProtocol === 'hl7') {
+      that.receiveHL7(data);
+    } else if (this.appSettings.interfaceCommunicationProtocol === 'astm-elecsys') {
+      that.receiveASTM('astm-elecsys', data);
+    } else if (this.appSettings.interfaceCommunicationProtocol === 'astm-concatenated') {
+      that.receiveASTM('astm-concatenated', data);
     }
   }
 
