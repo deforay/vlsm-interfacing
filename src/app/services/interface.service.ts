@@ -626,11 +626,12 @@ export class InterfaceService {
       that.logger('info', 'Sending ACK');
     } else {
       let text = that.hex2ascii(hexData);
-      if (text.match(/^\d*H/)) {
+      const regex = /^\d*H/;
+      if (regex.test(text.replace(/[\x05\x02\x03]/g, ''))) {
         text = '##START##' + text;
       }
       that.strData += text;
-      that.logger('info', 'Receiving....');
+      that.logger('info', 'Receiving....' + text);
       that.socketClient.write(that.ACK);
       that.logger('info', 'Sending ACK');
     }
