@@ -10,11 +10,12 @@ import { ElectronStoreService } from '../../services/electron-store.service';
 })
 export class SettingsComponent implements OnInit {
   public commonSettings: any = {};
-  public instrumentsSettings: any = {};
+  public instrumentsSettings: any[] = [];
   public appPath: string = "";
   public appVersion: string = null;
 
-  constructor(private electronService: ElectronService, private router: Router, private store: ElectronStoreService) {
+  constructor(private electronService: ElectronService,
+    private router: Router, private store: ElectronStoreService) {
 
     const commonSettingsStore = this.store.get('commonConfig');
     const instrumentSettingsStore = this.store.get('instrumentsConfig');
@@ -29,15 +30,21 @@ export class SettingsComponent implements OnInit {
       this.commonSettings.mysqlDb = commonSettingsStore.mysqlDb;
       this.commonSettings.mysqlUser = commonSettingsStore.mysqlUser;
       this.commonSettings.mysqlPassword = commonSettingsStore.mysqlPassword;
+      this.commonSettings.interfaceAutoConnect = commonSettingsStore.interfaceAutoConnect;
 
-      this.instrumentsSettings.analyzerMachineType = instrumentSettingsStore.analyzerMachineType;
-      this.instrumentsSettings.analyzerMachineName = instrumentSettingsStore.analyzerMachineName;
-      this.instrumentsSettings.analyzerMachinePort = instrumentSettingsStore.analyzerMachinePort;
-      this.instrumentsSettings.analyzerMachineHost = instrumentSettingsStore.analyzerMachineHost;
-      this.instrumentsSettings.interfaceConnectionMode = instrumentSettingsStore.interfaceConnectionMode;
-      this.instrumentsSettings.interfaceAutoConnect = instrumentSettingsStore.interfaceAutoConnect;
-      this.instrumentsSettings.interfaceCommunicationProtocol = instrumentSettingsStore.interfaceCommunicationProtocol;
-
+      // this.instrumentsSettings[0].analyzerMachineType = instrumentSettingsStore.analyzerMachineType;
+      // this.instrumentsSettings[0].analyzerMachineName = instrumentSettingsStore.analyzerMachineName;
+      // this.instrumentsSettings[0].analyzerMachinePort = instrumentSettingsStore.analyzerMachinePort;
+      // this.instrumentsSettings[0].analyzerMachineHost = instrumentSettingsStore.analyzerMachineHost;
+      // this.instrumentsSettings[0].interfaceConnectionMode = instrumentSettingsStore.interfaceConnectionMode;
+      // this.instrumentsSettings[0].interfaceCommunicationProtocol = instrumentSettingsStore.interfaceCommunicationProtocol;
+      // Check if instrumentSettingsStore is an array and has at least one element
+      if (Array.isArray(instrumentSettingsStore) && instrumentSettingsStore.length > 0) {
+        this.instrumentsSettings = instrumentSettingsStore;
+      } else if (instrumentSettingsStore && typeof instrumentSettingsStore === 'object') {
+        // If instrumentSettingsStore is an object, wrap it in an array
+        this.instrumentsSettings = [instrumentSettingsStore];
+      }
 
     }
 
@@ -47,7 +54,6 @@ export class SettingsComponent implements OnInit {
   }
 
   updateSettings() {
-
     const that = this;
 
     const common = {
@@ -57,19 +63,12 @@ export class SettingsComponent implements OnInit {
       mysqlPort: that.commonSettings.mysqlPort,
       mysqlDb: that.commonSettings.mysqlDb,
       mysqlUser: that.commonSettings.mysqlUser,
-      mysqlPassword: that.commonSettings.mysqlPassword
-    };
-    const instruments = {
-      analyzerMachinePort: that.instrumentsSettings.analyzerMachinePort,
-      analyzerMachineName: that.instrumentsSettings.analyzerMachineName,
-      analyzerMachineType: that.instrumentsSettings.analyzerMachineType,
-      analyzerMachineHost: that.instrumentsSettings.analyzerMachineHost,
-      interfaceConnectionMode: that.instrumentsSettings.interfaceConnectionMode,
-      interfaceAutoConnect: that.instrumentsSettings.interfaceAutoConnect,
-      interfaceCommunicationProtocol: that.instrumentsSettings.interfaceCommunicationProtocol
+      mysqlPassword: that.commonSettings.mysqlPassword,
+      interfaceAutoConnect: that.commonSettings.interfaceAutoConnect
     };
 
-    that.store.set('instrumentsConfig', instruments);
+    // Assuming that instrumentsSettings is an array of instrument settings objects
+    that.store.set('instrumentsConfig', that.instrumentsSettings);  // Store the entire array
     that.store.set('commonConfig', common);
 
     new Notification('Success', {
@@ -77,8 +76,8 @@ export class SettingsComponent implements OnInit {
     });
 
     this.router.navigate(['/dashboard']);
-
   }
+
 
   checkMysqlConnection() {
 
@@ -91,7 +90,7 @@ export class SettingsComponent implements OnInit {
       port: that.commonSettings.mysqlPort
     });
 
-    connection.connect(function (err) {
+    connection.connect(function (err: string) {
 
       if (err) {
 

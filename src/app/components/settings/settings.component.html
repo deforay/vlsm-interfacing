@@ -6,17 +6,36 @@
     </div>
 
     <div class="card-body">
+
       <form (submit)="updateSettings()" class="form" ngNativeValidate>
-        <div class="row">
-          <div class="form-group col col-sm-6">
-            <label for="labID" class="col-form-label-sm">Testing Lab Code/ID</label>
-            <input type="text" [(ngModel)]="commonSettings.labID" name="labID" class="form-control form-control-sm"
-              placeholder="Lab Code/ID" required />
-          </div>
-          <div class="form-group col col-sm-6">
-            <label for="labName" class="col-form-label-sm">Testing Lab Name</label>
-            <input type="text" [(ngModel)]="commonSettings.labName" name="labName" class="form-control form-control-sm"
-              placeholder="Lab Name" required />
+        <div class="card text-bg-light">
+          <div class="card-body">
+            <div class="row">
+              <div class="form-group col col-sm-6">
+                <label for="labID" class="col-form-label-sm">Testing Lab Code/ID</label>
+                <input type="text" [(ngModel)]="commonSettings.labID" name="labID" class="form-control form-control-sm"
+                  placeholder="Lab Code/ID" required />
+              </div>
+              <div class="form-group col col-sm-6">
+                <label for="labName" class="col-form-label-sm">Testing Lab Name</label>
+                <input type="text" [(ngModel)]="commonSettings.labName" name="labName"
+                  class="form-control form-control-sm" placeholder="Lab Name" required />
+              </div>
+
+              <div class="form-group col col-sm-6">
+                <label for="interfaceAutoConnect" class="col-form-label-sm">Should the interface attempt to
+                  autoconnect?</label>
+                <select [(ngModel)]="commonSettings.interfaceAutoConnect" name="interfaceAutoConnect"
+                  class="form-control form-control-sm" required>
+                  <option value="yes">Yes</option>
+                  <option value="no">No</option>
+                </select>
+              </div>
+              <div class="form-group col col-sm-6">
+                <label for="appPath" class="col-form-label-sm">SQLite DB Path</label>
+                <p class="form-control-static small text-muted">{{appPath}}</p>
+              </div>
+            </div>
           </div>
         </div>
         <br>
@@ -65,7 +84,7 @@
             <div class="row">
               <div class="form-group col col-sm-6">
                 <label for="analyzerMachineType" class="col-form-label-sm">Analyzer/Machine Type</label>
-                <select [(ngModel)]="instrumentsSettings.analyzerMachineType" name="analyzerMachineType"
+                <select [(ngModel)]="instrumentsSettings[0].analyzerMachineType" name="analyzerMachineType"
                   class="form-control form-control-sm" required>
                   <optgroup label="Roche">
                     <option value="roche-cobas-taqman">Roche Cobas Taqman</option>
@@ -90,7 +109,7 @@
               <div class="form-group col col-sm-6">
                 <label for="interfaceCommunicationProtocol" class="col-form-label-sm">Interface Communication
                   Protocol</label>
-                <select [(ngModel)]="instrumentsSettings.interfaceCommunicationProtocol"
+                <select [(ngModel)]="instrumentsSettings[0].interfaceCommunicationProtocol"
                   name="interfaceCommunicationProtocol" class="form-control form-control-sm" required>
                   <option value="astm-elecsys">ASTM/Elecsys (Single Record)</option>
                   <option value="astm-concatenated">ASTM (Concatenated)</option>
@@ -100,40 +119,28 @@
               <div class="form-group col col-sm-6">
                 <label for="analyzerMachineName" class="col-form-label-sm">Instrument Name/Code assigned by
                   Testing Lab</label>
-                <input type="text" [(ngModel)]="instrumentsSettings.analyzerMachineName" name="analyzerMachineName"
+                <input type="text" [(ngModel)]="instrumentsSettings[0].analyzerMachineName" name="analyzerMachineName"
                   class="form-control form-control-sm" placeholder="eg. Roche Cobas48" required>
               </div>
               <div class="form-group col col-sm-6">
                 <label for="analyzerMachineHost" class="col-form-label-sm">Instrument IP Address</label>
-                <input type="text" [(ngModel)]="instrumentsSettings.analyzerMachineHost" name="analyzerMachineHost"
+                <input type="text" [(ngModel)]="instrumentsSettings[0].analyzerMachineHost" name="analyzerMachineHost"
                   class="form-control form-control-sm" placeholder="eg. 198.1.1.1" required>
               </div>
               <div class="form-group col col-sm-6">
                 <label for="analyzerMachinePort" class="col-form-label-sm">Instrument Port number</label>
-                <input type="text" [(ngModel)]="instrumentsSettings.analyzerMachinePort" name="analyzerMachinePort"
+                <input type="text" [(ngModel)]="instrumentsSettings[0].analyzerMachinePort" name="analyzerMachinePort"
                   class="form-control form-control-sm" placeholder="eg. 3120" required>
               </div>
               <div class="form-group col col-sm-6">
                 <label for="interfaceConnectionMode" class="col-form-label-sm">This Interface Tool is a</label>
-                <select [(ngModel)]="instrumentsSettings.interfaceConnectionMode" name="interfaceConnectionMode"
+                <select [(ngModel)]="instrumentsSettings[0].interfaceConnectionMode" name="interfaceConnectionMode"
                   class="form-control form-control-sm" required>
                   <option value="tcpserver">Server (TCP/IP)</option>
                   <option value="tcpclient">Client (TCP/IP)</option>
                 </select>
               </div>
-              <div class="form-group col col-sm-6">
-                <label for="interfaceAutoConnect" class="col-form-label-sm">Should the interface attempt to
-                  autoconnect?</label>
-                <select [(ngModel)]="instrumentsSettings.interfaceAutoConnect" name="interfaceAutoConnect"
-                  class="form-control form-control-sm" required>
-                  <option value="yes">Yes</option>
-                  <option value="no">No</option>
-                </select>
-              </div>
-              <div class="form-group col col-sm-6">
-                <label for="appPath" class="col-form-label-sm">SQLite DB Path</label>
-                <p class="form-control-static small text-muted">{{appPath}}</p>
-              </div>
+
             </div>
           </div>
         </div>

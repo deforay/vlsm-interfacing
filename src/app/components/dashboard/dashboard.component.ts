@@ -41,12 +41,12 @@ export class DashboardComponent implements OnInit {
     that.appVersion = that.store.get('appVersion');
 
     that.connectionParams = {
-      connectionMode: that.instrumentsSettings.interfaceConnectionMode,
-      connectionProtocol: that.instrumentsSettings.interfaceCommunicationProtocol,
-      host: that.instrumentsSettings.analyzerMachineHost,
-      port: that.instrumentsSettings.analyzerMachinePort,
-      instrumentId: that.instrumentsSettings.analyzerMachineName,
-      machineType: that.instrumentsSettings.analyzerMachineType,
+      connectionMode: that.instrumentsSettings[0].interfaceConnectionMode,
+      connectionProtocol: that.instrumentsSettings[0].interfaceCommunicationProtocol,
+      host: that.instrumentsSettings[0].analyzerMachineHost,
+      port: that.instrumentsSettings[0].analyzerMachinePort,
+      instrumentId: that.instrumentsSettings[0].analyzerMachineName,
+      machineType: that.instrumentsSettings[0].analyzerMachineType,
       labName: that.commonSettings.labName,
       interfaceAutoConnect: that.commonSettings.interfaceAutoConnect
     };
@@ -72,10 +72,8 @@ export class DashboardComponent implements OnInit {
     setTimeout(() => {
       // Let us fetch last few Orders and Logs on load
       that.fetchLastOrders();
-
       that.fetchRecentLogs();
-
-    }, 400);
+    }, 600);
 
     // let us refresh last orders every 5 minutes
     that.interval = setInterval(() => { that.fetchLastOrders(); }, 1000 * 60 * 5);
