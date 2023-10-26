@@ -11,7 +11,7 @@
       <div *ngIf="isConnected; else notConnected">
         <h5 class="card-title text-success"><span>{{machineName}}</span> Connected</h5>
         <!-- <p class="card-text">Disconnect to modify settings.</p> -->
-        <button (click)="close()" class="btn btn-danger">
+        <button (click)="close(connectionParams)" class="btn btn-danger">
           <span>Disconnect {{machineName}}</span>
         </button>
       </div>
@@ -20,11 +20,11 @@
       <ng-template #notConnected>
         <h5 class="card-title text-danger"><span>{{machineName}}</span> Not Connected!</h5>
         <p class="card-text">Please try to reconnect and wait for a few moments.</p>
-        <button (click)="reconnect()" class="btn btn-success" [disabled]="connectionInProcess">
+        <button (click)="reconnect(connectionParams)" class="btn btn-success" [disabled]="connectionInProcess">
           <span>{{reconnectButtonText}}</span>
         </button>
         &nbsp;&nbsp;
-        <button *ngIf="connectionInProcess" (click)="close()" class="btn btn-danger">
+        <button *ngIf="connectionInProcess" (click)="close(connectionParams)" class="btn btn-danger">
           <span>Cancel</span>
         </button>
         &nbsp;&nbsp;
@@ -49,8 +49,9 @@
 
 
   <div style="padding:10px; font-size:0.8em;">
-    <span style="padding-right:10px;"  *ngIf="lastLimsSync"><strong>Last LIS Sync on :</strong> {{lastLimsSync}}</span>
-    <span style="padding-right:10px;"  *ngIf="lastResultReceived"><strong>Last Instrument Result Received on :</strong> {{lastResultReceived}}</span>
+    <span style="padding-right:10px;" *ngIf="lastLimsSync"><strong>Last LIS Sync on :</strong> {{lastLimsSync}}</span>
+    <span style="padding-right:10px;" *ngIf="lastResultReceived"><strong>Last Instrument Result Received on :</strong>
+      {{lastResultReceived}}</span>
     <a (click)="clearLiveLog()" class="btn btn-outline-primary btn-sm" style="float:right;">
       <span>Clear Log</span>
     </a>
@@ -110,14 +111,9 @@
   </div>
   <br>
 
-  <small class="float-end"  *ngIf="appVersion">v{{appVersion}}</small>
+  <small class="float-end" *ngIf="appVersion">v{{appVersion}}</small>
   <br>
   <br>
   <br>
-
-
-
-
-
 
 </main>

@@ -17,6 +17,7 @@ import { AppComponent } from './app.component';
 import { SettingsComponent } from './components/settings/settings.component';
 import { DashboardComponent } from './components/dashboard/dashboard.component';
 import { DatabaseService } from './services/database.service';
+import { TcpConnectionService } from './services/tcp-connection.service';
 import { ElectronService } from './core/services';
 import { InterfaceService } from './services/interface.service';
 import { ElectronStoreService } from './services/electron-store.service';
@@ -44,6 +45,7 @@ const httpLoaderFactory = (http: HttpClient): TranslateHttpLoader => new Transla
   ],
   providers: [ElectronService,
     DatabaseService,
+    TcpConnectionService,
     InterfaceService,
     ElectronStoreService],
   bootstrap: [AppComponent]

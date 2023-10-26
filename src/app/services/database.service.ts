@@ -9,30 +9,30 @@ export class DatabaseService {
 
   private mysqlPool = null;
   private dbConfig = null;
-  public appSettings = null;
+  public commonSettings = null;
 
   constructor(private electronService: ElectronService,
     private store: ElectronStoreService) {
 
     const mysql = this.electronService.mysql;
     const that = this;
-    that.appSettings = that.store.get('appSettings');
+    that.commonSettings = that.store.get('commonConfig');
 
     // Initialize mysql connection pool only if settings are available
-    if (that.appSettings.mysqlHost != null && that.appSettings.mysqlHost != ''
-      && that.appSettings.mysqlUser != null && that.appSettings.mysqlUser != ''
-      && that.appSettings.mysqlDb != null && that.appSettings.mysqlDb != '') {
+    if (that.commonSettings.mysqlHost != null && that.commonSettings.mysqlHost != ''
+      && that.commonSettings.mysqlUser != null && that.commonSettings.mysqlUser != ''
+      && that.commonSettings.mysqlDb != null && that.commonSettings.mysqlDb != '') {
 
       this.dbConfig = {
         connectionLimit: 100,
         // connectTimeout: 60 * 60 * 1000,
         // acquireTimeout: 60 * 60 * 1000,
         // timeout: 60 * 60 * 1000,
-        host: that.appSettings.mysqlHost,
-        user: that.appSettings.mysqlUser,
-        password: that.appSettings.mysqlPassword,
-        database: that.appSettings.mysqlDb,
-        port: that.appSettings.mysqlPort,
+        host: that.commonSettings.mysqlHost,
+        user: that.commonSettings.mysqlUser,
+        password: that.commonSettings.mysqlPassword,
+        database: that.commonSettings.mysqlDb,
+        port: that.commonSettings.mysqlPort,
         dateStrings: 'date'
       };
 

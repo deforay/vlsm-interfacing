@@ -15,7 +15,7 @@ export class HomeComponent implements OnInit {
     password: ''
   };
   constructor(private router: Router, private store: ElectronStoreService) {
-    this.settings = this.store.get('appSettings');
+    this.settings = this.store.get('commonConfig');
     this.appVersion = this.store.get('appVersion');
 
     if (undefined !== this.settings && null !== this.settings && undefined !== this.settings.interfaceAutoConnect && null !== this.settings.interfaceAutoConnect && 'yes' === this.settings.interfaceAutoConnect) {

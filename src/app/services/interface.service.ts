@@ -1,13 +1,28 @@
 import { Injectable } from '@angular/core';
 import { DatabaseService } from './database.service';
-import { BehaviorSubject } from 'rxjs';
+import { BehaviorSubject, Observable } from 'rxjs';
 import { ElectronStoreService } from './electron-store.service';
 import { ElectronService } from '../core/services';
+import { ConnectionParams } from '../interfaces/connection-params.interface';
+
 
 interface RawData {
   data: string;
   machine: string;
 }
+
+interface ConnectionData {
+  connectionMode?: 'tcpserver' | 'tcpclient';
+  connectionProtocol?: string;
+  instrumentId?: string;
+  labName?: string;
+  machineType?: string;
+  statusSubject: BehaviorSubject<boolean>;
+  connectionAttemptStatusSubject: BehaviorSubject<boolean>;
+  connectionSocket?: any;
+  connectionServer?: any;
+}
+
 
 @Injectable({
   providedIn: 'root'
@@ -16,12 +31,10 @@ interface RawData {
 
 export class InterfaceService {
 
-
+  public connectionParams: ConnectionParams = null;
   public socketClient = null;
   public server = null;
   public net = null;
-
-  public connectionTries = 0;
   public hl7parser = require('hl7parser');
 
   protected ACK = Buffer.from('06', 'hex');
@@ -31,23 +44,10 @@ export class InterfaceService {
   protected log = null;
   protected strData = '';
   protected connectopts: any = null;
-  protected appSettings = null;
   protected timer = null;
   protected logtext = [];
 
-  // protected serialConnection = null;
-
-  protected statusSubject = new BehaviorSubject(false);
-  // eslint-disable-next-line @typescript-eslint/member-ordering
-  currentStatus = this.statusSubject.asObservable();
-
-  protected connectionAttemptStatusSubject = new BehaviorSubject(false);
-  // eslint-disable-next-line @typescript-eslint/member-ordering
-  connectionAttemptStatus = this.connectionAttemptStatusSubject.asObservable();
-
-  //protected connectionTriesSubject = new BehaviorSubject(false);
-  // eslint-disable-next-line @typescript-eslint/member-ordering
-  //stopTrying = this.connectionTriesSubject.asObservable();
+  private connections: Map<string, ConnectionData> = new Map();
 
   protected lastOrdersSubject = new BehaviorSubject([]);
   // eslint-disable-next-line @typescript-eslint/member-ordering
@@ -59,28 +59,181 @@ export class InterfaceService {
 
 
   constructor(public electronService: ElectronService,
-    public dbService: DatabaseService,
-    public store: ElectronStoreService) {
+    public dbService: DatabaseService) {
     this.log = this.electronService.log;
-    // console.log(this.log.findLogPath());
     this.net = this.electronService.net;
+  }
+
+  // Method used to connect to the Testing Machine
+  connect(connectionParams: ConnectionParams) {
+
+    const that = this;
+    that.connectionParams = connectionParams;
+    let connectionData: ConnectionData = null;
+
+    const connectionKey = that._getKey(that.connectionParams.host, that.connectionParams.port);
+
+    if (this.connections.has(connectionKey)) {
+      connectionData = this.connections.get(connectionKey);
+    }
+    else {
+      const statusSubject = new BehaviorSubject(false);
+      // Subscribe to the BehaviorSubject
+      statusSubject.subscribe(value => {
+        console.log('statusSubject::::::::' + value);
+      });
+      const connectionAttemptStatusSubject = new BehaviorSubject(false);
+      // Subscribe to the BehaviorSubject
+      connectionAttemptStatusSubject.subscribe(value => {
+        console.log('connectionAttemptStatusSubject::::::::' + value);
+      });
+
+      connectionData = {
+        connectionMode: that.connectionParams.connectionMode,
+        connectionProtocol: that.connectionParams.connectionProtocol,
+        instrumentId: that.connectionParams.instrumentId,
+        labName: that.connectionParams.labName,
+        machineType: that.connectionParams.machineType,
+        statusSubject: statusSubject,
+        connectionAttemptStatusSubject: connectionAttemptStatusSubject,
+        connectionSocket: null,
+        connectionServer: null
+      };
+
+      this.connections.set(connectionKey, connectionData);
+
+    }
+
+    connectionData.connectionAttemptStatusSubject.next(true);
+
+    if (that.connectionParams.connectionMode === 'tcpserver') {
+      that.logger('info', 'Listening for connection on port ' + that.connectionParams.port);
+      connectionData.connectionServer = that.net.createServer();
+      connectionData.connectionServer.listen(that.connectionParams.port);
+
+      const sockets = [];
+      connectionData.connectionServer.on('connection', function (socket) {
+        // confirm socket connection from client
+        that.logger('info', (new Date()) + ' : A remote client has connected to the Interfacing Server');
+
+        sockets.push(socket);
+        that.socketClient = socket;
+        socket.on('data', function (data) {
+          that.handleTCPResponse(connectionKey, data);
+        });
+
+        connectionData.connectionSocket = that.socketClient;
+        connectionData.statusSubject.next(true);
+
+        // Add a 'close' event handler to this instance of socket
+        socket.on('close', function (data) {
+          const index = sockets.findIndex(function (o) {
+            return o.host === socket.host && o.port === socket.port;
+          })
+          if (index !== -1) {
+            sockets.splice(index, 1);
+          }
+          console.log('CLOSED: ' + socket.host + ' ' + socket.host);
+        });
+
+      });
+
+
+      connectionData.connectionServer.on('error', function (e) {
+        that.logger('error', 'Error while connecting ' + e.code);
+        that.disconnect(that.connectionParams.host, that.connectionParams.port);
+
+        if (that.connectionParams.interfaceAutoConnect === 'yes') {
+          connectionData.connectionAttemptStatusSubject.next(true);
+          that.logger('error', "Interface AutoConnect is enabled: Will re-attempt connection in 30 seconds");
+          setTimeout(() => {
+            that.reconnect(that.connectionParams);
+          }, 30000);
+        }
+
+      });
+
+    } else if (that.connectionParams.connectionMode === 'tcpclient') {
+
+      connectionData.connectionSocket = that.socketClient = new that.net.Socket();
+      that.connectopts = {
+        port: that.connectionParams.port,
+        host: that.connectionParams.host
+      };
+
+      // since this is a CLIENT connection, we don't need a server object, so we set it to null
+      connectionData.connectionServer = null;
+
+      that.logger('info', 'Trying to connect as client');
+
+      connectionData.connectionSocket.connect(that.connectopts, function () {
+        connectionData.statusSubject.next(true);
+        that.logger('success', 'Connected as client successfully');
+      });
+
+      connectionData.connectionSocket.on('data', function (data) {
+        connectionData.statusSubject.next(true);
+        that.handleTCPResponse(connectionKey, data);
+      });
+
+      connectionData.connectionSocket.on('close', function () {
+        that.disconnect(that.connectionParams.host, that.connectionParams.port);
+        if (that.connectionParams.interfaceAutoConnect === 'yes') {
+          connectionData.connectionAttemptStatusSubject.next(true);
+          that.logger('error', "Interface AutoConnect is enabled: Will re-attempt connection in 30 seconds");
+          setTimeout(() => {
+            that.reconnect(that.connectionParams);
+          }, 30000);
+        }
+
+      });
+
+      connectionData.connectionSocket.on('error', (e) => {
+        that.logger('error', e);
+        that.disconnect(that.connectionParams.host, that.connectionParams.port);
+
+        if (that.connectionParams.interfaceAutoConnect === 'yes') {
+          connectionData.connectionAttemptStatusSubject.next(true);
+          that.logger('error', "Interface AutoConnect is enabled: Will re-attempt connection in 30 seconds");
+          setTimeout(() => {
+            that.reconnect(that.connectionParams);
+          }, 30000);
+        }
+
+      });
+    } else {
+
+    }
 
   }
 
-  // Method used to track machine connection status
-  connectionStatus(interfaceConnected: boolean) {
-    this.statusSubject.next(interfaceConnected);
+  reconnect(connectionParams: ConnectionParams) {
+    let that = this;
+    that.disconnect(connectionParams.host, connectionParams.port);
+    that.connect(connectionParams)
   }
 
-  // Method used to track machine connection status
-  connectionAttempt(interfaceAttempt: boolean) {
-    this.connectionAttemptStatusSubject.next(interfaceAttempt);
-  }
+  disconnect(host: string, port: number) {
+    const that = this;
+    const connectionKey = that._getKey(host, port);
 
-  // Method used to track machine connection status
-  // stopTryingStatus(stopTrying: boolean) {
-  //   this.connectionTriesSubject.next(stopTrying);
-  // }
+    const connectionData = that.connections.get(connectionKey);
+    if (connectionData) {
+
+      connectionData.statusSubject.next(false);
+      connectionData.connectionAttemptStatusSubject.next(false);
+
+      if (connectionData.connectionMode === 'tcpclient' && connectionData.connectionSocket) {
+        connectionData.connectionSocket.destroy();
+        that.logger('info', 'Client Disconnected');
+
+      } else if (connectionData.connectionMode === 'tcpserver' && connectionData.connectionServer) {
+        connectionData.connectionServer.close();
+        that.logger('info', 'Server Stopped');
+      }
+    }
+
+  }
 
   hl7ACK(messageID, characterSet, messageProfileIdentifier) {
 
@@ -118,134 +271,6 @@ export class InterfaceService {
   }
 
 
-  // Method used to connect to the Testing Machine
-  connect() {
-
-    const that = this;
-    that.appSettings = that.store.get('appSettings');
-
-    that.connectionAttempt(true);
-
-    if (that.appSettings.interfaceConnectionMode === 'tcpserver') {
-      that.logger('info', 'Listening for connection on port ' + that.appSettings.analyzerMachinePort);
-      that.server = that.net.createServer();
-      that.server.listen(that.appSettings.analyzerMachinePort);
-
-      const sockets = [];
-
-      that.server.on('connection', function (socket) {
-        // confirm socket connection from client
-        that.logger('info', (new Date()) + ' : A remote client has connected to the Interfacing Server');
-        that.connectionStatus(true);
-        sockets.push(socket);
-        that.socketClient = socket;
-        socket.on('data', function (data) {
-          that.handleTCPResponse(data);
-        });
-
-        // Add a 'close' event handler to this instance of socket
-        socket.on('close', function (data) {
-          const index = sockets.findIndex(function (o) {
-            return o.analyzerMachineHost === socket.analyzerMachineHost && o.analyzerMachinePort === socket.analyzerMachinePort;
-          })
-          if (index !== -1) {
-            sockets.splice(index, 1);
-          }
-          console.log('CLOSED: ' + socket.analyzerMachineHost + ' ' + socket.analyzerMachineHost);
-        });
-
-      });
-
-
-      that.server.on('error', function (e) {
-        //that.connectionStatus(false);
-        //that.stopTryingStatus(true);
-        that.logger('error', 'Error while connecting ' + e.code);
-        that.closeConnection();
-
-        if (that.appSettings.interfaceAutoConnect === 'yes') {
-          that.logger('error', "Interface AutoConnect is enabled: Will restart server in 30 seconds");
-          setTimeout(() => { that.reconnect() }, 30000);
-        }
-
-      });
-
-    } else if (that.appSettings.interfaceConnectionMode === 'tcpclient') {
-
-      that.socketClient = new that.net.Socket();
-      that.connectopts = {
-        port: that.appSettings.analyzerMachinePort,
-        host: that.appSettings.analyzerMachineHost
-      };
-
-      that.logger('info', 'Trying to connect as client');
-      that.connectionTries++; // incrementing the connection tries
-
-      that.socketClient.connect(that.connectopts, function () {
-        that.connectionTries = 0; // resetting connection tries to 0
-        that.connectionStatus(true);
-        that.logger('success', 'Connected as client successfully');
-      });
-
-      that.socketClient.on('data', function (data) {
-        that.connectionStatus(true);
-        that.handleTCPResponse(data);
-      });
-
-      that.socketClient.on('close', function () {
-        // that.socketClient.destroy();
-        // that.connectionStatus(false);
-        // that.logger('info', 'Client Disconnected');
-        // that.closeConnection();
-      });
-
-      that.socketClient.on('error', (e) => {
-        //that.connectionStatus(false);
-        //that.stopTryingStatus(true);
-        that.logger('error', e);
-        that.closeConnection();
-
-        if (that.appSettings.interfaceAutoConnect === 'yes') {
-          that.logger('error', "Interface AutoConnect is enabled: Will re-attempt connection in 30 seconds");
-          setTimeout(() => { that.reconnect() }, 30000);
-        }
-
-      });
-    } else {
-
-    }
-
-  }
-
-  reconnect() {
-    this.closeConnection();
-    this.connect();
-  }
-
-  closeConnection() {
-
-    const that = this;
-    that.appSettings = that.store.get('appSettings');
-
-    if (that.appSettings.interfaceConnectionMode === 'tcpclient') {
-      if (that.socketClient) {
-        that.socketClient.destroy();
-        that.connectionStatus(false);
-        that.connectionAttempt(false);
-        that.logger('info', 'Client Disconnected');
-      }
-
-    } else {
-      if (that.server) {
-        that.server.close();
-        that.connectionStatus(false);
-        that.connectionAttempt(false);
-        that.logger('info', 'Server Stopped');
-      }
-    }
-  }
-
-
 
   hex2ascii(hexx) {
     const hex = hexx.toString(); // force conversion
@@ -258,7 +283,7 @@ export class InterfaceService {
   }
 
 
-  processHL7DataAlinity(rawHl7Text: string) {
+  processHL7DataAlinity(connectionData, rawHl7Text: string) {
 
     const that = this;
     const message = that.hl7parser.create(rawHl7Text.trim());
@@ -345,8 +370,8 @@ export class InterfaceService {
         //order.specimen_date_time = this.formatRawDate(message.get('OBX').get(0).get('OBX.19').toString());
         order.authorised_date_time = that.formatRawDate(singleObx.get('OBX.19').toString());
         order.result_accepted_date_time = that.formatRawDate(singleObx.get('OBX.19').toString());
-        order.test_location = that.appSettings.labName;
-        order.machine_used = that.appSettings.analyzerMachineName;
+        order.test_location = connectionData.labName;
+        order.machine_used = connectionData.analyzerMachineName;
 
         if (order.results) {
           that.dbService.addOrderTest(order, (res) => {
@@ -360,7 +385,7 @@ export class InterfaceService {
       });
     });
   }
-  processHL7Data(rawHl7Text: string) {
+  processHL7Data(connectionData, rawHl7Text: string) {
 
     const that = this;
     const message = that.hl7parser.create(rawHl7Text.trim());
@@ -450,8 +475,8 @@ export class InterfaceService {
         //order.specimen_date_time = this.formatRawDate(message.get('OBX').get(0).get('OBX.19').toString());
         order.authorised_date_time = that.formatRawDate(singleObx.get('OBX.19').toString());
         order.result_accepted_date_time = that.formatRawDate(singleObx.get('OBX.19').toString());
-        order.test_location = that.appSettings.labName;
-        order.machine_used = that.appSettings.analyzerMachineName;
+        order.test_location = connectionData.labName;
+        order.machine_used = connectionData.analyzerMachineName;
 
         if (order.results) {
           that.dbService.addOrderTest(order, (res) => {
@@ -465,7 +490,7 @@ export class InterfaceService {
       });
     });
   }
-  processHL7DataRoche68008800(rawHl7Text: string) {
+  processHL7DataRoche68008800(connectionData, rawHl7Text: string) {
 
     const that = this;
     const message = that.hl7parser.create(rawHl7Text.trim());
@@ -551,8 +576,8 @@ export class InterfaceService {
         //order.specimen_date_time = this.formatRawDate(message.get('OBX').get(0).get('OBX.19').toString());
         order.authorised_date_time = that.formatRawDate(singleObx.get('OBX.19').toString());
         order.result_accepted_date_time = that.formatRawDate(singleObx.get('OBX.19').toString());
-        order.test_location = that.appSettings.labName;
-        order.machine_used = that.appSettings.analyzerMachineName;
+        order.test_location = connectionData.labName;
+        order.machine_used = connectionData.instrumentId;
 
         if (order.results) {
           that.dbService.addOrderTest(order, (res) => {
@@ -579,27 +604,27 @@ export class InterfaceService {
       // order.specimen_date_time = r.specimenDate;
       // order.authorised_date_time = r.timestamp;
       // order.result_accepted_date_time = r.timestamp;
-      // order.test_location = this.appSettings.labName;
-      // order.machine_used = this.appSettings.analyzerMachineName;
+      // order.test_location = this.labName;
+      // order.machine_used = this.analyzerMachineName;
     });
   }
 
 
-  private receiveASTM(protocol: string, data: Buffer) {
+  private receiveASTM(astmProtocolType: string, connectionData: ConnectionData, data: Buffer) {
     let that = this;
-    that.logger('info', 'Receiving ' + protocol);
+    that.logger('info', 'Receiving ' + astmProtocolType);
 
     const hexData = data.toString('hex');
 
     if (hexData === that.EOT) {
-      that.socketClient.write(that.ACK);
+      connectionData.connectionSocket.write(that.ACK);
       that.logger('info', 'Received EOT. Sending ACK.');
-      that.logger('info', 'Processing ' + protocol);
+      that.logger('info', 'Processing ' + astmProtocolType);
       that.logger('info', 'Data ' + that.strData);
 
       const rawData: RawData = {
         data: that.strData,
-        machine: that.appSettings.analyzerMachineName,
+        machine: connectionData.instrumentId,
       };
 
       that.dbService.addRawData(rawData, (res) => {
@@ -608,12 +633,12 @@ export class InterfaceService {
         that.logger('error', 'Failed to save raw data : ' + JSON.stringify(err));
       });
 
-      switch (protocol) {
+      switch (astmProtocolType) {
         case 'astm-elecsys':
-          that.processASTMElecsysData(that.strData);
+          that.processASTMElecsysData(connectionData, that.strData);
           break;
         case 'astm-concatenated':
-          that.processASTMConcatenatedData(that.strData);
+          that.processASTMConcatenatedData(connectionData, that.strData);
           break;
         default:
           // Handle unexpected protocol
@@ -621,7 +646,7 @@ export class InterfaceService {
       }
       that.strData = "";
     } else if (hexData === that.NAK) {
-      that.socketClient.write(that.ACK);
+      connectionData.connectionSocket.write(that.ACK);
       that.logger('error', 'NAK Received');
       that.logger('info', 'Sending ACK');
     } else {
@@ -632,12 +657,12 @@ export class InterfaceService {
       }
       that.strData += text;
       that.logger('info', 'Receiving....' + text);
-      that.socketClient.write(that.ACK);
+      connectionData.connectionSocket.write(that.ACK);
       that.logger('info', 'Sending ACK');
     }
   }
 
-  private receiveHL7(data: Buffer) {
+  private receiveHL7(connectionData: ConnectionData, data: Buffer) {
     let that = this;
     that.logger('info', 'Receiving HL7 data');
     const hl7Text = that.hex2ascii(data.toString('hex'));
@@ -653,7 +678,7 @@ export class InterfaceService {
       that.logger('info', 'Received File Separator Character. Ready to process HL7 data');
       const rData: any = {};
       rData.data = that.strData;
-      rData.machine = that.appSettings.analyzerMachineName;
+      rData.machine = connectionData.instrumentId;
 
       that.dbService.addRawData(rData, (res) => {
         that.logger('success', 'Successfully saved raw data');
@@ -665,20 +690,20 @@ export class InterfaceService {
       that.strData = that.strData.trim();
       that.strData = that.strData.replace(/[\r\n\x0B\x0C\u0085\u2028\u2029]+/gm, '\r');
 
-      if (that.appSettings.analyzerMachineType !== undefined
-        && that.appSettings.analyzerMachineType !== null
-        && that.appSettings.analyzerMachineType !== ""
-        && that.appSettings.analyzerMachineType === 'abbott-alinity-m') {
-        that.processHL7DataAlinity(that.strData);
+      if (connectionData.machineType !== undefined
+        && connectionData.machineType !== null
+        && connectionData.machineType !== ""
+        && connectionData.machineType === 'abbott-alinity-m') {
+        that.processHL7DataAlinity(connectionData, that.strData);
       }
-      else if (that.appSettings.analyzerMachineType !== undefined
-        && that.appSettings.analyzerMachineType !== null
-        && that.appSettings.analyzerMachineType !== ""
-        && that.appSettings.analyzerMachineType === 'roche-cobas-6800') {
-        that.processHL7DataRoche68008800(that.strData);
+      else if (connectionData.machineType !== undefined
+        && connectionData.machineType !== null
+        && connectionData.machineType !== ""
+        && connectionData.machineType === 'roche-cobas-6800') {
+        that.processHL7DataRoche68008800(connectionData, that.strData);
       }
       else {
-        that.processHL7Data(that.strData);
+        that.processHL7Data(connectionData, that.strData);
       }
 
       that.strData = '';
@@ -686,14 +711,15 @@ export class InterfaceService {
   }
 
 
-  handleTCPResponse(data) {
+  handleTCPResponse(connectionKey: string, data) {
     const that = this;
-    if (that.appSettings.interfaceCommunicationProtocol === 'hl7') {
-      that.receiveHL7(data);
-    } else if (this.appSettings.interfaceCommunicationProtocol === 'astm-elecsys') {
-      that.receiveASTM('astm-elecsys', data);
-    } else if (this.appSettings.interfaceCommunicationProtocol === 'astm-concatenated') {
-      that.receiveASTM('astm-concatenated', data);
+    const connectionData = that.connections.get(connectionKey);
+    if (connectionData.connectionProtocol === 'hl7') {
+      that.receiveHL7(connectionData, data);
+    } else if (connectionData.connectionProtocol === 'astm-elecsys') {
+      that.receiveASTM('astm-elecsys', connectionData, data);
+    } else if (connectionData.connectionProtocol === 'astm-concatenated') {
+      that.receiveASTM('astm-concatenated', connectionData, data);
     }
   }
 
@@ -732,7 +758,7 @@ export class InterfaceService {
     return d;
   }
 
-  processASTMElecsysData(astmData: string) {
+  processASTMElecsysData(connectionData: ConnectionData, astmData: string) {
 
     //that.logger('info', astmData);
 
@@ -818,8 +844,8 @@ export class InterfaceService {
             order.raw_text = partData;
             order.result_status = 1;
             order.lims_sync_status = 0;
-            order.test_location = that.appSettings.labName;
-            order.machine_used = that.appSettings.analyzerMachineName;
+            order.test_location = connectionData.labName;
+            order.machine_used = connectionData.instrumentId;
 
             if (order.order_id) {
               that.logger('info', "Trying to add order :" + JSON.stringify(order));
@@ -854,7 +880,7 @@ export class InterfaceService {
 
   }
 
-  processASTMConcatenatedData(astmData: string) {
+  processASTMConcatenatedData(connectionData: ConnectionData, astmData: string) {
 
     //this.logger('info', astmData);
 
@@ -950,8 +976,8 @@ export class InterfaceService {
             order.raw_text = partData;
             order.result_status = 1;
             order.lims_sync_status = 0;
-            order.test_location = that.appSettings.labName;
-            order.machine_used = that.appSettings.analyzerMachineName;
+            order.test_location = connectionData.labName;
+            order.machine_used = connectionData.instrumentId;
 
             if (order.order_id) {
               that.logger('info', "Trying to add order :" + JSON.stringify(order));
@@ -1059,6 +1085,22 @@ export class InterfaceService {
 
     that.dbService.addApplicationLog(dbLog, (res) => { }, (err) => { });
 
+  }
+
+  _getKey(host: string, port: number): string {
+    return `${host}:${port}`;
+  }
+
+  getStatusObservable(host: string, port: number): Observable<boolean> {
+    const connectionKey = this._getKey(host, port);
+    const connectionData = this.connections.get(connectionKey);
+    return connectionData.statusSubject.asObservable();
+  }
+
+  getConnectionAttemptObservable(host: string, port: number): Observable<boolean> {
+    const connectionKey = this._getKey(host, port);
+    const connectionData = this.connections.get(connectionKey);
+    return connectionData.connectionAttemptStatusSubject.asObservable();
   }
 
 }

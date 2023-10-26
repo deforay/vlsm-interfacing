@@ -2,6 +2,7 @@ import { Component, OnInit, NgZone } from '@angular/core';
 import { Router } from '@angular/router';
 import { ElectronStoreService } from '../../services/electron-store.service';
 import { InterfaceService } from '../../services/interface.service';
+import { ConnectionParams } from '../../interfaces/connection-params.interface';
 //import { GeneXpertService } from '../../services/genexpert.service';
 
 @Component({
@@ -11,7 +12,8 @@ import { InterfaceService } from '../../services/interface.service';
 })
 export class DashboardComponent implements OnInit {
   public isConnected = false;
-  public appSettings = null;
+  public commonSettings = null;
+  public instrumentsSettings = null;
   public appVersion: string = null;
   public connectionInProcess = false;
   public reconnectButtonText = 'Connect';
@@ -21,6 +23,7 @@ export class DashboardComponent implements OnInit {
   public interval: any;
   public lastOrders: any;
   public liveLogText = [];
+  public connectionParams: ConnectionParams = null;
 
   constructor(private store: ElectronStoreService,
     private _ngZone: NgZone,
@@ -33,43 +36,38 @@ export class DashboardComponent implements OnInit {
 
     const that = this;
 
-    that.appSettings = that.store.get('appSettings');
+    that.commonSettings = that.store.get('commonConfig');
+    that.instrumentsSettings = that.store.get('instrumentsConfig');
     that.appVersion = that.store.get('appVersion');
 
-    if (null === that.appSettings || undefined === that.appSettings || !that.appSettings.analyzerMachinePort || !that.appSettings.interfaceCommunicationProtocol || !that.appSettings.analyzerMachineHost) {
+    that.connectionParams = {
+      connectionMode: that.instrumentsSettings.interfaceConnectionMode,
+      connectionProtocol: that.instrumentsSettings.interfaceCommunicationProtocol,
+      host: that.instrumentsSettings.analyzerMachineHost,
+      port: that.instrumentsSettings.analyzerMachinePort,
+      instrumentId: that.instrumentsSettings.analyzerMachineName,
+      machineType: that.instrumentsSettings.analyzerMachineType,
+      labName: that.commonSettings.labName,
+      interfaceAutoConnect: that.commonSettings.interfaceAutoConnect
+    };
+
+    if (null === that.commonSettings || undefined === that.commonSettings || !that.connectionParams.port || !that.connectionParams.connectionProtocol || !that.connectionParams.host) {
       that.router.navigate(['/settings']);
     } else {
-      that.machineName = that.appSettings.analyzerMachineName;
+      that.machineName = that.connectionParams.instrumentId;
     }
 
-    if (that.appSettings.interfaceAutoConnect !== undefined && that.appSettings.interfaceAutoConnect !== null && that.appSettings.interfaceAutoConnect === 'yes') {
-      setTimeout(() => { that.reconnect() }, 1000);
+    if (that.connectionParams.interfaceAutoConnect !== undefined && that.connectionParams.interfaceAutoConnect !== null && that.connectionParams.interfaceAutoConnect === 'yes') {
+      setTimeout(() => {
+        that.reconnect(that.connectionParams);
+      }, 1000);
     }
-
-    that.interfaceService.currentStatus.subscribe(status => {
-      that._ngZone.run(() => {
-        that.isConnected = status;
-      });
-    });
-
-    that.interfaceService.connectionAttemptStatus.subscribe(status => {
-      that._ngZone.run(() => {
-        if (status === false) {
-          that.connectionInProcess = false;
-          that.reconnectButtonText = 'Connect';
-        } else {
-          that.connectionInProcess = true;
-          that.reconnectButtonText = 'Please wait ...';
-        }
-      });
-    });
 
     that.interfaceService.liveLog.subscribe(mesg => {
       that._ngZone.run(() => {
         that.liveLogText = mesg;
       });
     });
-
 
     setTimeout(() => {
       // Let us fetch last few Orders and Logs on load
@@ -110,12 +108,33 @@ export class DashboardComponent implements OnInit {
     this.interfaceService.clearLiveLog();
   }
 
-  reconnect() {
-    this.interfaceService.reconnect();
+  reconnect(connectionParams: ConnectionParams) {
+
+    const that = this;
+    that.interfaceService.reconnect(connectionParams);
+    that.interfaceService.getStatusObservable(connectionParams.host, connectionParams.port).subscribe(status => {
+      that._ngZone.run(() => {
+        that.isConnected = status;
+      });
+    });
+
+    that.interfaceService.getConnectionAttemptObservable(connectionParams.host, connectionParams.port).subscribe(status => {
+      that._ngZone.run(() => {
+        if (status === false) {
+          that.connectionInProcess = false;
+          that.reconnectButtonText = 'Connect';
+        } else {
+          that.connectionInProcess = true;
+          that.reconnectButtonText = 'Please wait ...';
+        }
+      });
+    });
+
+
   }
 
-  close() {
-    this.interfaceService.closeConnection();
+  close(connectionParams: ConnectionParams) {
+    this.interfaceService.disconnect(connectionParams.host, connectionParams.port);
   }
 
   ngOnDestroy() {
@@ -123,4 +142,3 @@ export class DashboardComponent implements OnInit {
   }
 
 }
-

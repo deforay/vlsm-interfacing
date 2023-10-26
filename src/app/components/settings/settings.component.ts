@@ -9,33 +9,36 @@ import { ElectronStoreService } from '../../services/electron-store.service';
   styleUrls: ['./settings.component.scss']
 })
 export class SettingsComponent implements OnInit {
-  public settings: any = {};
+  public commonSettings: any = {};
+  public instrumentsSettings: any = {};
   public appPath: string = "";
   public appVersion: string = null;
 
   constructor(private electronService: ElectronService, private router: Router, private store: ElectronStoreService) {
 
-    const appSettings = this.store.get('appSettings');
+    const commonSettingsStore = this.store.get('commonConfig');
+    const instrumentSettingsStore = this.store.get('instrumentsConfig');
     this.appPath = this.store.get('appPath');
     this.appVersion = this.store.get('appVersion');
 
-    if (undefined !== appSettings) {
-      this.settings.labID = appSettings.labID;
-      this.settings.labName = appSettings.labName;
+    if (undefined !== commonSettingsStore && undefined !== instrumentSettingsStore) {
+      this.commonSettings.labID = commonSettingsStore.labID;
+      this.commonSettings.labName = commonSettingsStore.labName;
+      this.commonSettings.mysqlHost = commonSettingsStore.mysqlHost;
+      this.commonSettings.mysqlPort = commonSettingsStore.mysqlPort;
+      this.commonSettings.mysqlDb = commonSettingsStore.mysqlDb;
+      this.commonSettings.mysqlUser = commonSettingsStore.mysqlUser;
+      this.commonSettings.mysqlPassword = commonSettingsStore.mysqlPassword;
 
-      this.settings.analyzerMachineType = appSettings.analyzerMachineType;
-      this.settings.analyzerMachineName = appSettings.analyzerMachineName;
-      this.settings.analyzerMachinePort = appSettings.analyzerMachinePort;
-      this.settings.analyzerMachineHost = appSettings.analyzerMachineHost;
-      this.settings.interfaceConnectionMode = appSettings.interfaceConnectionMode;
-      this.settings.interfaceAutoConnect = appSettings.interfaceAutoConnect;
-      this.settings.interfaceCommunicationProtocol = appSettings.interfaceCommunicationProtocol;
+      this.instrumentsSettings.analyzerMachineType = instrumentSettingsStore.analyzerMachineType;
+      this.instrumentsSettings.analyzerMachineName = instrumentSettingsStore.analyzerMachineName;
+      this.instrumentsSettings.analyzerMachinePort = instrumentSettingsStore.analyzerMachinePort;
+      this.instrumentsSettings.analyzerMachineHost = instrumentSettingsStore.analyzerMachineHost;
+      this.instrumentsSettings.interfaceConnectionMode = instrumentSettingsStore.interfaceConnectionMode;
+      this.instrumentsSettings.interfaceAutoConnect = instrumentSettingsStore.interfaceAutoConnect;
+      this.instrumentsSettings.interfaceCommunicationProtocol = instrumentSettingsStore.interfaceCommunicationProtocol;
 
-      this.settings.mysqlHost = appSettings.mysqlHost;
-      this.settings.mysqlPort = appSettings.mysqlPort;
-      this.settings.mysqlDb = appSettings.mysqlDb;
-      this.settings.mysqlUser = appSettings.mysqlUser;
-      this.settings.mysqlPassword = appSettings.mysqlPassword;
+
     }
 
   }
@@ -47,27 +50,30 @@ export class SettingsComponent implements OnInit {
 
     const that = this;
 
-    const appSettings = {
-      labID: that.settings.labID,
-      labName: that.settings.labName,
-      analyzerMachinePort: that.settings.analyzerMachinePort,
-      analyzerMachineName: that.settings.analyzerMachineName,
-      analyzerMachineType: that.settings.analyzerMachineType,
-      analyzerMachineHost: that.settings.analyzerMachineHost,
-      interfaceConnectionMode: that.settings.interfaceConnectionMode,
-      interfaceAutoConnect: that.settings.interfaceAutoConnect,
-      interfaceCommunicationProtocol: that.settings.interfaceCommunicationProtocol,
-      mysqlHost: that.settings.mysqlHost,
-      mysqlPort: that.settings.mysqlPort,
-      mysqlDb: that.settings.mysqlDb,
-      mysqlUser: that.settings.mysqlUser,
-      mysqlPassword: that.settings.mysqlPassword
+    const common = {
+      labID: that.commonSettings.labID,
+      labName: that.commonSettings.labName,
+      mysqlHost: that.commonSettings.mysqlHost,
+      mysqlPort: that.commonSettings.mysqlPort,
+      mysqlDb: that.commonSettings.mysqlDb,
+      mysqlUser: that.commonSettings.mysqlUser,
+      mysqlPassword: that.commonSettings.mysqlPassword
+    };
+    const instruments = {
+      analyzerMachinePort: that.instrumentsSettings.analyzerMachinePort,
+      analyzerMachineName: that.instrumentsSettings.analyzerMachineName,
+      analyzerMachineType: that.instrumentsSettings.analyzerMachineType,
+      analyzerMachineHost: that.instrumentsSettings.analyzerMachineHost,
+      interfaceConnectionMode: that.instrumentsSettings.interfaceConnectionMode,
+      interfaceAutoConnect: that.instrumentsSettings.interfaceAutoConnect,
+      interfaceCommunicationProtocol: that.instrumentsSettings.interfaceCommunicationProtocol
     };
 
-    that.store.set('appSettings', appSettings);
+    that.store.set('instrumentsConfig', instruments);
+    that.store.set('commonConfig', common);
 
     new Notification('Success', {
-      body: 'Updated VLSM interfacing settings'
+      body: 'Updated Interface Tool settings'
     });
 
     this.router.navigate(['/dashboard']);
@@ -79,10 +85,10 @@ export class SettingsComponent implements OnInit {
     const that = this;
     const mysql = that.electronService.mysql;
     const connection = mysql.createConnection({
-      host: that.settings.mysqlHost,
-      user: that.settings.mysqlUser,
-      password: that.settings.mysqlPassword,
-      port: that.settings.mysqlPort
+      host: that.commonSettings.mysqlHost,
+      user: that.commonSettings.mysqlUser,
+      password: that.commonSettings.mysqlPassword,
+      port: that.commonSettings.mysqlPort
     });
 
     connection.connect(function (err) {
@@ -91,7 +97,7 @@ export class SettingsComponent implements OnInit {
 
         const dialogConfig = {
           type: 'error',
-          message: 'Oops! Something went wrong! Unable to connect to the MySQL database on host ' + that.settings.mysqlHost,
+          message: 'Oops! Something went wrong! Unable to connect to the MySQL database on host ' + that.commonSettings.mysqlHost,
           detail: err + '\n\nPlease check if all the database connection settings are correct and the MySQL server is running.',
           buttons: ['OK']
         };
