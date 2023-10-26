@@ -68,10 +68,9 @@ export class InterfaceService {
   connect(connectionParams: ConnectionParams) {
 
     const that = this;
-    that.connectionParams = connectionParams;
     let connectionData: ConnectionData = null;
 
-    const connectionKey = that._getKey(that.connectionParams.host, that.connectionParams.port);
+    const connectionKey = that._getKey(connectionParams.host, connectionParams.port);
 
     if (this.connections.has(connectionKey)) {
       connectionData = this.connections.get(connectionKey);
@@ -80,20 +79,20 @@ export class InterfaceService {
       const statusSubject = new BehaviorSubject(false);
       // Subscribe to the BehaviorSubject
       statusSubject.subscribe(value => {
-        console.log('statusSubject::::::::' + value);
+        console.log(connectionParams.instrumentId + ' statusSubject::::::::' + value);
       });
       const connectionAttemptStatusSubject = new BehaviorSubject(false);
       // Subscribe to the BehaviorSubject
       connectionAttemptStatusSubject.subscribe(value => {
-        console.log('connectionAttemptStatusSubject::::::::' + value);
+        console.log(connectionParams.instrumentId + ' connectionAttemptStatusSubject::::::::' + value);
       });
 
       connectionData = {
-        connectionMode: that.connectionParams.connectionMode,
-        connectionProtocol: that.connectionParams.connectionProtocol,
-        instrumentId: that.connectionParams.instrumentId,
-        labName: that.connectionParams.labName,
-        machineType: that.connectionParams.machineType,
+        connectionMode: connectionParams.connectionMode,
+        connectionProtocol: connectionParams.connectionProtocol,
+        instrumentId: connectionParams.instrumentId,
+        labName: connectionParams.labName,
+        machineType: connectionParams.machineType,
         statusSubject: statusSubject,
         connectionAttemptStatusSubject: connectionAttemptStatusSubject,
         connectionSocket: null,
@@ -106,8 +105,8 @@ export class InterfaceService {
 
     connectionData.connectionAttemptStatusSubject.next(true);
 
-    if (that.connectionParams.connectionMode === 'tcpserver') {
-      that.logger('info', 'Listening for connection on port ' + that.connectionParams.port);
+    if (connectionParams.connectionMode === 'tcpserver') {
+      that.logger('info', 'Listening for connection on port ' + connectionParams.port);
       connectionData.connectionServer = that.net.createServer();
       connectionData.connectionServer.listen(that.connectionParams.port);
 
@@ -141,24 +140,24 @@ export class InterfaceService {
 
       connectionData.connectionServer.on('error', function (e) {
         that.logger('error', 'Error while connecting ' + e.code);
-        that.disconnect(that.connectionParams.host, that.connectionParams.port);
+        that.disconnect(connectionParams.host, connectionParams.port);
 
-        if (that.connectionParams.interfaceAutoConnect === 'yes') {
+        if (connectionParams.interfaceAutoConnect === 'yes') {
           connectionData.connectionAttemptStatusSubject.next(true);
           that.logger('error', "Interface AutoConnect is enabled: Will re-attempt connection in 30 seconds");
           setTimeout(() => {
-            that.reconnect(that.connectionParams);
+            that.reconnect(connectionParams);
           }, 30000);
         }
 
       });
 
-    } else if (that.connectionParams.connectionMode === 'tcpclient') {
+    } else if (connectionParams.connectionMode === 'tcpclient') {
 
       connectionData.connectionSocket = that.socketClient = new that.net.Socket();
       that.connectopts = {
-        port: that.connectionParams.port,
-        host: that.connectionParams.host
+        port: connectionParams.port,
+        host: connectionParams.host
       };
 
       // since this is a CLIENT connection, we don't need a server object, so we set it to null

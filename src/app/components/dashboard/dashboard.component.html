@@ -7,34 +7,51 @@
 
   <div class="card">
     <div class="card-body">
+      <ul class="nav nav-tabs" role="tablist">
+        <li class="nav-item" *ngFor="let instrument of instrumentsSettings; let i = index">
+          <a class="nav-link" [class.active]="i == 0" [attr.id]="'tab-' + i" data-toggle="tab" href="#content"
+            role="tab">
+            <i [ngClass]="{'fa': true,
+                                'fa-plug': instrument.isConnected,
+                                'fa-exclamation-triangle': !instrument.isConnected,
+                                'connected': instrument.isConnected,
+                                'disconnected': !instrument.isConnected}" aria-hidden="true"></i>
+            {{instrument.connectionParams.instrumentId}}
+          </a>
+        </li>
+      </ul>
 
-      <div *ngIf="isConnected; else notConnected">
-        <h5 class="card-title text-success"><span>{{machineName}}</span> Connected</h5>
-        <!-- <p class="card-text">Disconnect to modify settings.</p> -->
-        <button (click)="close(connectionParams)" class="btn btn-danger">
-          <span>Disconnect {{machineName}}</span>
-        </button>
+
+      <div class="tab-content padding-class">
+        <div class="tab-pane" *ngFor="let instrument of instrumentsSettings; let i = index" [class.active]="i == 0"
+          id="content">
+          <div *ngIf="instrument.isConnected; else notConnected">
+            <h5 class="card-title text-success"><span>{{instrument.connectionParams.instrumentId}}</span> Connected</h5>
+            <button (click)="close(instrument)" class="btn btn-danger">
+              <span>Disconnect {{instrument.connectionParams.instrumentId}}</span>
+            </button>
+          </div>
+
+          <ng-template #notConnected>
+            <h5 class="card-title text-danger"><span>{{instrument.connectionParams.instrumentId}}</span> Not Connected!
+            </h5>
+            <p class="card-text">Please try to reconnect and wait for a few moments.</p>
+            <button (click)="reconnect(instrument)" class="btn btn-success" [disabled]="connectionInProcess">
+              <span>{{reconnectButtonText}}</span>
+            </button>
+            &nbsp;&nbsp;
+            <button *ngIf="connectionInProcess" (click)="close(instrument)" class="btn btn-danger">
+              <span>Cancel</span>
+            </button>
+            &nbsp;&nbsp;
+            <button *ngIf="!connectionInProcess" routerLink="/settings" class="btn btn-primary">
+              <span>Settings</span>
+            </button>
+          </ng-template>
+        </div>
       </div>
-
-
-      <ng-template #notConnected>
-        <h5 class="card-title text-danger"><span>{{machineName}}</span> Not Connected!</h5>
-        <p class="card-text">Please try to reconnect and wait for a few moments.</p>
-        <button (click)="reconnect(connectionParams)" class="btn btn-success" [disabled]="connectionInProcess">
-          <span>{{reconnectButtonText}}</span>
-        </button>
-        &nbsp;&nbsp;
-        <button *ngIf="connectionInProcess" (click)="close(connectionParams)" class="btn btn-danger">
-          <span>Cancel</span>
-        </button>
-        &nbsp;&nbsp;
-        <button *ngIf="!connectionInProcess" routerLink="/settings" class="btn btn-primary">
-          <span>Settings</span>
-        </button>
-
-
-      </ng-template>
     </div>
+
     <div class="livelog">
       <ng-container *ngIf="!(liveLogText?.length > 0)">
         <span></span>

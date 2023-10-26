@@ -40,28 +40,28 @@ export class DashboardComponent implements OnInit {
     that.instrumentsSettings = that.store.get('instrumentsConfig');
     that.appVersion = that.store.get('appVersion');
 
-    that.connectionParams = {
-      connectionMode: that.instrumentsSettings[0].interfaceConnectionMode,
-      connectionProtocol: that.instrumentsSettings[0].interfaceCommunicationProtocol,
-      host: that.instrumentsSettings[0].analyzerMachineHost,
-      port: that.instrumentsSettings[0].analyzerMachinePort,
-      instrumentId: that.instrumentsSettings[0].analyzerMachineName,
-      machineType: that.instrumentsSettings[0].analyzerMachineType,
-      labName: that.commonSettings.labName,
-      interfaceAutoConnect: that.commonSettings.interfaceAutoConnect
-    };
+    that.instrumentsSettings.forEach((instrument, index) => {
+      instrument.connectionParams = {
+        connectionMode: instrument.interfaceConnectionMode,
+        connectionProtocol: instrument.interfaceCommunicationProtocol,
+        host: instrument.analyzerMachineHost,
+        port: instrument.analyzerMachinePort,
+        instrumentId: instrument.analyzerMachineName,
+        machineType: instrument.analyzerMachineType,
+        labName: that.commonSettings.labName,
+        interfaceAutoConnect: that.commonSettings.interfaceAutoConnect
+      };
 
-    if (null === that.commonSettings || undefined === that.commonSettings || !that.connectionParams.port || !that.connectionParams.connectionProtocol || !that.connectionParams.host) {
-      that.router.navigate(['/settings']);
-    } else {
-      that.machineName = that.connectionParams.instrumentId;
-    }
+      if (null === that.commonSettings || undefined === that.commonSettings || !instrument.connectionParams.port || !instrument.connectionParams.connectionProtocol || !instrument.connectionParams.host) {
+        that.router.navigate(['/settings']);
+      }
 
-    if (that.connectionParams.interfaceAutoConnect !== undefined && that.connectionParams.interfaceAutoConnect !== null && that.connectionParams.interfaceAutoConnect === 'yes') {
-      setTimeout(() => {
-        that.reconnect(that.connectionParams);
-      }, 1000);
-    }
+      if (instrument.connectionParams.interfaceAutoConnect !== undefined && instrument.connectionParams.interfaceAutoConnect !== null && instrument.connectionParams.interfaceAutoConnect === 'yes') {
+        setTimeout(() => {
+          that.reconnect(instrument);
+        }, 1000);
+      }
+    });
 
     that.interfaceService.liveLog.subscribe(mesg => {
       that._ngZone.run(() => {
@@ -79,6 +79,7 @@ export class DashboardComponent implements OnInit {
     that.interval = setInterval(() => { that.fetchLastOrders(); }, 1000 * 60 * 5);
 
   }
+
 
   fetchLastOrders() {
     const that = this;
@@ -105,34 +106,31 @@ export class DashboardComponent implements OnInit {
     this.liveLogText = null;
     this.interfaceService.clearLiveLog();
   }
-
-  reconnect(connectionParams: ConnectionParams) {
-
+  reconnect(instrument: any) {
     const that = this;
-    that.interfaceService.reconnect(connectionParams);
-    that.interfaceService.getStatusObservable(connectionParams.host, connectionParams.port).subscribe(status => {
+    that.interfaceService.reconnect(instrument.connectionParams);
+    that.interfaceService.getStatusObservable(instrument.connectionParams.host, instrument.connectionParams.port).subscribe(status => {
       that._ngZone.run(() => {
-        that.isConnected = status;
+        instrument.isConnected = status;
       });
     });
 
-    that.interfaceService.getConnectionAttemptObservable(connectionParams.host, connectionParams.port).subscribe(status => {
+    that.interfaceService.getConnectionAttemptObservable(instrument.connectionParams.host, instrument.connectionParams.port).subscribe(status => {
       that._ngZone.run(() => {
         if (status === false) {
-          that.connectionInProcess = false;
-          that.reconnectButtonText = 'Connect';
+          instrument.connectionInProcess = false;
+          instrument.reconnectButtonText = 'Connect';
         } else {
-          that.connectionInProcess = true;
-          that.reconnectButtonText = 'Please wait ...';
+          instrument.connectionInProcess = true;
+          instrument.reconnectButtonText = 'Please wait ...';
         }
       });
     });
-
-
   }
 
-  close(connectionParams: ConnectionParams) {
-    this.interfaceService.disconnect(connectionParams.host, connectionParams.port);
+
+  close(instrument: any) {
+    this.interfaceService.disconnect(instrument.connectionParams.host, instrument.connectionParams.port);
   }
 
   ngOnDestroy() {
