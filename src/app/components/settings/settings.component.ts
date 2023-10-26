@@ -1,4 +1,5 @@
 import { Component, OnInit } from '@angular/core';
+import { FormBuilder, FormGroup, FormArray, Validators, ReactiveFormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
 import { ElectronService } from '../../core/services';
 import { ElectronStoreService } from '../../services/electron-store.service';
@@ -9,85 +10,98 @@ import { ElectronStoreService } from '../../services/electron-store.service';
   styleUrls: ['./settings.component.scss']
 })
 export class SettingsComponent implements OnInit {
-  public commonSettings: any = {};
-  public instrumentsSettings: any[] = [];
+  public settingsForm: FormGroup;
   public appPath: string = "";
   public appVersion: string = null;
 
-  constructor(private electronService: ElectronService,
-    private router: Router, private store: ElectronStoreService) {
-
+  constructor(
+    private fb: FormBuilder,
+    private electronService: ElectronService,
+    private router: Router,
+    private store: ElectronStoreService
+  ) {
     const commonSettingsStore = this.store.get('commonConfig');
     const instrumentSettingsStore = this.store.get('instrumentsConfig');
     this.appPath = this.store.get('appPath');
     this.appVersion = this.store.get('appVersion');
 
-    if (undefined !== commonSettingsStore && undefined !== instrumentSettingsStore) {
-      this.commonSettings.labID = commonSettingsStore.labID;
-      this.commonSettings.labName = commonSettingsStore.labName;
-      this.commonSettings.mysqlHost = commonSettingsStore.mysqlHost;
-      this.commonSettings.mysqlPort = commonSettingsStore.mysqlPort;
-      this.commonSettings.mysqlDb = commonSettingsStore.mysqlDb;
-      this.commonSettings.mysqlUser = commonSettingsStore.mysqlUser;
-      this.commonSettings.mysqlPassword = commonSettingsStore.mysqlPassword;
-      this.commonSettings.interfaceAutoConnect = commonSettingsStore.interfaceAutoConnect;
-
-      // this.instrumentsSettings[0].analyzerMachineType = instrumentSettingsStore.analyzerMachineType;
-      // this.instrumentsSettings[0].analyzerMachineName = instrumentSettingsStore.analyzerMachineName;
-      // this.instrumentsSettings[0].analyzerMachinePort = instrumentSettingsStore.analyzerMachinePort;
-      // this.instrumentsSettings[0].analyzerMachineHost = instrumentSettingsStore.analyzerMachineHost;
-      // this.instrumentsSettings[0].interfaceConnectionMode = instrumentSettingsStore.interfaceConnectionMode;
-      // this.instrumentsSettings[0].interfaceCommunicationProtocol = instrumentSettingsStore.interfaceCommunicationProtocol;
-      // Check if instrumentSettingsStore is an array and has at least one element
-      if (Array.isArray(instrumentSettingsStore) && instrumentSettingsStore.length > 0) {
-        this.instrumentsSettings = instrumentSettingsStore;
-      } else if (instrumentSettingsStore && typeof instrumentSettingsStore === 'object') {
-        // If instrumentSettingsStore is an object, wrap it in an array
-        this.instrumentsSettings = [instrumentSettingsStore];
-      }
-
-    }
-
-  }
-
-  ngOnInit(): void {
-  }
-
-  updateSettings() {
-    const that = this;
-
-    const common = {
-      labID: that.commonSettings.labID,
-      labName: that.commonSettings.labName,
-      mysqlHost: that.commonSettings.mysqlHost,
-      mysqlPort: that.commonSettings.mysqlPort,
-      mysqlDb: that.commonSettings.mysqlDb,
-      mysqlUser: that.commonSettings.mysqlUser,
-      mysqlPassword: that.commonSettings.mysqlPassword,
-      interfaceAutoConnect: that.commonSettings.interfaceAutoConnect
-    };
-
-    // Assuming that instrumentsSettings is an array of instrument settings objects
-    that.store.set('instrumentsConfig', that.instrumentsSettings);  // Store the entire array
-    that.store.set('commonConfig', common);
-
-    new Notification('Success', {
-      body: 'Updated Interface Tool settings'
+    // Initialize the form with the existing settings
+    this.settingsForm = this.fb.group({
+      commonSettings: this.fb.group({
+        labID: ['', Validators.required],
+        labName: ['', Validators.required],
+        mysqlHost: [''],
+        mysqlPort: [''],
+        mysqlDb: [''],
+        mysqlUser: [''],
+        mysqlPassword: [''],
+        interfaceAutoConnect: ['yes', Validators.required]
+      }),
+      instrumentsSettings: this.fb.array(
+        (instrumentSettingsStore || []).map(instrument => this.fb.group(instrument))
+      )
     });
-
-    this.router.navigate(['/dashboard']);
   }
 
+  ngOnInit(): void { }
+
+  // Getter for easy access to the instrumentsSettings FormArray
+  get instrumentsSettings(): FormArray {
+    return this.settingsForm.get('instrumentsSettings') as FormArray;
+  }
+
+  createInstrumentFormGroup(): FormGroup {
+    return this.fb.group({
+      analyzerMachineType: ['', Validators.required],
+      interfaceCommunicationProtocol: ['', Validators.required],
+      analyzerMachineName: ['', Validators.required],
+      analyzerMachineHost: ['', Validators.required],
+      analyzerMachinePort: ['', Validators.required],
+      interfaceConnectionMode: ['', Validators.required]
+    });
+  }
+
+  addInstrument(): void {
+    this.instrumentsSettings.push(this.createInstrumentFormGroup());
+  }
+
+  confirmRemoval(index: number, analyzerMachineName: string): void {
+    const confirmed = window.confirm(`Are you sure you want to remove Instrument ${analyzerMachineName}?`);
+    if (confirmed) {
+      this.removeInstrument(index);
+    }
+  }
+
+  removeInstrument(index: number): void {
+    this.instrumentsSettings.removeAt(index);
+  }
+
+  updateSettings(): void {
+    if (this.settingsForm.valid) {
+      const updatedSettings = this.settingsForm.value;
+      this.store.set('commonConfig', updatedSettings.commonSettings);
+      this.store.set('instrumentsConfig', updatedSettings.instrumentsSettings);
+
+      new Notification('Success', {
+        body: 'Updated Interface Tool settings'
+      });
+
+      this.router.navigate(['/dashboard']);
+    } else {
+      console.error('Form is not valid');
+    }
+  }
 
   checkMysqlConnection() {
 
     const that = this;
     const mysql = that.electronService.mysql;
+    const commonSettings = that.settingsForm.get('commonSettings').value;
     const connection = mysql.createConnection({
-      host: that.commonSettings.mysqlHost,
-      user: that.commonSettings.mysqlUser,
-      password: that.commonSettings.mysqlPassword,
-      port: that.commonSettings.mysqlPort
+      host: commonSettings.mysqlHost,
+      user: commonSettings.mysqlUser,
+      password: commonSettings.mysqlPassword,
+      port: commonSettings.mysqlPort
     });
 
     connection.connect(function (err: string) {
@@ -96,7 +110,7 @@ export class SettingsComponent implements OnInit {
 
         const dialogConfig = {
           type: 'error',
-          message: 'Oops! Something went wrong! Unable to connect to the MySQL database on host ' + that.commonSettings.mysqlHost,
+          message: 'Oops! Something went wrong! Unable to connect to the MySQL database on host ' + commonSettings.mysqlHost,
           detail: err + '\n\nPlease check if all the database connection settings are correct and the MySQL server is running.',
           buttons: ['OK']
         };
@@ -113,5 +127,4 @@ export class SettingsComponent implements OnInit {
 
     });
   }
-
 }

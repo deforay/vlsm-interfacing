@@ -7,10 +7,11 @@
 
   <div class="card">
     <div class="card-body">
+
       <ul class="nav nav-tabs" role="tablist">
         <li class="nav-item" *ngFor="let instrument of instrumentsSettings; let i = index">
-          <a class="nav-link" [class.active]="i == 0" [attr.id]="'tab-' + i" data-toggle="tab" href="#content"
-            role="tab">
+          <a class="nav-link" [class.active]="selectedTabIndex === i" [attr.id]="'tab-' + i" data-toggle="tab"
+            href="javascript:void(0);" role="tab" (click)="selectTab(i)">
             <i [ngClass]="{'fa': true,
                                 'fa-plug': instrument.isConnected,
                                 'fa-exclamation-triangle': !instrument.isConnected,
@@ -23,8 +24,8 @@
 
 
       <div class="tab-content padding-class">
-        <div class="tab-pane" *ngFor="let instrument of instrumentsSettings; let i = index" [class.active]="i == 0"
-          id="content">
+        <div class="tab-pane" *ngFor="let instrument of instrumentsSettings; let i = index"
+          [class.active]="selectedTabIndex === i" [attr.id]="'content-' + i">
           <div *ngIf="instrument.isConnected; else notConnected">
             <h5 class="card-title text-success"><span>{{instrument.connectionParams.instrumentId}}</span> Connected</h5>
             <button (click)="close(instrument)" class="btn btn-danger">
@@ -77,9 +78,10 @@
   <br>
 
   <br>
+  <br>
 
-  <div class="card">
-    <div class="card-body">
+  <div class="scard">
+    <div class="scard-body">
       <h4>
 
         Recent Results
@@ -91,15 +93,16 @@
 
       </h4>
       <table style="font-size: 0.9em;" id="dashtable"
-        class="table dashtable table-bordered table-striped table-hover table-responsive">
+        class="table dashtable table-striped table-hover table-responsive">
         <thead>
           <tr class="thead-dark">
-            <th style="width:15%;">Sample/Order ID</th>
-            <th style="width:15%;">Test Result</th>
+            <th style="width:8%;">Sample/Order ID</th>
+            <th style="width:10%;">Test Result</th>
             <th style="width:10%;">Result Unit</th>
-            <th style="width:15%;">Test Type</th>
-            <th style="width:15%;">Tested By</th>
+            <th style="width:10%;">Test Type</th>
+            <th style="width:10%;">Tested By</th>
             <th style="width:10%;">Tested On</th>
+            <th style="width:10%;">Received On</th>
             <th style="width:5%;">LIS Sync Status</th>
             <th style="width:5%;">LIS Sync Datetime</th>
           </tr>
@@ -107,7 +110,7 @@
         <tbody>
           <ng-container *ngIf="!(lastOrders?.length > 0)">
             <tr>
-              <td colspan="8" class="center"> No data available in database </td>
+              <td colspan="9" class="center"> No data available in database </td>
             </tr>
           </ng-container>
           <ng-container *ngFor="let rows of lastOrders">
@@ -118,6 +121,7 @@
               <td>{{rows.test_type}}</td>
               <td>{{rows.tested_by}}</td>
               <td>{{rows.analysed_date_time}}</td>
+              <td>{{rows.added_on}}</td>
               <td>{{rows.lims_sync_status}}</td>
               <td>{{rows.lims_sync_date_time}}</td>
             </tr>

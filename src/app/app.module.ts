@@ -10,6 +10,7 @@ import { AppRoutingModule } from './app-routing.module';
 // NG Translate
 import { TranslateModule, TranslateLoader } from '@ngx-translate/core';
 import { TranslateHttpLoader } from '@ngx-translate/http-loader';
+import { ReactiveFormsModule } from '@angular/forms';
 
 import { HomeModule } from './home/home.module';
 
@@ -35,6 +36,7 @@ const httpLoaderFactory = (http: HttpClient): TranslateHttpLoader => new Transla
     SharedModule,
     HomeModule,
     AppRoutingModule,
+    ReactiveFormsModule,
     TranslateModule.forRoot({
       loader: {
         provide: TranslateLoader,

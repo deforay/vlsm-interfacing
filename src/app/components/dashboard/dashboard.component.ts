@@ -24,6 +24,7 @@ export class DashboardComponent implements OnInit {
   public lastOrders: any;
   public liveLogText = [];
   public connectionParams: ConnectionParams = null;
+  public selectedTabIndex = 0;
 
   constructor(private store: ElectronStoreService,
     private _ngZone: NgZone,
@@ -81,6 +82,7 @@ export class DashboardComponent implements OnInit {
   }
 
 
+
   fetchLastOrders() {
     const that = this;
     that.interfaceService.fetchLastOrders();
@@ -131,6 +133,10 @@ export class DashboardComponent implements OnInit {
 
   close(instrument: any) {
     this.interfaceService.disconnect(instrument.connectionParams.host, instrument.connectionParams.port);
+  }
+
+  selectTab(index: number): void {
+    this.selectedTabIndex = index;
   }
 
   ngOnDestroy() {

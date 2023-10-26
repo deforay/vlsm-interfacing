@@ -108,7 +108,7 @@ export class InterfaceService {
     if (connectionParams.connectionMode === 'tcpserver') {
       that.logger('info', 'Listening for connection on port ' + connectionParams.port);
       connectionData.connectionServer = that.net.createServer();
-      connectionData.connectionServer.listen(that.connectionParams.port);
+      connectionData.connectionServer.listen(connectionParams.port);
 
       const sockets = [];
       connectionData.connectionServer.on('connection', function (socket) {
@@ -176,12 +176,12 @@ export class InterfaceService {
       });
 
       connectionData.connectionSocket.on('close', function () {
-        that.disconnect(that.connectionParams.host, that.connectionParams.port);
-        if (that.connectionParams.interfaceAutoConnect === 'yes') {
+        that.disconnect(connectionParams.host, connectionParams.port);
+        if (connectionParams.interfaceAutoConnect === 'yes') {
           connectionData.connectionAttemptStatusSubject.next(true);
           that.logger('error', "Interface AutoConnect is enabled: Will re-attempt connection in 30 seconds");
           setTimeout(() => {
-            that.reconnect(that.connectionParams);
+            that.reconnect(connectionParams);
           }, 30000);
         }
 
@@ -189,13 +189,13 @@ export class InterfaceService {
 
       connectionData.connectionSocket.on('error', (e) => {
         that.logger('error', e);
-        that.disconnect(that.connectionParams.host, that.connectionParams.port);
+        that.disconnect(connectionParams.host, connectionParams.port);
 
-        if (that.connectionParams.interfaceAutoConnect === 'yes') {
+        if (connectionParams.interfaceAutoConnect === 'yes') {
           connectionData.connectionAttemptStatusSubject.next(true);
           that.logger('error', "Interface AutoConnect is enabled: Will re-attempt connection in 30 seconds");
           setTimeout(() => {
-            that.reconnect(that.connectionParams);
+            that.reconnect(connectionParams);
           }, 30000);
         }
 
