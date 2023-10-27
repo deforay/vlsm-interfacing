@@ -90,6 +90,16 @@
               <div *ngFor="let instrument of instrumentsSettings.controls; let i = index">
                 <div [formGroupName]="i">
                   <div class="row">
+
+                    <div class="form-group col col-sm-6">
+                      <label for="interfaceConnectionMode" class="col-form-label-sm">Make Interface Tool as a</label>
+                      <select formControlName="interfaceConnectionMode" class="form-control form-control-sm" required
+                        (change)="onConnectionModeChange(i, $event)">
+                        <option value="tcpclient">Client (TCP/IP)</option>
+                        <option value="tcpserver">Server (TCP/IP)</option>
+                      </select>
+                    </div>
+
                     <div class="form-group col col-sm-6">
                       <label for="analyzerMachineType" class="col-form-label-sm">Analyzer/Machine Type</label>
                       <select formControlName="analyzerMachineType" class="form-control form-control-sm" required>
@@ -129,35 +139,45 @@
                         Testing Lab</label>
                       <input type="text" formControlName="analyzerMachineName" class="form-control form-control-sm"
                         placeholder="eg. Roche Cobas48" required />
+                      <div *ngIf="instrument.get('analyzerMachineName').hasError('duplicateInstrumentName')"
+                        class="error-text">Duplicate
+                        instrument names are not allowed.</div>
                     </div>
 
                     <div class="form-group col col-sm-6">
                       <label for="analyzerMachineHost" class="col-form-label-sm">Instrument IP Address</label>
                       <input type="text" formControlName="analyzerMachineHost" class="form-control form-control-sm"
-                        placeholder="eg. 198.1.1.1" required />
+                        placeholder="eg. 198.1.1.1" required
+                        [readonly]="instrument.get('interfaceConnectionMode').value === 'tcpserver'" />
+                      <div *ngIf="instrument.hasError('duplicateIpPort')" class="error-text">Duplicate IP Port
+                        combinations are not
+                        allowed.</div>
+
+
                     </div>
 
                     <div class="form-group col col-sm-6">
                       <label for="analyzerMachinePort" class="col-form-label-sm">Instrument Port number</label>
                       <input type="text" formControlName="analyzerMachinePort" class="form-control form-control-sm"
                         placeholder="eg. 3120" required />
+                      <div *ngIf="instrument.hasError('duplicateIpPort')" class="error-text">Duplicate IP Port
+                        combinations are not
+                        allowed.</div>
+
+
                     </div>
 
-                    <div class="form-group col col-sm-6">
-                      <label for="interfaceConnectionMode" class="col-form-label-sm">This Interface Tool is a</label>
-                      <select formControlName="interfaceConnectionMode" class="form-control form-control-sm" required>
-                        <option value="tcpserver">Server (TCP/IP)</option>
-                        <option value="tcpclient">Client (TCP/IP)</option>
-                      </select>
-                    </div>
 
                   </div>
                 </div>
                 <br>
-                <button (click)="confirmRemoval(i, instrument.get('analyzerMachineName').value)"
-                  class="btn btn-danger float-right">
-                  Remove Instrument
-                </button>
+                <div style="display: flex; justify-content: flex-end;">
+                  <button (click)="confirmRemoval(i, instrument.get('analyzerMachineName').value, $event)"
+                    class="btn btn-danger" [attr.disabled]="i === 0 ? true : null">
+                    Remove Instrument
+                  </button>
+                  <!-- Remove button -->
+                </div>
                 <!-- Remove button -->
                 <hr *ngIf="i < instrumentsSettings.controls.length - 1">
               </div>
@@ -171,7 +191,9 @@
 
 
 
-        <button class="btn btn-primary" type="submit">Save Settings</button>
+
+
+        <button class="btn btn-primary" type="submit" [disabled]="settingsForm.invalid">Save Settings</button>
         &nbsp;
         <button routerLink="/dashboard" class="btn btn-danger" type="button">
           <span>Back without saving</span>

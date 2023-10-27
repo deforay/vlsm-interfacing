@@ -13,3 +13,24 @@
 .disconnected {
   color: red;
 }
+
+.nav-tabs .nav-link.active,
+.tab-content {
+  background-color: #fbfbfb !important;
+}
+
+.tab-content {
+  min-height: 10em;
+}
+
+.tab-content h5 {
+  font-size: 1.2em !important;
+}
+
+.nav-tabs .nav-link {
+  border-bottom: none !important;
+}
+
+.btn i {
+  margin-right: 5px;
+}

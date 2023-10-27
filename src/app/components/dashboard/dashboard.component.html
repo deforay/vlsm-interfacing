@@ -2,12 +2,16 @@
 <main role="main" class="container-lg">
   <br>
   <br>
-  <br>
-  <br>
 
   <div class="card">
     <div class="card-body">
 
+      <button routerLink="/settings" class="btn btn-primary float-end">
+        <i class="fa fa-cog"></i>
+        <span>Settings</span>
+      </button>
+      <br>
+      <br>
       <ul class="nav nav-tabs" role="tablist">
         <li class="nav-item" *ngFor="let instrument of instrumentsSettings; let i = index">
           <a class="nav-link" [class.active]="selectedTabIndex === i" [attr.id]="'tab-' + i" data-toggle="tab"
@@ -23,7 +27,7 @@
       </ul>
 
 
-      <div class="tab-content padding-class">
+      <div class="tab-content padding-class border border-top-0 rounded-bottom">
         <div class="tab-pane" *ngFor="let instrument of instrumentsSettings; let i = index"
           [class.active]="selectedTabIndex === i" [attr.id]="'content-' + i">
           <div *ngIf="instrument.isConnected; else notConnected">
@@ -45,22 +49,23 @@
               <span>Cancel</span>
             </button>
             &nbsp;&nbsp;
-            <button *ngIf="!connectionInProcess" routerLink="/settings" class="btn btn-primary">
-              <span>Settings</span>
-            </button>
+
           </ng-template>
         </div>
       </div>
     </div>
 
+    <input style="border:1px #777 dotted;" type="text" [(ngModel)]="searchText" (input)="filterLogs()"
+      placeholder="Search logs..." />
+
+
+
     <div class="livelog">
-      <ng-container *ngIf="!(liveLogText?.length > 0)">
+      <ng-container *ngIf="!(filteredLogText?.length > 0)">
         <span></span>
       </ng-container>
-      <ng-container *ngFor="let x of liveLogText">
-
+      <ng-container *ngFor="let x of filteredLogText">
         <span [innerHTML]="x"> </span>
-
       </ng-container>
     </div>
   </div>
@@ -70,9 +75,17 @@
     <span style="padding-right:10px;" *ngIf="lastLimsSync"><strong>Last LIS Sync on :</strong> {{lastLimsSync}}</span>
     <span style="padding-right:10px;" *ngIf="lastResultReceived"><strong>Last Instrument Result Received on :</strong>
       {{lastResultReceived}}</span>
+    <a (click)="copyLog()" class="btn btn-outline-secondary btn-sm" style="float:right;margin-left:20px;">
+      <i class="fa fa-copy"></i>
+      <span>Copy Log</span>
+    </a>
     <a (click)="clearLiveLog()" class="btn btn-outline-primary btn-sm" style="float:right;">
+      <i class="fa fa-trash"></i>
       <span>Clear Log</span>
     </a>
+
+
+
   </div>
 
   <br>
@@ -93,9 +106,10 @@
 
       </h4>
       <table style="font-size: 0.9em;" id="dashtable"
-        class="table dashtable table-striped table-hover table-responsive">
+        class="table dashtable table-striped table-hover table-bordered table-responsive">
         <thead>
           <tr class="thead-dark">
+            <th style="width:8%;">Instrument</th>
             <th style="width:8%;">Sample/Order ID</th>
             <th style="width:10%;">Test Result</th>
             <th style="width:10%;">Result Unit</th>
@@ -110,11 +124,12 @@
         <tbody>
           <ng-container *ngIf="!(lastOrders?.length > 0)">
             <tr>
-              <td colspan="9" class="center"> No data available in database </td>
+              <td colspan="10" class="center"> No data available in database </td>
             </tr>
           </ng-container>
           <ng-container *ngFor="let rows of lastOrders">
             <tr>
+              <td>{{rows.machine_used}}</td>
               <td>{{rows.order_id}}</td>
               <td>{{rows.results}}</td>
               <td>{{rows.test_unit}}</td>

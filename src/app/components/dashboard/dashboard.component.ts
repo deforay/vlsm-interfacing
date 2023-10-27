@@ -25,6 +25,11 @@ export class DashboardComponent implements OnInit {
   public liveLogText = [];
   public connectionParams: ConnectionParams = null;
   public selectedTabIndex = 0;
+  private configSubscription: any;
+  public searchText: string = '';
+  public filteredLogText: any = [];
+
+
 
   constructor(private store: ElectronStoreService,
     private _ngZone: NgZone,
@@ -37,47 +42,51 @@ export class DashboardComponent implements OnInit {
 
     const that = this;
 
-    that.commonSettings = that.store.get('commonConfig');
-    that.instrumentsSettings = that.store.get('instrumentsConfig');
-    that.appVersion = that.store.get('appVersion');
+    this.configSubscription = this.store.getConfigObservable().subscribe(config => {
 
-    that.instrumentsSettings.forEach((instrument, index) => {
-      instrument.connectionParams = {
-        connectionMode: instrument.interfaceConnectionMode,
-        connectionProtocol: instrument.interfaceCommunicationProtocol,
-        host: instrument.analyzerMachineHost,
-        port: instrument.analyzerMachinePort,
-        instrumentId: instrument.analyzerMachineName,
-        machineType: instrument.analyzerMachineType,
-        labName: that.commonSettings.labName,
-        interfaceAutoConnect: that.commonSettings.interfaceAutoConnect
-      };
+      that.commonSettings = config.commonConfig;
+      that.instrumentsSettings = config.instrumentsConfig;
+      that.appVersion = config.appVersion;
 
-      if (null === that.commonSettings || undefined === that.commonSettings || !instrument.connectionParams.port || !instrument.connectionParams.connectionProtocol || !instrument.connectionParams.host) {
-        that.router.navigate(['/settings']);
-      }
+      that.instrumentsSettings.forEach((instrument, index) => {
+        instrument.connectionParams = {
+          connectionMode: instrument.interfaceConnectionMode,
+          connectionProtocol: instrument.interfaceCommunicationProtocol,
+          host: instrument.analyzerMachineHost,
+          port: instrument.analyzerMachinePort,
+          instrumentId: instrument.analyzerMachineName,
+          machineType: instrument.analyzerMachineType,
+          labName: that.commonSettings.labName,
+          interfaceAutoConnect: that.commonSettings.interfaceAutoConnect
+        };
 
-      if (instrument.connectionParams.interfaceAutoConnect !== undefined && instrument.connectionParams.interfaceAutoConnect !== null && instrument.connectionParams.interfaceAutoConnect === 'yes') {
-        setTimeout(() => {
-          that.reconnect(instrument);
-        }, 1000);
-      }
-    });
+        if (null === that.commonSettings || undefined === that.commonSettings || !instrument.connectionParams.port || !instrument.connectionParams.connectionProtocol || !instrument.connectionParams.host) {
+          that.router.navigate(['/settings']);
+        }
 
-    that.interfaceService.liveLog.subscribe(mesg => {
-      that._ngZone.run(() => {
-        that.liveLogText = mesg;
+        if (instrument.connectionParams.interfaceAutoConnect !== undefined && instrument.connectionParams.interfaceAutoConnect !== null && instrument.connectionParams.interfaceAutoConnect === 'yes') {
+          setTimeout(() => {
+            that.reconnect(instrument);
+          }, 1000);
+        }
       });
+
+      that.interfaceService.liveLog.subscribe(mesg => {
+        that._ngZone.run(() => {
+          this.filteredLogText = that.liveLogText = mesg;
+          this.filterLogs();
+        });
+      });
+
+      setTimeout(() => {
+        // Let us fetch last few Orders and Logs on load
+        that.fetchLastOrders();
+        that.fetchRecentLogs();
+      }, 600);
+
+      // let us refresh last orders every 5 minutes
+      that.interval = setInterval(() => { that.fetchLastOrders(); }, 1000 * 60 * 5);
     });
-
-    setTimeout(() => {
-      // Let us fetch last few Orders and Logs on load
-      that.fetchLastOrders();
-      that.fetchRecentLogs();
-    }, 600);
-
-    // let us refresh last orders every 5 minutes
-    that.interval = setInterval(() => { that.fetchLastOrders(); }, 1000 * 60 * 5);
 
   }
 
@@ -139,8 +148,36 @@ export class DashboardComponent implements OnInit {
     this.selectedTabIndex = index;
   }
 
+
+  filterLogs() {
+    if (this.searchText.trim() === '') {
+      // If searchText is empty, show all logs
+      this.filteredLogText = this.liveLogText;
+    } else {
+      // If searchText is not empty, filter the logs
+      this.filteredLogText = this.liveLogText.filter(log => log.toLowerCase().includes(this.searchText.toLowerCase()));
+    }
+  }
+  copyLog() {
+    const logContent = this.liveLogText.join('');  // Join the array elements into a single string
+    this.copyTextToClipboard(logContent);
+  }
+
+  copyTextToClipboard(text: string) {
+    navigator.clipboard.writeText(text).then(() => {
+      console.log('Log copied to clipboard');
+    }, (err) => {
+      console.error('Error in copying text: ', err);
+    });
+  }
+
+
   ngOnDestroy() {
     clearInterval(this.interval);
+    // Unsubscribe from the configuration observable to avoid memory leaks
+    if (this.configSubscription) {
+      this.configSubscription.unsubscribe();
+    }
   }
 
 }

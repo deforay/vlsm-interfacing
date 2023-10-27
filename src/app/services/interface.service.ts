@@ -1,7 +1,6 @@
 import { Injectable } from '@angular/core';
 import { DatabaseService } from './database.service';
 import { BehaviorSubject, Observable } from 'rxjs';
-import { ElectronStoreService } from './electron-store.service';
 import { ElectronService } from '../core/services';
 import { ConnectionParams } from '../interfaces/connection-params.interface';
 
@@ -106,14 +105,14 @@ export class InterfaceService {
     connectionData.connectionAttemptStatusSubject.next(true);
 
     if (connectionParams.connectionMode === 'tcpserver') {
-      that.logger('info', 'Listening for connection on port ' + connectionParams.port);
+      that.logger('info', 'Listening for connection on port ' + connectionParams.port, connectionData.instrumentId);
       connectionData.connectionServer = that.net.createServer();
       connectionData.connectionServer.listen(connectionParams.port);
 
       const sockets = [];
       connectionData.connectionServer.on('connection', function (socket) {
         // confirm socket connection from client
-        that.logger('info', (new Date()) + ' : A remote client has connected to the Interfacing Server');
+        that.logger('info', (new Date()) + ' : A remote client has connected to the Interfacing Server', connectionData.instrumentId);
 
         sockets.push(socket);
         that.socketClient = socket;
@@ -139,12 +138,12 @@ export class InterfaceService {
 
 
       connectionData.connectionServer.on('error', function (e) {
-        that.logger('error', 'Error while connecting ' + e.code);
+        that.logger('error', 'Error while connecting ' + e.code, connectionData.instrumentId);
         that.disconnect(connectionParams.host, connectionParams.port);
 
         if (connectionParams.interfaceAutoConnect === 'yes') {
           connectionData.connectionAttemptStatusSubject.next(true);
-          that.logger('error', "Interface AutoConnect is enabled: Will re-attempt connection in 30 seconds");
+          that.logger('error', "Interface AutoConnect is enabled: Will re-attempt connection in 30 seconds", connectionData.instrumentId);
           setTimeout(() => {
             that.reconnect(connectionParams);
           }, 30000);
@@ -163,11 +162,11 @@ export class InterfaceService {
       // since this is a CLIENT connection, we don't need a server object, so we set it to null
       connectionData.connectionServer = null;
 
-      that.logger('info', 'Trying to connect as client');
+      that.logger('info', 'Trying to connect as client', connectionData.instrumentId);
 
       connectionData.connectionSocket.connect(that.connectopts, function () {
         connectionData.statusSubject.next(true);
-        that.logger('success', 'Connected as client successfully');
+        that.logger('success', 'Connected as client successfully', connectionData.instrumentId);
       });
 
       connectionData.connectionSocket.on('data', function (data) {
@@ -179,7 +178,7 @@ export class InterfaceService {
         that.disconnect(connectionParams.host, connectionParams.port);
         if (connectionParams.interfaceAutoConnect === 'yes') {
           connectionData.connectionAttemptStatusSubject.next(true);
-          that.logger('error', "Interface AutoConnect is enabled: Will re-attempt connection in 30 seconds");
+          that.logger('error', "Interface AutoConnect is enabled: Will re-attempt connection in 30 seconds", connectionData.instrumentId);
           setTimeout(() => {
             that.reconnect(connectionParams);
           }, 30000);
@@ -193,7 +192,7 @@ export class InterfaceService {
 
         if (connectionParams.interfaceAutoConnect === 'yes') {
           connectionData.connectionAttemptStatusSubject.next(true);
-          that.logger('error', "Interface AutoConnect is enabled: Will re-attempt connection in 30 seconds");
+          that.logger('error', "Interface AutoConnect is enabled: Will re-attempt connection in 30 seconds", connectionData.instrumentId);
           setTimeout(() => {
             that.reconnect(connectionParams);
           }, 30000);
@@ -224,11 +223,11 @@ export class InterfaceService {
 
       if (connectionData.connectionMode === 'tcpclient' && connectionData.connectionSocket) {
         connectionData.connectionSocket.destroy();
-        that.logger('info', 'Client Disconnected');
+        that.logger('info', 'Client Disconnected', connectionData.instrumentId);
 
       } else if (connectionData.connectionMode === 'tcpserver' && connectionData.connectionServer) {
         connectionData.connectionServer.close();
-        that.logger('info', 'Server Stopped');
+        that.logger('info', 'Server Stopped', connectionData.instrumentId);
       }
     }
 
@@ -374,12 +373,12 @@ export class InterfaceService {
 
         if (order.results) {
           that.dbService.addOrderTest(order, (res) => {
-            that.logger('success', 'Successfully saved result : ' + order.test_id);
+            that.logger('success', 'Successfully saved result : ' + order.test_id, connectionData.instrumentId);
           }, (err) => {
-            that.logger('error', 'Failed to save result : ' + order.test_id + ' ' + JSON.stringify(err));
+            that.logger('error', 'Failed to save result : ' + order.test_id + ' ' + JSON.stringify(err), connectionData.instrumentId);
           });
         } else {
-          that.logger('error', 'Failed to store data into the database');
+          that.logger('error', 'Failed to store data into the database', connectionData.instrumentId);
         }
       });
     });
@@ -479,12 +478,12 @@ export class InterfaceService {
 
         if (order.results) {
           that.dbService.addOrderTest(order, (res) => {
-            that.logger('success', 'Successfully saved result : ' + order.test_id);
+            that.logger('success', 'Successfully saved result : ' + order.test_id, connectionData.instrumentId);
           }, (err) => {
-            that.logger('error', 'Failed to save result : ' + order.test_id + ' ' + JSON.stringify(err));
+            that.logger('error', 'Failed to save result : ' + order.test_id + ' ' + JSON.stringify(err), connectionData.instrumentId);
           });
         } else {
-          that.logger('error', 'Failed to store data into the database');
+          that.logger('error', 'Failed to store data into the database', connectionData.instrumentId);
         }
       });
     });
@@ -580,12 +579,12 @@ export class InterfaceService {
 
         if (order.results) {
           that.dbService.addOrderTest(order, (res) => {
-            that.logger('success', 'Successfully saved result : ' + order.test_id);
+            that.logger('success', 'Successfully saved result : ' + order.test_id, connectionData.instrumentId);
           }, (err) => {
-            that.logger('error', 'Failed to save result : ' + order.test_id + ' ' + JSON.stringify(err));
+            that.logger('error', 'Failed to save result : ' + order.test_id + ' ' + JSON.stringify(err), connectionData.instrumentId);
           });
         } else {
-          that.logger('error', 'Failed to store data into the database');
+          that.logger('error', 'Failed to store data into the database', connectionData.instrumentId);
         }
       });
 
@@ -611,15 +610,15 @@ export class InterfaceService {
 
   private receiveASTM(astmProtocolType: string, connectionData: ConnectionData, data: Buffer) {
     let that = this;
-    that.logger('info', 'Receiving ' + astmProtocolType);
+    that.logger('info', 'Receiving ' + astmProtocolType, connectionData.instrumentId);
 
     const hexData = data.toString('hex');
 
     if (hexData === that.EOT) {
       connectionData.connectionSocket.write(that.ACK);
-      that.logger('info', 'Received EOT. Sending ACK.');
-      that.logger('info', 'Processing ' + astmProtocolType);
-      that.logger('info', 'Data ' + that.strData);
+      that.logger('info', 'Received EOT. Sending ACK.', connectionData.instrumentId);
+      that.logger('info', 'Processing ' + astmProtocolType, connectionData.instrumentId);
+      that.logger('info', 'Data ' + that.strData, connectionData.instrumentId);
 
       const rawData: RawData = {
         data: that.strData,
@@ -627,9 +626,9 @@ export class InterfaceService {
       };
 
       that.dbService.addRawData(rawData, (res) => {
-        that.logger('success', 'Successfully saved raw data');
+        that.logger('success', 'Successfully saved raw data', connectionData.instrumentId);
       }, (err) => {
-        that.logger('error', 'Failed to save raw data : ' + JSON.stringify(err));
+        that.logger('error', 'Failed to save raw data : ' + JSON.stringify(err), connectionData.instrumentId);
       });
 
       switch (astmProtocolType) {
@@ -646,8 +645,8 @@ export class InterfaceService {
       that.strData = "";
     } else if (hexData === that.NAK) {
       connectionData.connectionSocket.write(that.ACK);
-      that.logger('error', 'NAK Received');
-      that.logger('info', 'Sending ACK');
+      that.logger('error', 'NAK Received', connectionData.instrumentId);
+      that.logger('info', 'Sending ACK', connectionData.instrumentId);
     } else {
       let text = that.hex2ascii(hexData);
       const regex = /^\d*H/;
@@ -655,34 +654,34 @@ export class InterfaceService {
         text = '##START##' + text;
       }
       that.strData += text;
-      that.logger('info', 'Receiving....' + text);
+      that.logger('info', 'Receiving....' + text, connectionData.instrumentId);
       connectionData.connectionSocket.write(that.ACK);
-      that.logger('info', 'Sending ACK');
+      that.logger('info', 'Sending ACK', connectionData.instrumentId);
     }
   }
 
   private receiveHL7(connectionData: ConnectionData, data: Buffer) {
     let that = this;
-    that.logger('info', 'Receiving HL7 data');
+    that.logger('info', 'Receiving HL7 data', connectionData.instrumentId);
     const hl7Text = that.hex2ascii(data.toString('hex'));
     that.strData += hl7Text;
 
-    that.logger('info', hl7Text);
+    that.logger('info', hl7Text, connectionData.instrumentId);
 
     // If there is a File Separator or 1C or ASCII 28 character,
     // it means the stream has ended and we can proceed with saving this data
     if (that.strData.includes('\x1c')) {
       // Let us store this Raw Data before we process it
 
-      that.logger('info', 'Received File Separator Character. Ready to process HL7 data');
+      that.logger('info', 'Received File Separator Character. Ready to process HL7 data', connectionData.instrumentId);
       const rData: any = {};
       rData.data = that.strData;
       rData.machine = connectionData.instrumentId;
 
       that.dbService.addRawData(rData, (res) => {
-        that.logger('success', 'Successfully saved raw data');
+        that.logger('success', 'Successfully saved raw data', connectionData.instrumentId);
       }, (err) => {
-        that.logger('error', 'Failed to save raw data ' + JSON.stringify(err));
+        that.logger('error', 'Failed to save raw data ' + JSON.stringify(err), connectionData.instrumentId);
       });
 
       that.strData = that.strData.replace(/[\x0b\x1c]/g, '');
@@ -759,13 +758,13 @@ export class InterfaceService {
 
   processASTMElecsysData(connectionData: ConnectionData, astmData: string) {
 
-    //that.logger('info', astmData);
+    //that.logger('info', astmData, connectionData.instrumentId);
 
     const that = this;
     const fullDataArray = astmData.split('##START##');
 
-    // that.logger('info', "AFTER SPLITTING USING ##START##");
-    // that.logger('info', fullDataArray);
+    // that.logger('info', "AFTER SPLITTING USING ##START##", connectionData.instrumentId);
+    // that.logger('info', fullDataArray, connectionData.instrumentId);
 
 
     fullDataArray.forEach(function (partData) {
@@ -791,11 +790,11 @@ export class InterfaceService {
         });
 
 
-        //that.logger('info', dataArray);
-        //that.logger('info',dataArray['R']);
+        //that.logger('info', dataArray, connectionData.instrumentId);
+        //that.logger('info',dataArray['R'], connectionData.instrumentId);
 
         if (dataArray === null || dataArray === undefined || dataArray['R'] === undefined) {
-          that.logger('info', 'No data received');
+          that.logger('info', 'No data received', connectionData.instrumentId);
           return;
         }
 
@@ -847,20 +846,20 @@ export class InterfaceService {
             order.machine_used = connectionData.instrumentId;
 
             if (order.order_id) {
-              that.logger('info', "Trying to add order :" + JSON.stringify(order));
+              that.logger('info', "Trying to add order :" + JSON.stringify(order), connectionData.instrumentId);
               that.dbService.addOrderTest(order, (res) => {
-                that.logger('success', 'Successfully saved result : ' + order.order_id);
+                that.logger('success', 'Successfully saved result : ' + order.order_id, connectionData.instrumentId);
               }, (err) => {
-                that.logger('error', 'Failed to save : ' + JSON.stringify(err));
+                that.logger('error', 'Failed to save : ' + JSON.stringify(err), connectionData.instrumentId);
               });
             } else {
-              that.logger('error', "Failed to save :" + JSON.stringify(order));
+              that.logger('error', "Failed to save :" + JSON.stringify(order), connectionData.instrumentId);
             }
           }
         }
 
         catch (error) {
-          that.logger('error', error);
+          that.logger('error', error, connectionData.instrumentId);
           console.error(error);
           return;
         }
@@ -873,7 +872,7 @@ export class InterfaceService {
         //        || dataArray['R'][2] == '') return;
 
       } else {
-        that.logger('error', "Failed to save :" + JSON.stringify(astmData));
+        that.logger('error', "Failed to save :" + JSON.stringify(astmData), connectionData.instrumentId);
       }
     });
 
@@ -881,7 +880,7 @@ export class InterfaceService {
 
   processASTMConcatenatedData(connectionData: ConnectionData, astmData: string) {
 
-    //this.logger('info', astmData);
+    //this.logger('info', astmData, connectionData.instrumentId);
 
     const that = this;
     astmData = astmData.replace(/[\x05]/g, '');
@@ -899,8 +898,8 @@ export class InterfaceService {
 
     const fullDataArray = astmData.split('##START##');
 
-    // that.logger('info', "AFTER SPLITTING USING ##START##");
-    // that.logger('info', fullDataArray);
+    // that.logger('info', "AFTER SPLITTING USING ##START##", connectionData.instrumentId);
+    // that.logger('info', fullDataArray, connectionData.instrumentId);
 
     fullDataArray.forEach(function (partData) {
 
@@ -925,11 +924,11 @@ export class InterfaceService {
 
 
         //console.log("=== CHOTOA ===");
-        //that.logger('info', dataArray);
+        //that.logger('info', dataArray, connectionData.instrumentId);
         //that.logger('info',dataArray['R']);
 
         if (dataArray === null || dataArray === undefined || dataArray['R'] === undefined) {
-          that.logger('info', 'dataArray blank');
+          that.logger('info', 'No data received.', connectionData.instrumentId);
           return;
         }
 
@@ -979,20 +978,20 @@ export class InterfaceService {
             order.machine_used = connectionData.instrumentId;
 
             if (order.order_id) {
-              that.logger('info', "Trying to add order :" + JSON.stringify(order));
+              that.logger('info', "Trying to add order :" + JSON.stringify(order), connectionData.instrumentId);
               that.dbService.addOrderTest(order, (res) => {
-                that.logger('success', 'Successfully saved result : ' + order.order_id);
+                that.logger('success', 'Successfully saved result : ' + order.order_id, connectionData.instrumentId);
               }, (err) => {
-                that.logger('error', 'Failed to save : ' + JSON.stringify(err));
+                that.logger('error', 'Failed to save : ' + JSON.stringify(err), connectionData.instrumentId);
               });
             } else {
-              that.logger('error', "Failed to save :" + JSON.stringify(order));
+              that.logger('error', "Failed to save :" + JSON.stringify(order), connectionData.instrumentId);
             }
           }
         }
 
         catch (error) {
-          that.logger('error', error);
+          that.logger('error', error, connectionData.instrumentId);
           console.error(error);
           return;
 
@@ -1055,10 +1054,14 @@ export class InterfaceService {
   }
 
 
-  logger(logType, message) {
+  logger(logType, message, instrumentId = null) {
     const that = this;
     const moment = require('moment');
     const date = moment(new Date()).format('DD-MMM-YYYY HH:mm:ss');
+    let logFor = ' [' + date + '] ';
+    if (instrumentId) {
+      logFor = ' [' + instrumentId + '] ' + ' [' + date + '] ';
+    }
 
     let logMessage = '';
 
@@ -1066,13 +1069,13 @@ export class InterfaceService {
 
     if (logType === 'info') {
       that.log.info(message);
-      logMessage = '<span class="text-info">[info]</span> [' + date + '] ' + message + '<br>';
+      logMessage = '<span class="text-info">[info]</span> ' + logFor + message + '<br>';
     } else if (logType === 'error') {
       that.log.error(message);
-      logMessage = '<span class="text-danger">[error]</span> [' + date + '] ' + message + '<br>';
+      logMessage = '<span class="text-danger">[error]</span> ' + logFor + message + '<br>';
     } else if (logType === 'success') {
       that.log.info(message);
-      logMessage = '<span class="text-success">[success]</span> [' + date + '] ' + message + '<br>';
+      logMessage = '<span class="text-success">[success]</span> ' + logFor + message + '<br>';
     }
 
     //that.logtext[that.logtext.length] = logMessage;
