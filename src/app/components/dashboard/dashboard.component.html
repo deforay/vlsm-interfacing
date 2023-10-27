@@ -75,11 +75,11 @@
     <span style="padding-right:10px;" *ngIf="lastLimsSync"><strong>Last LIS Sync on :</strong> {{lastLimsSync}}</span>
     <span style="padding-right:10px;" *ngIf="lastResultReceived"><strong>Last Instrument Result Received on :</strong>
       {{lastResultReceived}}</span>
-    <a (click)="copyLog()" class="btn btn-outline-secondary btn-sm" style="float:right;margin-left:20px;">
+    <a (click)="copyLog()" class="btn btn-outline-primary btn-sm" style="float:right;margin-left:20px;">
       <i class="fa fa-copy"></i>
       <span>Copy Log</span>
     </a>
-    <a (click)="clearLiveLog()" class="btn btn-outline-primary btn-sm" style="float:right;">
+    <a (click)="clearLiveLog()" class="btn btn-outline-danger btn-sm" style="float:right;">
       <i class="fa fa-trash"></i>
       <span>Clear Log</span>
     </a>

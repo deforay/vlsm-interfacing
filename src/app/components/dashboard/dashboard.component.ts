@@ -119,7 +119,7 @@ export class DashboardComponent implements OnInit {
   }
   reconnect(instrument: any) {
     const that = this;
-    that.interfaceService.reconnect(instrument.connectionParams);
+    that.interfaceService.connect(instrument.connectionParams);
     that.interfaceService.getStatusObservable(instrument.connectionParams.host, instrument.connectionParams.port).subscribe(status => {
       that._ngZone.run(() => {
         instrument.isConnected = status;
