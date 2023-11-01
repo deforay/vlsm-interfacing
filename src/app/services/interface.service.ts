@@ -78,12 +78,12 @@ export class InterfaceService {
       const statusSubject = new BehaviorSubject(false);
       // Subscribe to the BehaviorSubject
       statusSubject.subscribe(value => {
-        console.log(connectionParams.instrumentId + ' statusSubject::::::::' + value);
+        console.error(connectionParams.instrumentId + ' statusSubject ===> ' + value);
       });
       const connectionAttemptStatusSubject = new BehaviorSubject(false);
       // Subscribe to the BehaviorSubject
       connectionAttemptStatusSubject.subscribe(value => {
-        console.log(connectionParams.instrumentId + ' connectionAttemptStatusSubject::::::::' + value);
+        console.error(connectionParams.instrumentId + ' connectionAttemptStatusSubject ===> ' + value);
       });
 
       connectionData = {
@@ -145,7 +145,7 @@ export class InterfaceService {
           connectionData.connectionAttemptStatusSubject.next(true);
           that.logger('error', "Interface AutoConnect is enabled: Will re-attempt connection in 30 seconds", connectionData.instrumentId);
           setTimeout(() => {
-            that.reconnect(connectionParams);
+            that.connect(connectionParams);
           }, 30000);
         }
 
@@ -180,7 +180,7 @@ export class InterfaceService {
           connectionData.connectionAttemptStatusSubject.next(true);
           that.logger('error', "Interface AutoConnect is enabled: Will re-attempt connection in 30 seconds", connectionData.instrumentId);
           setTimeout(() => {
-            that.reconnect(connectionParams);
+            that.connect(connectionParams);
           }, 30000);
         }
 
@@ -194,7 +194,7 @@ export class InterfaceService {
           connectionData.connectionAttemptStatusSubject.next(true);
           that.logger('error', "Interface AutoConnect is enabled: Will re-attempt connection in 30 seconds", connectionData.instrumentId);
           setTimeout(() => {
-            that.reconnect(connectionParams);
+            that.connect(connectionParams);
           }, 30000);
         }
 
@@ -205,10 +205,14 @@ export class InterfaceService {
 
   }
 
-  reconnect(connectionParams: ConnectionParams) {
+  sleep(ms) {
+    return new Promise(resolve => setTimeout(resolve, ms));
+  }
+
+  reconnect(connectionParams: ConnectionParams, connectInSeconds = 0) {
     let that = this;
     that.disconnect(connectionParams.host, connectionParams.port);
-    that.connect(connectionParams)
+    that.connect(connectionParams);
   }
 
   disconnect(host: string, port: number) {
@@ -922,8 +926,6 @@ export class InterfaceService {
           }
         });
 
-
-        //console.log("=== CHOTOA ===");
         //that.logger('info', dataArray, connectionData.instrumentId);
         //that.logger('info',dataArray['R']);
 
@@ -1004,6 +1006,8 @@ export class InterfaceService {
         //        || dataArray['R'][2] == undefined || dataArray['R'][2] == null
         //        || dataArray['R'][2] == '') return;
 
+      } else {
+        that.logger('error', "Failed to save :" + JSON.stringify(astmData), connectionData.instrumentId);
       }
     });
 
@@ -1058,9 +1062,9 @@ export class InterfaceService {
     const that = this;
     const moment = require('moment');
     const date = moment(new Date()).format('DD-MMM-YYYY HH:mm:ss');
-    let logFor = ' [' + date + '] ';
+    let logFor = ` [${date}] `;
     if (instrumentId) {
-      logFor = ' [' + instrumentId + '] ' + ' [' + date + '] ';
+      logFor = ` [${instrumentId}]  [${date}] `;
     }
 
     let logMessage = '';
@@ -1068,15 +1072,16 @@ export class InterfaceService {
     that.log.transports.file.fileName = `${moment().format('YYYY-MM-DD')}.log`;
 
     if (logType === 'info') {
-      that.log.info(message);
-      logMessage = '<span class="text-info">[info]</span> ' + logFor + message + '<br>';
+      this.log.info(message);
+      logMessage = `<span class="text-info">[info]</span> ${logFor}${message}<br>`;
     } else if (logType === 'error') {
-      that.log.error(message);
-      logMessage = '<span class="text-danger">[error]</span> ' + logFor + message + '<br>';
+      this.log.error(message);
+      logMessage = `<span class="text-danger">[error]</span> ${logFor}${message}<br>`;
     } else if (logType === 'success') {
-      that.log.info(message);
-      logMessage = '<span class="text-success">[success]</span> ' + logFor + message + '<br>';
+      this.log.info(message);
+      logMessage = `<span class="text-success">[success]</span> ${logFor}${message}<br>`;
     }
+
 
     //that.logtext[that.logtext.length] = logMessage;
     that.logtext.unshift(logMessage);
