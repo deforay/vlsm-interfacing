@@ -60,7 +60,7 @@ export class DashboardComponent implements OnInit {
           interfaceAutoConnect: that.commonSettings.interfaceAutoConnect
         };
 
-        if (null === that.commonSettings || undefined === that.commonSettings || !instrument.connectionParams.port || !instrument.connectionParams.connectionProtocol || !instrument.connectionParams.host) {
+        if (null === that.commonSettings || undefined === that.commonSettings || !instrument.connectionParams.port || (instrument.connectionParams.connectionProtocol === 'tcpclient' && !instrument.connectionParams.host)) {
           that.router.navigate(['/settings']);
         }
 
