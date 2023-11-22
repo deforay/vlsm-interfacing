@@ -92,16 +92,21 @@ export class SettingsComponent implements OnInit {
     return duplicates;
   }
 
+
   onConnectionModeChange(index: number, event: Event): void {
-    const selectElement = event.target as HTMLSelectElement;
-    const connectionMode = selectElement.value;
-    if (connectionMode === 'tcpserver') {
-      this.instrumentsSettings.at(index).get('analyzerMachineHost').setValue(this.getMachineIp());
-      this.instrumentsSettings.at(index).get('analyzerMachineHost').disable();
-    } else {
-      this.instrumentsSettings.at(index).get('analyzerMachineHost').enable();
-    }
+    // const selectElement = event.target as HTMLSelectElement;
+    // const connectionMode = selectElement.value;
+    // if (connectionMode === 'tcpserver') {
+    //   // Get the system's IP address and set it as analyzerMachineHost
+    //   //const systemIp = this.getMachineIp();
+    //   this.instrumentsSettings.at(index).get('analyzerMachineHost').setValue('');
+    //   this.instrumentsSettings.at(index).get('analyzerMachineHost').disable();
+    // } else {
+    //   // Enable the field to allow manual input when the connection mode is not tcpserver
+    //   this.instrumentsSettings.at(index).get('analyzerMachineHost').enable();
+    // }
   }
+
 
 
 

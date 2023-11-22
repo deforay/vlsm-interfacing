@@ -145,7 +145,7 @@
                     </div>
 
                     <div class="form-group col col-sm-6">
-                      <label for="analyzerMachineHost" class="col-form-label-sm">Instrument IP Address</label>
+                      <label for="analyzerMachineHost" class="col-form-label-sm">Server IP Address</label>
                       <input type="text" formControlName="analyzerMachineHost" class="form-control form-control-sm"
                         placeholder="eg. 198.1.1.1" required
                         [readonly]="instrument.get('interfaceConnectionMode').value === 'tcpserver'" />
@@ -157,7 +157,7 @@
                     </div>
 
                     <div class="form-group col col-sm-6">
-                      <label for="analyzerMachinePort" class="col-form-label-sm">Instrument Port number</label>
+                      <label for="analyzerMachinePort" class="col-form-label-sm">Server Port number</label>
                       <input type="text" formControlName="analyzerMachinePort" class="form-control form-control-sm"
                         placeholder="eg. 3120" required />
                       <div *ngIf="instrument.hasError('duplicateIpPort')" class="error-text">Duplicate IP Port
