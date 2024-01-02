@@ -94,8 +94,6 @@ export class DatabaseService {
     }
   }
 
-
-
   addOrderTest(data, success, errorf) {
     const t = 'INSERT INTO orders (' + Object.keys(data).join(',') + ') VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)';
     if (this.mysqlPool != null) {
