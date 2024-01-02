@@ -55,54 +55,46 @@ export class DatabaseService {
     }
   }
 
-  execQuery(query, data, success, errorf) {
+  execQuery(query, data, success, errorf, callback = null) {
     if (this.mysqlPool != null) {
       this.mysqlPool.getConnection((err, connection) => {
         if (err) {
-          try {
-            connection.release();
-          } catch (ex) { }
           errorf(err);
           return;
         }
 
-        connection.query({ sql: query }, data, (errors, results, fields) => {
-          if (!errors) {
-            success(results);
-            connection.release();
-          } else {
-            errorf(errors);
-            connection.release();
+        if (!connection) {
+          errorf(new Error('Failed to acquire connection'));
+          return;
+        }
+
+        const sql = connection.query({ sql: query }, data);
+
+        sql.on('result', (result) => {
+          success(result);
+          if (!callback) {
+            connection.release(); // Release connection immediately if no callback
           }
         });
 
-      });
-    } else {
-      errorf({ error: 'Please check your database connection' });
-    }
-  }
-  execWithCallback(query, data, success, errorf, callback) {
-    if (this.mysqlPool != null) {
-      this.mysqlPool.getConnection((err, connection) => {
-        if (err) {
-          try {
-            connection.release();
-          } catch (ex) { }
+        sql.on('error', (err) => {
           errorf(err);
-          return;
-        }
-        const sql = connection.query({ sql: query }, data);
-        sql.on('result', (result, index) => { success(result); });
-        sql.on('error', (err) => { connection.destroy(); errorf(err) });
+          connection.release();
+        });
+
         sql.on('end', () => {
-          if (callback != null) { callback(); }
-          if (connection) { connection.destroy(); }
+          if (callback) {
+            callback();
+            connection.release(); // Release connection after callback execution
+          }
         });
       });
     } else {
-      errorf({ error: 'database not found' });
+      errorf({ error: 'Database not found' });
     }
   }
+
+
 
   addOrderTest(data, success, errorf) {
     const t = 'INSERT INTO orders (' + Object.keys(data).join(',') + ') VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)';
