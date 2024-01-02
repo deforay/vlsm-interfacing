@@ -27,7 +27,10 @@ export class DatabaseService {
     if (this.commonSettings && this.commonSettings.mysqlHost && this.commonSettings.mysqlUser && this.commonSettings.mysqlDb) {
 
       this.dbConfig = {
-        connectionLimit: 100,
+        connectionLimit: 10,
+        waitForConnections: true, // Whether to wait for a connection to become available
+        queueLimit: 0, // Max number of connection requests to queue (0 for no limit)
+        acquireTimeout: 10000, // Time in ms to wait for a connection before throwing an error
         host: this.commonSettings.mysqlHost,
         user: this.commonSettings.mysqlUser,
         password: this.commonSettings.mysqlPassword,
