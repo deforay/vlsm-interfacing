@@ -32,7 +32,7 @@ export class DatabaseService {
         queueLimit: 0, // Max number of connection requests to queue (0 for no limit)
         acquireTimeout: 10000, // 10 seconds to acquire a connection
         connectTimeout: 10000, // 10 seconds to establish a connection
-        timeout: 3600, // 1 hour for interactive and wait timeouts
+        timeout: 600, // 10 minutes for idle connections in the pool
         host: this.commonSettings.mysqlHost,
         user: this.commonSettings.mysqlUser,
         password: this.commonSettings.mysqlPassword,
@@ -45,9 +45,10 @@ export class DatabaseService {
 
       this.mysqlPool.on('connection', (connection) => {
         connection.query("SET SESSION sql_mode=(SELECT REPLACE(@@sql_mode, 'ONLY_FULL_GROUP_BY', ''))");
-        connection.query("SET SESSION INTERACTIVE_TIMEOUT=3600");
-        connection.query("SET SESSION WAIT_TIMEOUT=3600");
-        connection.query("SET SESSION MAX_EXECUTION_TIME=3600");
+        connection.query("SET SESSION INTERACTIVE_TIMEOUT=600");
+        connection.query("SET SESSION WAIT_TIMEOUT=600");
+        //connection.query("SET SESSION MAX_EXECUTION_TIME=600");
+        //connection.query("SET SESSION CONNECT_TIMEOUT=600");
       });
 
     } else {
@@ -56,43 +57,43 @@ export class DatabaseService {
   }
 
   execQuery(query, data, success, errorf, callback = null) {
-    if (this.mysqlPool != null) {
-      this.mysqlPool.getConnection((err, connection) => {
-        if (err) {
-          errorf(err);
-          return;
-        }
-
-        if (!connection) {
-          errorf(new Error('Failed to acquire connection'));
-          return;
-        }
-
-        const sql = connection.query({ sql: query }, data);
-
-        sql.on('result', (result) => {
-          success(result);
-          if (!callback) {
-            connection.release(); // Release connection immediately if no callback
-          }
-        });
-
-        sql.on('error', (err) => {
-          errorf(err);
-          connection.release();
-        });
-
-        sql.on('end', () => {
-          if (callback) {
-            callback();
-            connection.release(); // Release connection after callback execution
-          }
-        });
-      });
-    } else {
+    if (!this.mysqlPool) {
       errorf({ error: 'Database not found' });
+      return;
     }
+
+    this.mysqlPool.getConnection((err, connection) => {
+      if (err) {
+        errorf(err);
+        return;
+      }
+
+      connection.query({ sql: query }, data, (queryError, results) => {
+        if (queryError) {
+          connection.release();
+          errorf(queryError);
+          return;
+        }
+
+        // If a callback is provided, use it and let it handle the connection release
+        if (callback) {
+          callback(results, error => {
+            connection.release();
+            if (error) {
+              errorf(error);
+            } else {
+              success(results);
+            }
+          });
+        } else {
+          // If no callback, handle success and release the connection
+          success(results);
+          connection.release();
+        }
+      });
+    });
   }
+
 
   addOrderTest(data, success, errorf) {
     const t = 'INSERT INTO orders (' + Object.keys(data).join(',') + ') VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)';
