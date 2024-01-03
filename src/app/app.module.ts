@@ -20,7 +20,7 @@ import { DashboardComponent } from './components/dashboard/dashboard.component';
 import { DatabaseService } from './services/database.service';
 import { TcpConnectionService } from './services/tcp-connection.service';
 import { ElectronService } from './core/services';
-import { InterfaceService } from './services/interface.service';
+import { InstrumentInterfaceService } from './services/intrument-interface.service';
 import { ElectronStoreService } from './services/electron-store.service';
 
 // AoT requires an exported function for factories
@@ -48,7 +48,7 @@ const httpLoaderFactory = (http: HttpClient): TranslateHttpLoader => new Transla
   providers: [ElectronService,
     DatabaseService,
     TcpConnectionService,
-    InterfaceService,
+    InstrumentInterfaceService,
     ElectronStoreService],
   bootstrap: [AppComponent]
 })

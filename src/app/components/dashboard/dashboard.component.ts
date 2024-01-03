@@ -1,9 +1,9 @@
 import { Component, OnInit, NgZone } from '@angular/core';
 import { Router } from '@angular/router';
 import { ElectronStoreService } from '../../services/electron-store.service';
-import { InterfaceService } from '../../services/interface.service';
+import { InstrumentInterfaceService } from '../../services/intrument-interface.service';
+import { UtilitiesService } from '../../services/utilities.service';
 import { ConnectionParams } from '../../interfaces/connection-params.interface';
-//import { GeneXpertService } from '../../services/genexpert.service';
 
 @Component({
   selector: 'app-dashboard',
@@ -11,15 +11,11 @@ import { ConnectionParams } from '../../interfaces/connection-params.interface';
   styleUrls: ['./dashboard.component.scss']
 })
 export class DashboardComponent implements OnInit {
-  public isConnected = false;
   public commonSettings = null;
   public instrumentsSettings = null;
   public appVersion: string = null;
-  public connectionInProcess = false;
-  public reconnectButtonText = 'Connect';
   public lastLimsSync = '';
   public lastResultReceived = '';
-  public machineName = '';
   public interval: any;
   public lastOrders: any;
   public liveLogText = [];
@@ -29,11 +25,10 @@ export class DashboardComponent implements OnInit {
   public searchText: string = '';
   public filteredLogText: any = [];
 
-
-
   constructor(private store: ElectronStoreService,
     private _ngZone: NgZone,
-    public interfaceService: InterfaceService,
+    public interfaceService: InstrumentInterfaceService,
+    public utilitiesService: UtilitiesService,
     private router: Router) {
 
   }
@@ -60,6 +55,9 @@ export class DashboardComponent implements OnInit {
           interfaceAutoConnect: that.commonSettings.interfaceAutoConnect
         };
 
+        instrument.isConnected = false;
+        instrument.reconnectButtonText = 'Connect';
+
         if (null === that.commonSettings || undefined === that.commonSettings || !instrument.connectionParams.port || (instrument.connectionParams.connectionProtocol === 'tcpclient' && !instrument.connectionParams.host)) {
           that.router.navigate(['/settings']);
         }
@@ -71,7 +69,7 @@ export class DashboardComponent implements OnInit {
         }
       });
 
-      that.interfaceService.liveLog.subscribe(mesg => {
+      that.utilitiesService.liveLog.subscribe(mesg => {
         that._ngZone.run(() => {
           this.filteredLogText = that.liveLogText = mesg;
           this.filterLogs();
@@ -94,9 +92,9 @@ export class DashboardComponent implements OnInit {
 
   fetchLastOrders() {
     const that = this;
-    that.interfaceService.fetchLastOrders();
+    that.utilitiesService.fetchLastOrders();
 
-    that.interfaceService.fetchLastSyncTimes(function (data) {
+    that.utilitiesService.fetchLastSyncTimes(function (data) {
       that.lastLimsSync = data.lastLimsSync;
       that.lastResultReceived = data.lastResultReceived;
     });
@@ -110,12 +108,12 @@ export class DashboardComponent implements OnInit {
   }
 
   fetchRecentLogs() {
-    this.interfaceService.fetchRecentLogs();
+    this.utilitiesService.fetchRecentLogs();
   }
 
   clearLiveLog() {
     this.liveLogText = null;
-    this.interfaceService.clearLiveLog();
+    this.utilitiesService.clearLiveLog();
   }
   reconnect(instrument: any) {
     const that = this;
@@ -128,7 +126,7 @@ export class DashboardComponent implements OnInit {
 
     that.interfaceService.getConnectionAttemptObservable(instrument.connectionParams.host, instrument.connectionParams.port).subscribe(status => {
       that._ngZone.run(() => {
-        if (status === false) {
+        if (!status) {
           instrument.connectionInProcess = false;
           instrument.reconnectButtonText = 'Connect';
         } else {
@@ -138,7 +136,6 @@ export class DashboardComponent implements OnInit {
       });
     });
   }
-
 
   close(instrument: any) {
     this.interfaceService.disconnect(instrument.connectionParams.host, instrument.connectionParams.port);

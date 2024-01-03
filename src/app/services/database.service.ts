@@ -16,11 +16,11 @@ export class DatabaseService {
 
     this.store.getConfigObservable().subscribe(config => {
       this.commonSettings = config.commonConfig;
-      this.initOrUpdateDbConfig();
+      this.init();
     });
   }
 
-  private initOrUpdateDbConfig() {
+  private init() {
     const mysql = this.electronService.mysql;
 
     // Initialize mysql connection pool only if settings are available
