@@ -2,6 +2,7 @@ import { Component, OnInit } from '@angular/core';
 import { FormBuilder, FormGroup, FormArray, Validators, AbstractControl, ValidatorFn } from '@angular/forms';
 import { Router } from '@angular/router';
 import { ElectronService } from '../../core/services';
+import { UtilitiesService } from '../../services/utilities.service';
 import { ElectronStoreService } from '../../services/electron-store.service';
 import * as os from 'os';
 
@@ -20,7 +21,8 @@ export class SettingsComponent implements OnInit {
     private fb: FormBuilder,
     private electronService: ElectronService,
     private router: Router,
-    private store: ElectronStoreService
+    private store: ElectronStoreService,
+    private utilitiesService: UtilitiesService
   ) {
     const commonSettingsStore = this.store.get('commonConfig');
     const instrumentSettingsStore = this.store.get('instrumentsConfig');
@@ -163,16 +165,22 @@ export class SettingsComponent implements OnInit {
   }
 
   updateSettings(): void {
-    if (this.settingsForm.valid) {
-      const updatedSettings = this.settingsForm.value;
-      this.store.set('commonConfig', updatedSettings.commonSettings);
-      this.store.set('instrumentsConfig', updatedSettings.instrumentsSettings);
+    const that = this;
+    if (that.settingsForm.valid) {
+      const updatedSettings = that.settingsForm.value;
+      that.store.set('commonConfig', updatedSettings.commonSettings);
+      that.store.set('instrumentsConfig', updatedSettings.instrumentsSettings);
 
       new Notification('Success', {
         body: 'Updated Interface Tool settings'
       });
 
-      this.router.navigate(['/dashboard']);
+      that.utilitiesService.updateSettings({
+        commonConfig: updatedSettings.commonSettings,
+        instrumentsConfig: updatedSettings.instrumentsSettings,
+        appVersion: that.appVersion
+      });
+      that.router.navigate(['/dashboard']);
     } else {
       console.error('Form is not valid');
     }

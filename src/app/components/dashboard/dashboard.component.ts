@@ -1,4 +1,4 @@
-import { Component, OnInit, NgZone } from '@angular/core';
+import { Component, OnInit, NgZone, OnDestroy } from '@angular/core';
 import { Router } from '@angular/router';
 import { ElectronStoreService } from '../../services/electron-store.service';
 import { InstrumentInterfaceService } from '../../services/intrument-interface.service';
@@ -11,7 +11,7 @@ import { ConnectionParams } from '../../interfaces/connection-params.interface';
   templateUrl: './dashboard.component.html',
   styleUrls: ['./dashboard.component.scss']
 })
-export class DashboardComponent implements OnInit {
+export class DashboardComponent implements OnInit, OnDestroy {
   public commonSettings = null;
   public instrumentsSettings = null;
   public appVersion: string = null;
@@ -22,15 +22,15 @@ export class DashboardComponent implements OnInit {
   public liveLogText = [];
   public connectionParams: ConnectionParams = null;
   public selectedTabIndex = 0;
-  private configSubscription: any;
+  private settingsSubscription: any;
   public searchText: string = '';
   public filteredLogText: any = [];
 
   constructor(private store: ElectronStoreService,
     private _ngZone: NgZone,
-    public interfaceService: InstrumentInterfaceService,
-    public tcpService: TcpConnectionService,
-    public utilitiesService: UtilitiesService,
+    private interfaceService: InstrumentInterfaceService,
+    private tcpService: TcpConnectionService,
+    private utilitiesService: UtilitiesService,
     private router: Router) {
 
   }
@@ -39,55 +39,77 @@ export class DashboardComponent implements OnInit {
 
     const that = this;
 
-    this.configSubscription = this.store.getConfigObservable().subscribe(config => {
+    // Fetch initial settings if not already present
+    if (!this.commonSettings || !this.instrumentsSettings) {
+      const initialCommonSettings = this.store.get('commonConfig');
+      const initialInstrumentsSettings = this.store.get('instrumentsConfig');
+      const appVersion = this.store.get('appVersion');
 
-      that.commonSettings = config.commonConfig;
-      that.instrumentsSettings = config.instrumentsConfig;
-      that.appVersion = config.appVersion;
-
-      that.instrumentsSettings.forEach((instrument, index) => {
-        instrument.connectionParams = {
-          connectionMode: instrument.interfaceConnectionMode,
-          connectionProtocol: instrument.interfaceCommunicationProtocol,
-          host: instrument.analyzerMachineHost,
-          port: instrument.analyzerMachinePort,
-          instrumentId: instrument.analyzerMachineName,
-          machineType: instrument.analyzerMachineType,
-          labName: that.commonSettings.labName,
-          interfaceAutoConnect: that.commonSettings.interfaceAutoConnect
-        };
-
-        instrument.isConnected = false;
-        instrument.reconnectButtonText = 'Connect';
-
-        if (null === that.commonSettings || undefined === that.commonSettings || !instrument.connectionParams.port || (instrument.connectionParams.connectionProtocol === 'tcpclient' && !instrument.connectionParams.host)) {
-          that.router.navigate(['/settings']);
-        }
-
-        if (instrument.connectionParams.interfaceAutoConnect !== undefined && instrument.connectionParams.interfaceAutoConnect !== null && instrument.connectionParams.interfaceAutoConnect === 'yes') {
-          setTimeout(() => {
-            that.reconnect(instrument);
-          }, 1000);
-        }
-      });
-
-      that.utilitiesService.liveLog.subscribe(mesg => {
-        that._ngZone.run(() => {
-          this.filteredLogText = that.liveLogText = mesg;
-          this.filterLogs();
+      if (initialCommonSettings && initialInstrumentsSettings) {
+        // Update UtilitiesService with the initial settings
+        this.utilitiesService.updateSettings({
+          commonConfig: initialCommonSettings,
+          instrumentsConfig: initialInstrumentsSettings,
+          appVersion: appVersion
         });
+      } else {
+        // Handle the case where settings are not found
+        console.warn('Settings not found, redirecting to settings page');
+        this.router.navigate(['/settings']);
+      }
+    }
+
+    that.settingsSubscription = that.utilitiesService.settings$.subscribe(settings => {
+      that._ngZone.run(() => {
+
+        that.commonSettings = settings.commonConfig;
+        that.instrumentsSettings = settings.instrumentsConfig;
+        that.appVersion = settings.appVersion;
+
+        that.instrumentsSettings.forEach((instrument, index) => {
+          instrument.connectionParams = {
+            connectionMode: instrument.interfaceConnectionMode,
+            connectionProtocol: instrument.interfaceCommunicationProtocol,
+            host: instrument.analyzerMachineHost,
+            port: instrument.analyzerMachinePort,
+            instrumentId: instrument.analyzerMachineName,
+            machineType: instrument.analyzerMachineType,
+            labName: that.commonSettings.labName,
+            interfaceAutoConnect: that.commonSettings.interfaceAutoConnect
+          };
+
+          instrument.isConnected = false;
+          instrument.reconnectButtonText = 'Connect';
+
+          if (null === that.commonSettings || undefined === that.commonSettings || !instrument.connectionParams.port || (instrument.connectionParams.connectionProtocol === 'tcpclient' && !instrument.connectionParams.host)) {
+            that.router.navigate(['/settings']);
+          }
+
+          if (instrument.connectionParams.interfaceAutoConnect !== undefined && instrument.connectionParams.interfaceAutoConnect !== null && instrument.connectionParams.interfaceAutoConnect === 'yes') {
+            setTimeout(() => {
+              that.tcpService.reconnect(instrument);
+            }, 1000);
+          }
+        });
+
+        that.utilitiesService.liveLog.subscribe(mesg => {
+          that._ngZone.run(() => {
+            that.filteredLogText = that.liveLogText = mesg;
+            that.filterLogs();
+          });
+        });
+
+        setTimeout(() => {
+          // Let us fetch last few Orders and Logs on load
+          that.fetchLastOrders();
+          that.fetchRecentLogs();
+        }, 600);
+
+        // let us refresh last orders every 5 minutes
+        that.interval = setInterval(() => { that.fetchLastOrders(); }, 1000 * 60 * 5);
       });
 
-      setTimeout(() => {
-        // Let us fetch last few Orders and Logs on load
-        that.fetchLastOrders();
-        that.fetchRecentLogs();
-      }, 600);
-
-      // let us refresh last orders every 5 minutes
-      that.interval = setInterval(() => { that.fetchLastOrders(); }, 1000 * 60 * 5);
     });
-
   }
 
 
@@ -174,9 +196,8 @@ export class DashboardComponent implements OnInit {
 
   ngOnDestroy() {
     clearInterval(this.interval);
-    // Unsubscribe from the configuration observable to avoid memory leaks
-    if (this.configSubscription) {
-      this.configSubscription.unsubscribe();
+    if (this.settingsSubscription) {
+      this.settingsSubscription.unsubscribe(); // Unsubscribe to avoid memory leaks
     }
   }
 

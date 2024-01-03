@@ -19,12 +19,10 @@ export class InstrumentInterfaceService {
   protected NAK = '21';
 
   protected strData = '';
-  protected timer = null;
 
   constructor(public dbService: DatabaseService,
     public tcpService: TcpConnectionService,
     public utilitiesService: UtilitiesService) {
-
   }
 
   // Method used to connect to the Testing Machine

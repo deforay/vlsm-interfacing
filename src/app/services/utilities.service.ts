@@ -3,6 +3,12 @@ import { DatabaseService } from './database.service';
 import { BehaviorSubject, Observable } from 'rxjs';
 import { ElectronService } from '../core/services';
 
+interface Settings {
+  commonConfig: any;
+  instrumentsConfig: any;
+  appVersion: string;
+}
+
 @Injectable({
   providedIn: 'root'
 })
@@ -19,9 +25,18 @@ export class UtilitiesService {
   protected liveLogSubject = new BehaviorSubject([]);
   liveLog = this.liveLogSubject.asObservable();
 
+  private settingsSubject = new BehaviorSubject<Settings>({} as Settings);
+  settings$ = this.settingsSubject.asObservable();
+
+
   constructor(public electronService: ElectronService,
     public dbService: DatabaseService) {
     this.log = this.electronService.log;
+  }
+
+
+  updateSettings(newSettings: Settings) {
+    this.settingsSubject.next(newSettings);
   }
 
   sleep(ms) {

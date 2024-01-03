@@ -17,15 +17,8 @@ export class TcpConnectionService {
   public socketClient = null;
   public server = null;
   public net = null;
-  public hl7parser = require('hl7parser');
 
-  protected ACK = Buffer.from('06', 'hex');
-  protected EOT = '04';
-  protected NAK = '21';
-
-  protected strData = '';
   protected clientConnectionOptions: any = null;
-  protected timer = null;
 
   public connections: Map<string, InstrumentConnections> = new Map();
 
