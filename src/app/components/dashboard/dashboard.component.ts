@@ -3,6 +3,7 @@ import { Router } from '@angular/router';
 import { ElectronStoreService } from '../../services/electron-store.service';
 import { InstrumentInterfaceService } from '../../services/intrument-interface.service';
 import { UtilitiesService } from '../../services/utilities.service';
+import { TcpConnectionService } from '../../services/tcp-connection.service';
 import { ConnectionParams } from '../../interfaces/connection-params.interface';
 
 @Component({
@@ -28,6 +29,7 @@ export class DashboardComponent implements OnInit {
   constructor(private store: ElectronStoreService,
     private _ngZone: NgZone,
     public interfaceService: InstrumentInterfaceService,
+    public tcpService: TcpConnectionService,
     public utilitiesService: UtilitiesService,
     private router: Router) {
 
@@ -99,7 +101,7 @@ export class DashboardComponent implements OnInit {
       that.lastResultReceived = data.lastResultReceived;
     });
 
-    that.interfaceService.lastOrders.subscribe(lastFewOrders => {
+    that.utilitiesService.lastOrders.subscribe(lastFewOrders => {
       that._ngZone.run(() => {
         that.lastOrders = lastFewOrders[0];
       });
@@ -118,13 +120,14 @@ export class DashboardComponent implements OnInit {
   reconnect(instrument: any) {
     const that = this;
     that.interfaceService.connect(instrument.connectionParams);
-    that.interfaceService.getStatusObservable(instrument.connectionParams.host, instrument.connectionParams.port).subscribe(status => {
+    //that.tcpService.connect(instrument.connectionParams, that.interfaceService.handleTCPResponse);
+    that.tcpService.getStatusObservable(instrument.connectionParams.host, instrument.connectionParams.port).subscribe(status => {
       that._ngZone.run(() => {
         instrument.isConnected = status;
       });
     });
 
-    that.interfaceService.getConnectionAttemptObservable(instrument.connectionParams.host, instrument.connectionParams.port).subscribe(status => {
+    that.tcpService.getConnectionAttemptObservable(instrument.connectionParams.host, instrument.connectionParams.port).subscribe(status => {
       that._ngZone.run(() => {
         if (!status) {
           instrument.connectionInProcess = false;
@@ -138,7 +141,7 @@ export class DashboardComponent implements OnInit {
   }
 
   close(instrument: any) {
-    this.interfaceService.disconnect(instrument.connectionParams.host, instrument.connectionParams.port);
+    this.tcpService.disconnect(instrument.connectionParams.host, instrument.connectionParams.port);
   }
 
   selectTab(index: number): void {

@@ -1,42 +1,51 @@
 import { Injectable } from '@angular/core';
+import { DatabaseService } from './database.service';
 import { BehaviorSubject, Observable } from 'rxjs';
 import { ElectronService } from '../core/services';
 import { ConnectionParams } from '../interfaces/connection-params.interface';
 import { InstrumentConnections } from '../interfaces/intrument-connections.interface';
-
+import { UtilitiesService } from './utilities.service';
 
 @Injectable({
   providedIn: 'root'
 })
 
-
 export class TcpConnectionService {
 
   public connectionParams: ConnectionParams = null;
+  protected handleTCPCallback: (connectionKey: string, data: any) => void;
   public socketClient = null;
   public server = null;
   public net = null;
+  public hl7parser = require('hl7parser');
 
+  protected ACK = Buffer.from('06', 'hex');
+  protected EOT = '04';
+  protected NAK = '21';
+
+  protected strData = '';
   protected clientConnectionOptions: any = null;
+  protected timer = null;
 
-  private connections: Map<string, InstrumentConnections> = new Map();
+  public connections: Map<string, InstrumentConnections> = new Map();
 
-
-  constructor(private electronService: ElectronService) {
+  constructor(public electronService: ElectronService,
+    public dbService: DatabaseService,
+    public utilitiesService: UtilitiesService) {
     this.net = this.electronService.net;
   }
 
   // Method used to connect to the Testing Machine
-  connect(connectionParams: ConnectionParams,
-    handleTCPResponse: (connectionKey: string, data: any) => void) {
+  connect(connectionParams: ConnectionParams, handleTCPCallback: (connectionKey: string, data: any) => void) {
 
     const that = this;
+    that.handleTCPCallback = handleTCPCallback;
     let instrumentConnectionData: InstrumentConnections = null;
 
     const connectionKey = that._getKey(connectionParams.host, connectionParams.port);
 
-    if (this.connections.has(connectionKey)) {
-      instrumentConnectionData = this.connections.get(connectionKey);
+    if (that.connections.has(connectionKey)) {
+      instrumentConnectionData = that.connections.get(connectionKey);
     }
     else {
       const statusSubject = new BehaviorSubject(false);
@@ -62,26 +71,26 @@ export class TcpConnectionService {
         connectionServer: null
       };
 
-      this.connections.set(connectionKey, instrumentConnectionData);
+      that.connections.set(connectionKey, instrumentConnectionData);
 
     }
 
     instrumentConnectionData.connectionAttemptStatusSubject.next(true);
 
     if (connectionParams.connectionMode === 'tcpserver') {
-      that.logger('info', 'Listening for connection on port ' + connectionParams.port, instrumentConnectionData.instrumentId);
+      that.utilitiesService.logger('info', 'Listening for connection on port ' + connectionParams.port, instrumentConnectionData.instrumentId);
       instrumentConnectionData.connectionServer = that.net.createServer();
       instrumentConnectionData.connectionServer.listen(connectionParams.port);
 
       const sockets = [];
       instrumentConnectionData.connectionServer.on('connection', function (socket) {
         // confirm socket connection from client
-        that.logger('info', (new Date()) + ' : A remote client has connected to the Interfacing Server', instrumentConnectionData.instrumentId);
+        that.utilitiesService.logger('info', (new Date()) + ' : A remote client has connected to the Interfacing Server', instrumentConnectionData.instrumentId);
 
         sockets.push(socket);
         that.socketClient = socket;
         socket.on('data', function (data) {
-          handleTCPResponse(connectionKey, data);
+          that.handleTCPCallback(connectionKey, data);
         });
 
         instrumentConnectionData.connectionSocket = that.socketClient;
@@ -102,14 +111,14 @@ export class TcpConnectionService {
 
 
       instrumentConnectionData.connectionServer.on('error', function (e) {
-        that.logger('error', 'Error while connecting ' + e.code, instrumentConnectionData.instrumentId);
+        that.utilitiesService.logger('error', 'Error while connecting ' + e.code, instrumentConnectionData.instrumentId);
         that.disconnect(connectionParams.host, connectionParams.port);
 
         if (connectionParams.interfaceAutoConnect === 'yes') {
           instrumentConnectionData.connectionAttemptStatusSubject.next(true);
-          that.logger('error', "Interface AutoConnect is enabled: Will re-attempt connection in 30 seconds", instrumentConnectionData.instrumentId);
+          that.utilitiesService.logger('error', "Interface AutoConnect is enabled: Will re-attempt connection in 30 seconds", instrumentConnectionData.instrumentId);
           setTimeout(() => {
-            that.connect(connectionParams, handleTCPResponse);
+            that.connect(connectionParams, that.handleTCPCallback);
           }, 30000);
         }
 
@@ -126,39 +135,39 @@ export class TcpConnectionService {
       // since this is a CLIENT connection, we don't need a server object, so we set it to null
       instrumentConnectionData.connectionServer = null;
 
-      that.logger('info', 'Trying to connect as client', instrumentConnectionData.instrumentId);
+      that.utilitiesService.logger('info', 'Trying to connect as client', instrumentConnectionData.instrumentId);
 
       instrumentConnectionData.connectionSocket.connect(that.clientConnectionOptions, function () {
         instrumentConnectionData.statusSubject.next(true);
-        that.logger('success', 'Connected as client successfully', instrumentConnectionData.instrumentId);
+        that.utilitiesService.logger('success', 'Connected as client successfully', instrumentConnectionData.instrumentId);
       });
 
       instrumentConnectionData.connectionSocket.on('data', function (data) {
         instrumentConnectionData.statusSubject.next(true);
-        handleTCPResponse(connectionKey, data);
+        that.handleTCPCallback(connectionKey, data);
       });
 
       instrumentConnectionData.connectionSocket.on('close', function () {
         that.disconnect(connectionParams.host, connectionParams.port);
         if (connectionParams.interfaceAutoConnect === 'yes') {
           instrumentConnectionData.connectionAttemptStatusSubject.next(true);
-          that.logger('error', "Interface AutoConnect is enabled: Will re-attempt connection in 30 seconds", instrumentConnectionData.instrumentId);
+          that.utilitiesService.logger('error', "Interface AutoConnect is enabled: Will re-attempt connection in 30 seconds", instrumentConnectionData.instrumentId);
           setTimeout(() => {
-            that.connect(connectionParams, handleTCPResponse);
+            that.connect(connectionParams, that.handleTCPCallback);
           }, 30000);
         }
 
       });
 
       instrumentConnectionData.connectionSocket.on('error', (e) => {
-        that.logger('error', e);
+        that.utilitiesService.logger('error', e);
         that.disconnect(connectionParams.host, connectionParams.port);
 
         if (connectionParams.interfaceAutoConnect === 'yes') {
           instrumentConnectionData.connectionAttemptStatusSubject.next(true);
-          that.logger('error', "Interface AutoConnect is enabled: Will re-attempt connection in 30 seconds", instrumentConnectionData.instrumentId);
+          that.utilitiesService.logger('error', "Interface AutoConnect is enabled: Will re-attempt connection in 30 seconds", instrumentConnectionData.instrumentId);
           setTimeout(() => {
-            that.connect(connectionParams, handleTCPResponse);
+            that.connect(connectionParams, that.handleTCPCallback);
           }, 30000);
         }
 
@@ -169,55 +178,51 @@ export class TcpConnectionService {
 
   }
 
-  reconnect(connectionParams: ConnectionParams,
-    handleTCPResponse: (connectionKey: string, data: any) => void) {
+  reconnect(connectionParams: ConnectionParams, connectInSeconds = 0) {
     let that = this;
     that.disconnect(connectionParams.host, connectionParams.port);
-    that.connect(connectionParams, handleTCPResponse);
+    that.connect(connectionParams, that.handleTCPCallback);
   }
 
   disconnect(host: string, port: number) {
     const that = this;
     const connectionKey = that._getKey(host, port);
 
-    const connectionData = that.connections.get(connectionKey);
-    if (connectionData) {
+    const instrumentConnectionData = that.connections.get(connectionKey);
+    if (instrumentConnectionData) {
 
-      connectionData.statusSubject.next(false);
-      connectionData.connectionAttemptStatusSubject.next(false);
+      instrumentConnectionData.statusSubject.next(false);
+      instrumentConnectionData.connectionAttemptStatusSubject.next(false);
 
-      if (connectionData.connectionMode === 'tcpclient' && connectionData.connectionSocket) {
-        connectionData.connectionSocket.destroy();
-        that.logger('info', 'Client Disconnected');
+      if (instrumentConnectionData.connectionMode === 'tcpclient' && instrumentConnectionData.connectionSocket) {
+        instrumentConnectionData.connectionSocket.end();
+        instrumentConnectionData.connectionSocket.destroy();
+        that.utilitiesService.logger('info', 'Client Disconnected', instrumentConnectionData.instrumentId);
 
-      } else if (connectionData.connectionMode === 'tcpserver' && connectionData.connectionServer) {
-        connectionData.connectionServer.close();
-        that.logger('info', 'Server Stopped');
+      } else if (instrumentConnectionData.connectionMode === 'tcpserver' && instrumentConnectionData.connectionServer) {
+        instrumentConnectionData.connectionServer.close();
+        that.utilitiesService.logger('info', 'Server Stopped', instrumentConnectionData.instrumentId);
       }
     }
 
   }
 
 
-  logger(logType, message, instrumentId = null) {
 
-
-  }
-
-  _getKey(host: string, port: number): string {
+  private _getKey(host: string, port: number): string {
     return `${host}:${port}`;
   }
 
   getStatusObservable(host: string, port: number): Observable<boolean> {
     const connectionKey = this._getKey(host, port);
-    const connectionData = this.connections.get(connectionKey);
-    return connectionData.statusSubject.asObservable();
+    const instrumentConnectionData = this.connections.get(connectionKey);
+    return instrumentConnectionData.statusSubject.asObservable();
   }
 
   getConnectionAttemptObservable(host: string, port: number): Observable<boolean> {
     const connectionKey = this._getKey(host, port);
-    const connectionData = this.connections.get(connectionKey);
-    return connectionData.connectionAttemptStatusSubject.asObservable();
+    const instrumentConnectionData = this.connections.get(connectionKey);
+    return instrumentConnectionData.connectionAttemptStatusSubject.asObservable();
   }
 
 }

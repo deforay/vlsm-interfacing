@@ -1,11 +1,10 @@
 import { Injectable } from '@angular/core';
 import { DatabaseService } from './database.service';
-import { BehaviorSubject, Observable } from 'rxjs';
-import { ElectronService } from '../core/services';
 import { ConnectionParams } from '../interfaces/connection-params.interface';
 import { InstrumentConnections } from '../interfaces/intrument-connections.interface';
 import { RawMachineData } from '../interfaces/raw-machine-data.interface';
 import { UtilitiesService } from './utilities.service';
+import { TcpConnectionService } from './tcp-connection.service';
 
 @Injectable({
   providedIn: 'root'
@@ -13,10 +12,6 @@ import { UtilitiesService } from './utilities.service';
 
 export class InstrumentInterfaceService {
 
-  public connectionParams: ConnectionParams = null;
-  public socketClient = null;
-  public server = null;
-  public net = null;
   public hl7parser = require('hl7parser');
 
   protected ACK = Buffer.from('06', 'hex');
@@ -24,187 +19,22 @@ export class InstrumentInterfaceService {
   protected NAK = '21';
 
   protected strData = '';
-  protected clientConnectionOptions: any = null;
   protected timer = null;
 
-  private connections: Map<string, InstrumentConnections> = new Map();
-
-  constructor(public electronService: ElectronService,
-    public dbService: DatabaseService,
+  constructor(public dbService: DatabaseService,
+    public tcpService: TcpConnectionService,
     public utilitiesService: UtilitiesService) {
-    this.net = this.electronService.net;
+
   }
 
   // Method used to connect to the Testing Machine
   connect(connectionParams: ConnectionParams) {
-
     const that = this;
-    let instrumentConnectionData: InstrumentConnections = null;
-
-    const connectionKey = that._getKey(connectionParams.host, connectionParams.port);
-
-    if (this.connections.has(connectionKey)) {
-      instrumentConnectionData = this.connections.get(connectionKey);
-    }
-    else {
-      const statusSubject = new BehaviorSubject(false);
-      // Subscribe to the BehaviorSubject
-      statusSubject.subscribe(value => {
-        console.info(connectionParams.instrumentId + ' statusSubject ===> ' + value);
-      });
-      const connectionAttemptStatusSubject = new BehaviorSubject(false);
-      // Subscribe to the BehaviorSubject
-      connectionAttemptStatusSubject.subscribe(value => {
-        console.info(connectionParams.instrumentId + ' connectionAttemptStatusSubject ===> ' + value);
-      });
-
-      instrumentConnectionData = {
-        connectionMode: connectionParams.connectionMode,
-        connectionProtocol: connectionParams.connectionProtocol,
-        instrumentId: connectionParams.instrumentId,
-        labName: connectionParams.labName,
-        machineType: connectionParams.machineType,
-        statusSubject: statusSubject,
-        connectionAttemptStatusSubject: connectionAttemptStatusSubject,
-        connectionSocket: null,
-        connectionServer: null
-      };
-
-      this.connections.set(connectionKey, instrumentConnectionData);
-
-    }
-
-    instrumentConnectionData.connectionAttemptStatusSubject.next(true);
-
-    if (connectionParams.connectionMode === 'tcpserver') {
-      that.utilitiesService.logger('info', 'Listening for connection on port ' + connectionParams.port, instrumentConnectionData.instrumentId);
-      instrumentConnectionData.connectionServer = that.net.createServer();
-      instrumentConnectionData.connectionServer.listen(connectionParams.port);
-
-      const sockets = [];
-      instrumentConnectionData.connectionServer.on('connection', function (socket) {
-        // confirm socket connection from client
-        that.utilitiesService.logger('info', (new Date()) + ' : A remote client has connected to the Interfacing Server', instrumentConnectionData.instrumentId);
-
-        sockets.push(socket);
-        that.socketClient = socket;
-        socket.on('data', function (data) {
-          that.handleTCPResponse(connectionKey, data);
-        });
-
-        instrumentConnectionData.connectionSocket = that.socketClient;
-        instrumentConnectionData.statusSubject.next(true);
-
-        // Add a 'close' event handler to this instance of socket
-        socket.on('close', function (data) {
-          const index = sockets.findIndex(function (o) {
-            return o.host === socket.host && o.port === socket.port;
-          })
-          if (index !== -1) {
-            sockets.splice(index, 1);
-          }
-          console.log('CLOSED: ' + socket.host + ' ' + socket.host);
-        });
-
-      });
-
-
-      instrumentConnectionData.connectionServer.on('error', function (e) {
-        that.utilitiesService.logger('error', 'Error while connecting ' + e.code, instrumentConnectionData.instrumentId);
-        that.disconnect(connectionParams.host, connectionParams.port);
-
-        if (connectionParams.interfaceAutoConnect === 'yes') {
-          instrumentConnectionData.connectionAttemptStatusSubject.next(true);
-          that.utilitiesService.logger('error', "Interface AutoConnect is enabled: Will re-attempt connection in 30 seconds", instrumentConnectionData.instrumentId);
-          setTimeout(() => {
-            that.connect(connectionParams);
-          }, 30000);
-        }
-
-      });
-
-    } else if (connectionParams.connectionMode === 'tcpclient') {
-
-      instrumentConnectionData.connectionSocket = that.socketClient = new that.net.Socket();
-      that.clientConnectionOptions = {
-        port: connectionParams.port,
-        host: connectionParams.host
-      };
-
-      // since this is a CLIENT connection, we don't need a server object, so we set it to null
-      instrumentConnectionData.connectionServer = null;
-
-      that.utilitiesService.logger('info', 'Trying to connect as client', instrumentConnectionData.instrumentId);
-
-      instrumentConnectionData.connectionSocket.connect(that.clientConnectionOptions, function () {
-        instrumentConnectionData.statusSubject.next(true);
-        that.utilitiesService.logger('success', 'Connected as client successfully', instrumentConnectionData.instrumentId);
-      });
-
-      instrumentConnectionData.connectionSocket.on('data', function (data) {
-        instrumentConnectionData.statusSubject.next(true);
-        that.handleTCPResponse(connectionKey, data);
-      });
-
-      instrumentConnectionData.connectionSocket.on('close', function () {
-        that.disconnect(connectionParams.host, connectionParams.port);
-        if (connectionParams.interfaceAutoConnect === 'yes') {
-          instrumentConnectionData.connectionAttemptStatusSubject.next(true);
-          that.utilitiesService.logger('error', "Interface AutoConnect is enabled: Will re-attempt connection in 30 seconds", instrumentConnectionData.instrumentId);
-          setTimeout(() => {
-            that.connect(connectionParams);
-          }, 30000);
-        }
-
-      });
-
-      instrumentConnectionData.connectionSocket.on('error', (e) => {
-        that.utilitiesService.logger('error', e);
-        that.disconnect(connectionParams.host, connectionParams.port);
-
-        if (connectionParams.interfaceAutoConnect === 'yes') {
-          instrumentConnectionData.connectionAttemptStatusSubject.next(true);
-          that.utilitiesService.logger('error', "Interface AutoConnect is enabled: Will re-attempt connection in 30 seconds", instrumentConnectionData.instrumentId);
-          setTimeout(() => {
-            that.connect(connectionParams);
-          }, 30000);
-        }
-
-      });
-    } else {
-
-    }
-
+    // Bind 'this' explicitly to handleTCPResponse
+    const boundHandleTCPResponse = this.handleTCPResponse.bind(this);
+    that.tcpService.connect(connectionParams, boundHandleTCPResponse);
   }
 
-  reconnect(connectionParams: ConnectionParams, connectInSeconds = 0) {
-    let that = this;
-    that.disconnect(connectionParams.host, connectionParams.port);
-    that.connect(connectionParams);
-  }
-
-  disconnect(host: string, port: number) {
-    const that = this;
-    const connectionKey = that._getKey(host, port);
-
-    const instrumentConnectionData = that.connections.get(connectionKey);
-    if (instrumentConnectionData) {
-
-      instrumentConnectionData.statusSubject.next(false);
-      instrumentConnectionData.connectionAttemptStatusSubject.next(false);
-
-      if (instrumentConnectionData.connectionMode === 'tcpclient' && instrumentConnectionData.connectionSocket) {
-        instrumentConnectionData.connectionSocket.end();
-        instrumentConnectionData.connectionSocket.destroy();
-        that.utilitiesService.logger('info', 'Client Disconnected', instrumentConnectionData.instrumentId);
-
-      } else if (instrumentConnectionData.connectionMode === 'tcpserver' && instrumentConnectionData.connectionServer) {
-        instrumentConnectionData.connectionServer.close();
-        that.utilitiesService.logger('info', 'Server Stopped', instrumentConnectionData.instrumentId);
-      }
-    }
-
-  }
 
   hl7ACK(messageID, characterSet, messageProfileIdentifier) {
 
@@ -249,7 +79,7 @@ export class InstrumentInterfaceService {
     const msgID = message.get('MSH.10').toString();
     const characterSet = message.get('MSH.18').toString();
     const messageProfileIdentifier = message.get('MSH.21').toString();
-    that.socketClient.write(that.hl7ACK(msgID, characterSet, messageProfileIdentifier));
+    that.tcpService.socketClient.write(that.hl7ACK(msgID, characterSet, messageProfileIdentifier));
     // let result = null;
     //console.log(message.get('OBX'));
 
@@ -344,7 +174,7 @@ export class InstrumentInterfaceService {
     const msgID = message.get('MSH.10').toString();
     const characterSet = message.get('MSH.18').toString();
     const messageProfileIdentifier = message.get('MSH.21').toString();
-    that.socketClient.write(that.hl7ACK(msgID, characterSet, messageProfileIdentifier));
+    that.tcpService.socketClient.write(that.hl7ACK(msgID, characterSet, messageProfileIdentifier));
     // let result = null;
     //console.log(message.get('OBX'));
 
@@ -442,7 +272,7 @@ export class InstrumentInterfaceService {
     const msgID = message.get('MSH.10').toString();
     const characterSet = message.get('MSH.18').toString();
     const messageProfileIdentifier = message.get('MSH.21').toString();
-    that.socketClient.write(that.hl7ACK(msgID, characterSet, messageProfileIdentifier));
+    that.tcpService.socketClient.write(that.hl7ACK(msgID, characterSet, messageProfileIdentifier));
 
     const hl7DataArray = rawHl7Text.split('MSH|');
 
@@ -653,7 +483,7 @@ export class InstrumentInterfaceService {
 
   handleTCPResponse(connectionKey: string, data: Buffer) {
     const that = this;
-    const instrumentConnectionData = that.connections.get(connectionKey);
+    const instrumentConnectionData = that.tcpService.connections.get(connectionKey);
     if (instrumentConnectionData.connectionProtocol === 'hl7') {
       that.receiveHL7(instrumentConnectionData, data);
     } else if (instrumentConnectionData.connectionProtocol === 'astm-elecsys') {
@@ -695,10 +525,12 @@ export class InstrumentInterfaceService {
         });
 
         //that.utilitiesService.logger('info', dataArray, instrumentConnectionData.instrumentId);
-        //that.utilitiesService.logger('info',dataArray['R'], instrumentConnectionData.instrumentId);
+        that.utilitiesService.logger('info', dataArray['R'], instrumentConnectionData.instrumentId);
 
         if (dataArray === null || dataArray === undefined || dataArray['R'] === undefined) {
-          console.error(dataArray);
+          // console.error(partData);
+          // console.error(astmArray);
+          // console.error(dataArray);
           that.utilitiesService.logger('info', 'No ASTM Elecsys data received.', instrumentConnectionData.instrumentId);
           return;
         }
@@ -748,31 +580,14 @@ export class InstrumentInterfaceService {
 
   }
 
-
-  private _getKey(host: string, port: number): string {
-    return `${host}:${port}`;
-  }
-
-  getStatusObservable(host: string, port: number): Observable<boolean> {
-    const connectionKey = this._getKey(host, port);
-    const instrumentConnectionData = this.connections.get(connectionKey);
-    return instrumentConnectionData.statusSubject.asObservable();
-  }
-
-  getConnectionAttemptObservable(host: string, port: number): Observable<boolean> {
-    const connectionKey = this._getKey(host, port);
-    const instrumentConnectionData = this.connections.get(connectionKey);
-    return instrumentConnectionData.connectionAttemptStatusSubject.asObservable();
-  }
-
   private saveOrder(order: any, instrumentConnectionData: InstrumentConnections) {
     const that = this;
     if (order.results) {
       that.dbService.addOrderTest(order, (res) => {
-        that.utilitiesService.logger('success', 'Successfully saved result : ' + order.test_id, instrumentConnectionData.instrumentId);
+        that.utilitiesService.logger('success', 'Successfully saved result : ' + order.test_id + '|' + order.order_id, instrumentConnectionData.instrumentId);
         return true;
       }, (err) => {
-        that.utilitiesService.logger('error', 'Failed to save result : ' + order.test_id + ' ' + JSON.stringify(err), instrumentConnectionData.instrumentId);
+        that.utilitiesService.logger('error', 'Failed to save result : ' + order.test_id + '|' + order.order_id + ' | ' + JSON.stringify(err), instrumentConnectionData.instrumentId);
         return false;
       });
     } else {
