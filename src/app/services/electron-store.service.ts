@@ -7,21 +7,21 @@ import { BehaviorSubject, Observable } from 'rxjs';
 })
 export class ElectronStoreService {
   private store: Store;
-  private configSubject: BehaviorSubject<any>;
+  private electronStoreSubject: BehaviorSubject<any>;
 
   constructor() {
     if (window.require) {
       try {
         const storeClass = window.require('electron-store');
         this.store = new storeClass();
-        this.configSubject = new BehaviorSubject<any>(this.getAll());
+        this.electronStoreSubject = new BehaviorSubject<any>(this.getAll());
       } catch (e) {
         console.warn('electron-store was not loaded');
-        this.configSubject = new BehaviorSubject<any>(null);
+        this.electronStoreSubject = new BehaviorSubject<any>(null);
       }
     } else {
       console.warn('electron-store was not loaded');
-      this.configSubject = new BehaviorSubject<any>(null);
+      this.electronStoreSubject = new BehaviorSubject<any>(null);
     }
   }
 
@@ -29,14 +29,14 @@ export class ElectronStoreService {
 
   set = (key: string, value: any): void => {
     this.store.set(key, value);
-    this.configSubject.next(this.getAll());
+    this.electronStoreSubject.next(this.getAll());
   };
 
   getAll(): any {
     return this.store.store;
   }
 
-  getConfigObservable(): Observable<any> {
-    return this.configSubject.asObservable();
+  electronStoreObservable(): Observable<any> {
+    return this.electronStoreSubject.asObservable();
   }
 }

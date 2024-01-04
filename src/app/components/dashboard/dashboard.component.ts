@@ -1,4 +1,4 @@
-import { Component, OnInit, NgZone, OnDestroy } from '@angular/core';
+import { Component, OnInit, NgZone, OnDestroy, ChangeDetectorRef } from '@angular/core';
 import { Router } from '@angular/router';
 import { ElectronStoreService } from '../../services/electron-store.service';
 import { InstrumentInterfaceService } from '../../services/intrument-interface.service';
@@ -20,15 +20,18 @@ export class DashboardComponent implements OnInit, OnDestroy {
   public interval: any;
   public lastOrders: any;
   public liveLogText = [];
+  public availableInstruments = [];
   public connectionParams: ConnectionParams = null;
   public selectedTabIndex = 0;
-  private settingsSubscription: any;
+  private electronStoreSubscription: any;
   public searchText: string = '';
   public filteredLogText: any = [];
 
-  constructor(private store: ElectronStoreService,
+  constructor(
+    private cdRef: ChangeDetectorRef,
+    private store: ElectronStoreService,
     private _ngZone: NgZone,
-    private interfaceService: InstrumentInterfaceService,
+    private instrumentInterfaceService: InstrumentInterfaceService,
     private tcpService: TcpConnectionService,
     private utilitiesService: UtilitiesService,
     private router: Router) {
@@ -39,47 +42,46 @@ export class DashboardComponent implements OnInit, OnDestroy {
 
     const that = this;
 
-    // Fetch initial settings if not already present
-    if (!this.commonSettings || !this.instrumentsSettings) {
-      const initialCommonSettings = this.store.get('commonConfig');
-      const initialInstrumentsSettings = this.store.get('instrumentsConfig');
-      const appVersion = this.store.get('appVersion');
+    const initialSettings = that.store.getAll();
 
-      if (initialCommonSettings && initialInstrumentsSettings) {
-        // Update UtilitiesService with the initial settings
-        this.utilitiesService.updateSettings({
-          commonConfig: initialCommonSettings,
-          instrumentsConfig: initialInstrumentsSettings,
-          appVersion: appVersion
-        });
-      } else {
+    that.utilitiesService.logger('ignore', "<hr/>");
+
+    // Fetch initial settings if not already present
+    if (!initialSettings.commonConfig || !initialSettings.instrumentsConfig) {
+      const initialCommonSettings = that.store.get('commonConfig');
+      const initialInstrumentsSettings = that.store.get('instrumentsConfig');
+
+      if (!initialCommonSettings || !initialInstrumentsSettings) {
         // Handle the case where settings are not found
         console.warn('Settings not found, redirecting to settings page');
-        this.router.navigate(['/settings']);
+        that.router.navigate(['/settings']);
       }
     }
 
-    that.settingsSubscription = that.utilitiesService.settings$.subscribe(settings => {
+    that.electronStoreSubscription = that.store.electronStoreObservable().subscribe(electronStoreObject => {
+
       that._ngZone.run(() => {
 
-        that.commonSettings = settings.commonConfig;
-        that.instrumentsSettings = settings.instrumentsConfig;
-        that.appVersion = settings.appVersion;
+        that.commonSettings = electronStoreObject.commonConfig;
+        that.instrumentsSettings = electronStoreObject.instrumentsConfig;
+        that.appVersion = electronStoreObject.appVersion;
 
-        that.instrumentsSettings.forEach((instrument, index) => {
+        that.instrumentsSettings.forEach((instrumentSetting, index) => {
+          let instrument: any = {};
           instrument.connectionParams = {
-            connectionMode: instrument.interfaceConnectionMode,
-            connectionProtocol: instrument.interfaceCommunicationProtocol,
-            host: instrument.analyzerMachineHost,
-            port: instrument.analyzerMachinePort,
-            instrumentId: instrument.analyzerMachineName,
-            machineType: instrument.analyzerMachineType,
+            instrumentIndex: index,
+            connectionMode: instrumentSetting.interfaceConnectionMode,
+            connectionProtocol: instrumentSetting.interfaceCommunicationProtocol,
+            host: instrumentSetting.analyzerMachineHost ?? '127.0.0.1',
+            port: instrumentSetting.analyzerMachinePort,
+            instrumentId: instrumentSetting.analyzerMachineName,
+            machineType: instrumentSetting.analyzerMachineType,
             labName: that.commonSettings.labName,
             interfaceAutoConnect: that.commonSettings.interfaceAutoConnect
           };
 
           instrument.isConnected = false;
-          instrument.reconnectButtonText = 'Connect';
+          instrument.instrumentButtonText = 'Connect';
 
           if (null === that.commonSettings || undefined === that.commonSettings || !instrument.connectionParams.port || (instrument.connectionParams.connectionProtocol === 'tcpclient' && !instrument.connectionParams.host)) {
             that.router.navigate(['/settings']);
@@ -87,9 +89,10 @@ export class DashboardComponent implements OnInit, OnDestroy {
 
           if (instrument.connectionParams.interfaceAutoConnect !== undefined && instrument.connectionParams.interfaceAutoConnect !== null && instrument.connectionParams.interfaceAutoConnect === 'yes') {
             setTimeout(() => {
-              that.tcpService.reconnect(instrument);
+              that.reConnect(instrument.connectionParams);
             }, 1000);
           }
+          that.availableInstruments.push(instrument);
         });
 
         that.utilitiesService.liveLog.subscribe(mesg => {
@@ -123,10 +126,15 @@ export class DashboardComponent implements OnInit, OnDestroy {
       that.lastResultReceived = data.lastResultReceived;
     });
 
-    that.utilitiesService.lastOrders.subscribe(lastFewOrders => {
-      that._ngZone.run(() => {
-        that.lastOrders = lastFewOrders[0];
-      });
+    that.utilitiesService.lastOrders.subscribe({
+      next: lastFewOrders => {
+        that._ngZone.run(() => {
+          that.lastOrders = lastFewOrders[0];
+        });
+      },
+      error: error => {
+        console.error('Error fetching last orders:', error);
+      }
     });
 
   }
@@ -139,37 +147,65 @@ export class DashboardComponent implements OnInit, OnDestroy {
     this.liveLogText = null;
     this.utilitiesService.clearLiveLog();
   }
-  reconnect(instrument: any) {
+  connect(instrument: any) {
     const that = this;
-    that.interfaceService.connect(instrument.connectionParams);
-    //that.tcpService.connect(instrument.connectionParams, that.interfaceService.handleTCPResponse);
+    if (instrument && instrument.connectionParams && instrument.connectionParams.host && instrument.connectionParams.port) {
+      that.instrumentInterfaceService.connect(instrument.connectionParams);
+      that.updateInstrumentStatusSubscription(instrument);
+    }
+  }
+
+  reConnect(instrument: any) {
+    const that = this;
+    if (instrument && instrument.connectionParams && instrument.connectionParams.host && instrument.connectionParams.port) {
+      that.instrumentInterfaceService.reConnect(instrument.connectionParams);
+      that.updateInstrumentStatusSubscription(instrument);
+    }
+  }
+
+  updateInstrumentStatusSubscription(instrument: any) {
+    const that = this;
     that.tcpService.getStatusObservable(instrument.connectionParams.host, instrument.connectionParams.port).subscribe(status => {
       that._ngZone.run(() => {
-        instrument.isConnected = status;
+        // Update the availableInstruments array
+        that.availableInstruments = that.availableInstruments.map(inst => {
+          if (inst.connectionParams.instrumentId === instrument.connectionParams.instrumentId) {
+            return { ...inst, isConnected: status };
+          }
+          return inst;
+        });
+        //this.cdRef.detectChanges();
       });
     });
 
-    that.tcpService.getConnectionAttemptObservable(instrument.connectionParams.host, instrument.connectionParams.port).subscribe(status => {
-      that._ngZone.run(() => {
-        if (!status) {
-          instrument.connectionInProcess = false;
-          instrument.reconnectButtonText = 'Connect';
-        } else {
-          instrument.connectionInProcess = true;
-          instrument.reconnectButtonText = 'Please wait ...';
-        }
+    that.tcpService.getConnectionAttemptObservable(instrument.connectionParams.host, instrument.connectionParams.port)
+      .subscribe(status => {
+        that._ngZone.run(() => {
+          // Update the availableInstruments array
+          that.availableInstruments = this.availableInstruments.map(inst => {
+            if (inst.connectionParams.instrumentId === instrument.connectionParams.instrumentId) {
+              return {
+                ...inst,
+                connectionInProcess: status,
+                instrumentButtonText: status ? 'Please wait ...' : 'Connect'
+              };
+            }
+            return inst;
+          });
+          //this.cdRef.detectChanges();
+        });
       });
-    });
   }
 
   close(instrument: any) {
-    this.tcpService.disconnect(instrument.connectionParams.host, instrument.connectionParams.port);
+    if (instrument && instrument.connectionParams && instrument.connectionParams.host && instrument.connectionParams.port) {
+      this.tcpService.disconnect(instrument.connectionParams.host, instrument.connectionParams.port);
+    }
   }
 
   selectTab(index: number): void {
     this.selectedTabIndex = index;
   }
-
 
   filterLogs() {
     if (this.searchText.trim() === '') {
@@ -180,6 +216,7 @@ export class DashboardComponent implements OnInit, OnDestroy {
       this.filteredLogText = this.liveLogText.filter(log => log.toLowerCase().includes(this.searchText.toLowerCase()));
     }
   }
+
   copyLog() {
     const logContent = this.liveLogText.join('');  // Join the array elements into a single string
     this.copyTextToClipboard(logContent);
@@ -193,11 +230,10 @@ export class DashboardComponent implements OnInit, OnDestroy {
     });
   }
 
-
   ngOnDestroy() {
     clearInterval(this.interval);
-    if (this.settingsSubscription) {
-      this.settingsSubscription.unsubscribe(); // Unsubscribe to avoid memory leaks
+    if (this.electronStoreSubscription) {
+      this.electronStoreSubscription.unsubscribe(); // Unsubscribe to avoid memory leaks
     }
   }
 

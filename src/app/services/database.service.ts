@@ -14,7 +14,7 @@ export class DatabaseService {
   constructor(private electronService: ElectronService,
     private store: ElectronStoreService) {
 
-    this.store.getConfigObservable().subscribe(config => {
+    this.store.electronStoreObservable().subscribe(config => {
       this.commonSettings = config.commonConfig;
       this.init();
     });

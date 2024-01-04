@@ -13,7 +13,7 @@
       <br>
       <br>
       <ul class="nav nav-tabs" role="tablist">
-        <li class="nav-item" *ngFor="let instrument of instrumentsSettings; let i = index">
+        <li class="nav-item" *ngFor="let instrument of availableInstruments; let i = index">
           <a class="nav-link" [class.active]="selectedTabIndex === i" [attr.id]="'tab-' + i" data-toggle="tab"
             href="javascript:void(0);" role="tab" (click)="selectTab(i)">
             <i [ngClass]="{'fa': true,
@@ -28,22 +28,28 @@
 
 
       <div class="tab-content padding-class border border-top-0 rounded-bottom">
-        <div class="tab-pane" *ngFor="let instrument of instrumentsSettings; let i = index"
+        <div class="tab-pane" *ngFor="let instrument of availableInstruments; let i = index"
           [class.active]="selectedTabIndex === i" [attr.id]="'content-' + i">
 
           <div *ngIf="instrument.isConnected; else notConnected">
-            <h5 class="card-title text-success"><span>{{instrument.connectionParams.instrumentId}}</span> Connected</h5>
+            <h5 class="card-title text-success">
+              <span>{{instrument.connectionParams.instrumentId}}</span> Connected
+
+            </h5>
+            <h6>({{instrument.connectionParams.host}}:{{instrument.connectionParams.port}})</h6>
             <button (click)="close(instrument)" class="btn btn-danger">
               <span>Disconnect {{instrument.connectionParams.instrumentId}}</span>
             </button>
           </div>
 
           <ng-template #notConnected>
-            <h5 class="card-title text-danger"><span>{{instrument.connectionParams.instrumentId}}</span> Not Connected!
+            <h5 class="card-title text-danger">
+              <span>{{instrument.connectionParams.instrumentId}}</span> Not Connected!
             </h5>
-            <p class="card-text">Please try to reconnect and wait for a few moments.</p>
-            <button (click)="reconnect(instrument)" class="btn btn-success" [disabled]="instrument.connectionInProcess">
-              <span>{{instrument.reconnectButtonText}}</span>
+            <h6>({{instrument.connectionParams.host}}:{{instrument.connectionParams.port}})</h6>
+            <p class="card-text">Please try to Connect and wait for a few moments.</p>
+            <button (click)="reConnect(instrument)" class="btn btn-success" [disabled]="instrument.connectionInProcess">
+              <span>{{instrument.instrumentButtonText}}</span>
             </button>
             &nbsp;&nbsp;
             <button *ngIf="instrument.connectionInProcess" (click)="close(instrument)" class="btn btn-danger">

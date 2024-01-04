@@ -1,7 +1,7 @@
 import { Injectable } from '@angular/core';
 import { DatabaseService } from './database.service';
 import { ConnectionParams } from '../interfaces/connection-params.interface';
-import { InstrumentConnections } from '../interfaces/intrument-connections.interface';
+import { InstrumentConnectionStack } from '../interfaces/intrument-connections.interface';
 import { RawMachineData } from '../interfaces/raw-machine-data.interface';
 import { UtilitiesService } from './utilities.service';
 import { TcpConnectionService } from './tcp-connection.service';
@@ -28,9 +28,20 @@ export class InstrumentInterfaceService {
   // Method used to connect to the Testing Machine
   connect(connectionParams: ConnectionParams) {
     const that = this;
-    // Bind 'this' explicitly to handleTCPResponse
-    const boundHandleTCPResponse = this.handleTCPResponse.bind(this);
-    that.tcpService.connect(connectionParams, boundHandleTCPResponse);
+    if (connectionParams) {
+      // Bind 'this' explicitly to handleTCPResponse
+      const boundHandleTCPResponse = this.handleTCPResponse.bind(this);
+      that.tcpService.connect(connectionParams, boundHandleTCPResponse);
+    }
+  }
+
+  reConnect(connectionParams: ConnectionParams) {
+    const that = this;
+    if (connectionParams) {
+      // Bind 'this' explicitly to handleTCPResponse
+      const boundHandleTCPResponse = this.handleTCPResponse.bind(this);
+      that.tcpService.reConnect(connectionParams, boundHandleTCPResponse);
+    }
   }
 
 
@@ -263,7 +274,7 @@ export class InstrumentInterfaceService {
       });
     });
   }
-  processHL7DataRoche68008800(instrumentConnectionData: InstrumentConnections, rawHl7Text: string) {
+  processHL7DataRoche68008800(instrumentConnectionData: InstrumentConnectionStack, rawHl7Text: string) {
 
     const that = this;
     const message = that.hl7parser.create(rawHl7Text.trim());
@@ -376,7 +387,7 @@ export class InstrumentInterfaceService {
   }
 
 
-  private receiveASTM(astmProtocolType: string, instrumentConnectionData: InstrumentConnections, data: Buffer) {
+  private receiveASTM(astmProtocolType: string, instrumentConnectionData: InstrumentConnectionStack, data: Buffer) {
     let that = this;
     that.utilitiesService.logger('info', 'Receiving ' + astmProtocolType, instrumentConnectionData.instrumentId);
 
@@ -428,7 +439,7 @@ export class InstrumentInterfaceService {
     }
   }
 
-  private receiveHL7(instrumentConnectionData: InstrumentConnections, data: Buffer) {
+  private receiveHL7(instrumentConnectionData: InstrumentConnectionStack, data: Buffer) {
     let that = this;
     that.utilitiesService.logger('info', 'Receiving HL7 data', instrumentConnectionData.instrumentId);
     const hl7Text = that.utilitiesService.hex2ascii(data.toString('hex'));
@@ -479,9 +490,9 @@ export class InstrumentInterfaceService {
   }
 
 
-  handleTCPResponse(connectionKey: string, data: Buffer) {
+  handleTCPResponse(connectionIdentifierKey: string, data: Buffer) {
     const that = this;
-    const instrumentConnectionData = that.tcpService.connections.get(connectionKey);
+    const instrumentConnectionData = that.tcpService.connectionStack.get(connectionIdentifierKey);
     if (instrumentConnectionData.connectionProtocol === 'hl7') {
       that.receiveHL7(instrumentConnectionData, data);
     } else if (instrumentConnectionData.connectionProtocol === 'astm-elecsys') {
@@ -492,7 +503,7 @@ export class InstrumentInterfaceService {
   }
 
 
-  processASTMElecsysData(instrumentConnectionData: InstrumentConnections, astmData: string) {
+  processASTMElecsysData(instrumentConnectionData: InstrumentConnectionStack, astmData: string) {
 
     //that.utilitiesService.logger('info', astmData, instrumentConnectionData.instrumentId);
 
@@ -543,7 +554,7 @@ export class InstrumentInterfaceService {
 
   }
 
-  processASTMConcatenatedData(instrumentConnectionData: InstrumentConnections, astmData: string) {
+  processASTMConcatenatedData(instrumentConnectionData: InstrumentConnectionStack, astmData: string) {
 
     //this.logger('info', astmData, instrumentConnectionData.instrumentId);
 
@@ -578,7 +589,7 @@ export class InstrumentInterfaceService {
 
   }
 
-  private saveOrder(order: any, instrumentConnectionData: InstrumentConnections) {
+  private saveOrder(order: any, instrumentConnectionData: InstrumentConnectionStack) {
     const that = this;
     if (order.results) {
       that.dbService.addOrderTest(order, (res) => {
@@ -611,7 +622,7 @@ export class InstrumentInterfaceService {
     return dataArray;
   }
 
-  private saveASTMDataBlock(dataArray: any[], partData: string, instrumentConnectionData: InstrumentConnections) {
+  private saveASTMDataBlock(dataArray: any[], partData: string, instrumentConnectionData: InstrumentConnectionStack) {
     const that = this;
     const order: any = {};
 

@@ -3,12 +3,6 @@ import { DatabaseService } from './database.service';
 import { BehaviorSubject, Observable } from 'rxjs';
 import { ElectronService } from '../core/services';
 
-interface Settings {
-  commonConfig: any;
-  instrumentsConfig: any;
-  appVersion: string;
-}
-
 @Injectable({
   providedIn: 'root'
 })
@@ -25,18 +19,10 @@ export class UtilitiesService {
   protected liveLogSubject = new BehaviorSubject([]);
   liveLog = this.liveLogSubject.asObservable();
 
-  private settingsSubject = new BehaviorSubject<Settings>({} as Settings);
-  settings$ = this.settingsSubject.asObservable();
-
 
   constructor(public electronService: ElectronService,
     public dbService: DatabaseService) {
     this.log = this.electronService.log;
-  }
-
-
-  updateSettings(newSettings: Settings) {
-    this.settingsSubject.next(newSettings);
   }
 
   sleep(ms) {
@@ -150,7 +136,7 @@ export class UtilitiesService {
   }
 
 
-  logger(logType, message, instrumentId = null) {
+  logger(logType = null, message = null, instrumentId = null) {
     const that = this;
     const moment = require('moment');
     const date = moment(new Date()).format('DD-MMM-YYYY HH:mm:ss');
@@ -172,6 +158,8 @@ export class UtilitiesService {
     } else if (logType === 'success') {
       this.log.info(message);
       logMessage = `<span class="text-success">[success]</span> ${logFor}${message}<br>`;
+    } else if (logType === 'ignore') {
+      logMessage = `${message}<br>`;
     }
 
 
@@ -179,10 +167,12 @@ export class UtilitiesService {
     that.logtext.unshift(logMessage);
     that.liveLogSubject.next(that.logtext);
 
-    const dbLog: any = {};
-    dbLog.log = logMessage;
+    if (logType !== 'ignore') {
+      const dbLog: any = {};
+      dbLog.log = logMessage;
 
-    that.dbService.addApplicationLog(dbLog, (res) => { }, (err) => { });
+      that.dbService.addApplicationLog(dbLog, (res) => { }, (err) => { });
+    }
 
   }
 

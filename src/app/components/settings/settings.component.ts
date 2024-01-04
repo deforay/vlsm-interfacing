@@ -2,7 +2,6 @@ import { Component, OnInit } from '@angular/core';
 import { FormBuilder, FormGroup, FormArray, Validators, AbstractControl, ValidatorFn } from '@angular/forms';
 import { Router } from '@angular/router';
 import { ElectronService } from '../../core/services';
-import { UtilitiesService } from '../../services/utilities.service';
 import { ElectronStoreService } from '../../services/electron-store.service';
 import * as os from 'os';
 
@@ -16,22 +15,23 @@ export class SettingsComponent implements OnInit {
   public settingsForm: FormGroup;
   public appPath: string = "";
   public appVersion: string = null;
+  public machineIps: string[] = [];
 
   constructor(
-    private fb: FormBuilder,
+    private formBuilder: FormBuilder,
     private electronService: ElectronService,
     private router: Router,
-    private store: ElectronStoreService,
-    private utilitiesService: UtilitiesService
+    private electronStoreService: ElectronStoreService
   ) {
-    const commonSettingsStore = this.store.get('commonConfig');
-    const instrumentSettingsStore = this.store.get('instrumentsConfig');
-    this.appPath = this.store.get('appPath');
-    this.appVersion = this.store.get('appVersion');
+    const commonSettingsStore = this.electronStoreService.get('commonConfig');
+    const instrumentSettingsStore = this.electronStoreService.get('instrumentsConfig');
+    this.appPath = this.electronStoreService.get('appPath');
+    this.appVersion = this.electronStoreService.get('appVersion');
+    this.machineIps = this.getMachineIps();
 
     // Initialize the form with the existing settings
-    this.settingsForm = this.fb.group({
-      commonSettings: this.fb.group({
+    this.settingsForm = this.formBuilder.group({
+      commonSettings: this.formBuilder.group({
         labID: ['', Validators.required],
         labName: ['', Validators.required],
         mysqlHost: [''],
@@ -41,8 +41,8 @@ export class SettingsComponent implements OnInit {
         mysqlPassword: [''],
         interfaceAutoConnect: ['yes', Validators.required]
       }),
-      instrumentsSettings: this.fb.array(
-        (instrumentSettingsStore || []).map(instrument => this.fb.group(instrument))
+      instrumentsSettings: this.formBuilder.array(
+        (instrumentSettingsStore || []).map(instrument => this.formBuilder.group(instrument))
       )
     }, { validators: [this.uniqueInstrumentNameValidator(), this.uniqueIpPortValidator()] });
 
@@ -94,19 +94,12 @@ export class SettingsComponent implements OnInit {
     return duplicates;
   }
 
-
   onConnectionModeChange(index: number, event: Event): void {
-    // const selectElement = event.target as HTMLSelectElement;
-    // const connectionMode = selectElement.value;
-    // if (connectionMode === 'tcpserver') {
-    //   // Get the system's IP address and set it as analyzerMachineHost
-    //   //const systemIp = this.getMachineIp();
-    //   this.instrumentsSettings.at(index).get('analyzerMachineHost').setValue('');
-    //   this.instrumentsSettings.at(index).get('analyzerMachineHost').disable();
-    // } else {
-    //   // Enable the field to allow manual input when the connection mode is not tcpserver
-    //   this.instrumentsSettings.at(index).get('analyzerMachineHost').enable();
-    // }
+    const selectElement = event.target as HTMLSelectElement;
+    const connectionMode = selectElement.value;
+    if (connectionMode === 'tcpserver') {
+      this.instrumentsSettings.at(index).get('analyzerMachineHost').setValue(this.machineIps[0]);
+    }
   }
 
 
@@ -118,7 +111,7 @@ export class SettingsComponent implements OnInit {
   }
 
   createInstrumentFormGroup(): FormGroup {
-    return this.fb.group({
+    return this.formBuilder.group({
       analyzerMachineType: ['', Validators.required],
       interfaceCommunicationProtocol: ['', Validators.required],
       analyzerMachineName: ['', Validators.required],
@@ -128,24 +121,27 @@ export class SettingsComponent implements OnInit {
     });
   }
 
-  getMachineIp() {
+  getMachineIps(): string[] {
     const networkInterfaces = os.networkInterfaces();
+    const ips = [];
+
 
     for (let interfaceName in networkInterfaces) {
       const iface = networkInterfaces[interfaceName];
       for (let i = 0; i < iface.length; i++) {
         const alias = iface[i];
         if (alias.family === 'IPv4' && !alias.internal) {
-          console.log(interfaceName, alias.address);
-          // Return the first non-internal IPv4 address
-          return alias.address;
+          ips.push(alias.address);
         }
       }
     }
 
-    // Return a fallback address or null if no external IPv4 address is found
-    return '127.0.0.1';
+    // Adding 127.0.0.1 as a default option
+    ips.push('127.0.0.1');
+
+    return ips;
   }
+
 
   addInstrument(): void {
     this.instrumentsSettings.push(this.createInstrumentFormGroup());
@@ -168,18 +164,29 @@ export class SettingsComponent implements OnInit {
     const that = this;
     if (that.settingsForm.valid) {
       const updatedSettings = that.settingsForm.value;
-      that.store.set('commonConfig', updatedSettings.commonSettings);
-      that.store.set('instrumentsConfig', updatedSettings.instrumentsSettings);
+
+
+      // Ensure all required keys exist in each instrument setting
+      updatedSettings.instrumentsSettings = updatedSettings.instrumentsSettings.map(instrument => {
+        const defaultInstrument = {
+          analyzerMachineType: '',
+          interfaceCommunicationProtocol: '',
+          analyzerMachineName: '',
+          analyzerMachineHost: '',
+          analyzerMachinePort: '',
+          interfaceConnectionMode: ''
+        };
+        return { ...defaultInstrument, ...instrument };
+      });
+
+
+      that.electronStoreService.set('commonConfig', updatedSettings.commonSettings);
+      that.electronStoreService.set('instrumentsConfig', updatedSettings.instrumentsSettings);
 
       new Notification('Success', {
         body: 'Updated Interface Tool settings'
       });
 
-      that.utilitiesService.updateSettings({
-        commonConfig: updatedSettings.commonSettings,
-        instrumentsConfig: updatedSettings.instrumentsSettings,
-        appVersion: that.appVersion
-      });
       that.router.navigate(['/dashboard']);
     } else {
       console.error('Form is not valid');
