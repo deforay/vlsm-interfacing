@@ -1,4 +1,5 @@
 import { Component, OnInit, NgZone, OnDestroy, ChangeDetectorRef } from '@angular/core';
+import { DomSanitizer } from '@angular/platform-browser';
 import { Router } from '@angular/router';
 import { ElectronStoreService } from '../../services/electron-store.service';
 import { InstrumentInterfaceService } from '../../services/instrument-interface.service';
@@ -19,16 +20,16 @@ export class DashboardComponent implements OnInit, OnDestroy {
   public lastResultReceived = '';
   public interval: any;
   public lastOrders: any;
-  public liveLogText = [];
   public availableInstruments = [];
+  public instrumentLogs = [];
   public connectionParams: ConnectionParams = null;
   public selectedTabIndex = 0;
   private electronStoreSubscription: any;
   public searchText: string = '';
-  public filteredLogText: any = [];
 
   constructor(
     private cdRef: ChangeDetectorRef,
+    private sanitizer: DomSanitizer,
     private store: ElectronStoreService,
     private _ngZone: NgZone,
     private instrumentInterfaceService: InstrumentInterfaceService,
@@ -82,6 +83,9 @@ export class DashboardComponent implements OnInit, OnDestroy {
 
           instrument.isConnected = false;
           instrument.instrumentButtonText = 'Connect';
+          //instrument.logs = []; // Initialize logs
+          //instrument.filteredLogs = []; // Initialize filtered logs
+          //instrument.searchText = ''; // Initialize search text
 
           if (null === that.commonSettings || undefined === that.commonSettings || !instrument.connectionParams.port || (instrument.connectionParams.connectionProtocol === 'tcpclient' && !instrument.connectionParams.host)) {
             that.router.navigate(['/settings']);
@@ -93,14 +97,18 @@ export class DashboardComponent implements OnInit, OnDestroy {
               that.reconnect(instrument);
             }, 1000);
           }
-          that.availableInstruments.push(instrument);
-        });
 
-        that.utilitiesService.liveLog.subscribe(mesg => {
-          that._ngZone.run(() => {
-            that.filteredLogText = that.liveLogText = mesg;
-            that.filterLogs();
-          });
+          that.utilitiesService.getInstrumentLogSubject(instrument.connectionParams.instrumentId)
+            .subscribe(logs => {
+              that._ngZone.run(() => {
+                //instrument.logs = logs;
+                that.updateLogsForInstrument(instrument.connectionParams.instrumentId, logs);
+                that.filterInstrumentLogs(instrument);
+                that.cdRef.detectChanges(); // Trigger change detection
+              });
+            });
+
+          that.availableInstruments.push(instrument);
         });
 
         setTimeout(() => {
@@ -115,8 +123,6 @@ export class DashboardComponent implements OnInit, OnDestroy {
 
     });
   }
-
-
 
   fetchLastOrders() {
     const that = this;
@@ -140,13 +146,30 @@ export class DashboardComponent implements OnInit, OnDestroy {
 
   }
 
-  fetchRecentLogs() {
-    this.utilitiesService.fetchRecentLogs();
+  updateLogsForInstrument(instrumentId: string, newLogs: any) {
+    if (!this.instrumentLogs[instrumentId]) {
+      // Initialize the logs structure if it does not exist
+      this.instrumentLogs[instrumentId] = {
+        logs: [],
+        filteredLogs: []
+      };
+    }
+    // Update both logs and filteredLogs, as the new logs are not yet filtered
+    this.instrumentLogs[instrumentId].logs = newLogs;
+    this.instrumentLogs[instrumentId].filteredLogs = newLogs;
   }
 
-  clearLiveLog() {
-    this.liveLogText = null;
-    this.utilitiesService.clearLiveLog();
+
+  fetchRecentLogs() {
+    const that = this;
+    that.availableInstruments.forEach(instrument => {
+      let logs = that.utilitiesService.fetchRecentLogs(instrument.connectionParams.instrumentId);
+      //instrument.logs = logs; // Initially, filteredLogs are the same as logs
+      that.updateLogsForInstrument(instrument.connectionParams.instrumentId, logs);
+
+    });
+
+    that.cdRef.detectChanges(); // Trigger change detection
   }
 
   connect(instrument: any) {
@@ -207,30 +230,56 @@ export class DashboardComponent implements OnInit, OnDestroy {
       });
   }
 
-  close(instrument: any) {
-    if (instrument && instrument.connectionParams && instrument.connectionParams.host && instrument.connectionParams.port) {
-      this.tcpService.disconnect(instrument.connectionParams.host, instrument.connectionParams.port);
-    }
-  }
-
   selectTab(index: number): void {
     this.selectedTabIndex = index;
   }
 
-  filterLogs() {
-    if (this.searchText.trim() === '') {
-      // If searchText is empty, show all logs
-      this.filteredLogText = this.liveLogText;
+  filterInstrumentLogs(instrument: any) {
+
+    if (!this.instrumentLogs[instrument.connectionParams.instrumentId]) {
+      // Initialize the logs structure for the instrument if not already done
+      this.instrumentLogs[instrument.connectionParams.instrumentId] = {
+        logs: [...instrument.logs],
+        filteredLogs: [...instrument.logs]
+      };
+    }
+
+    if (!instrument.searchText || instrument.searchText === '') {
+      // If search text is empty, show all logs
+      this.instrumentLogs[instrument.connectionParams.instrumentId].filteredLogs = [...this.instrumentLogs[instrument.connectionParams.instrumentId].logs];
     } else {
-      // If searchText is not empty, filter the logs
-      this.filteredLogText = this.liveLogText.filter(log => log.toLowerCase().includes(this.searchText.toLowerCase()));
+      // Apply filter on the original logs
+      this.instrumentLogs[instrument.connectionParams.instrumentId].filteredLogs = this.instrumentLogs[instrument.connectionParams.instrumentId].logs.filter(log =>
+        log.toLowerCase().includes(instrument.searchText.trim().toLowerCase())
+      );
+    }
+
+    this.cdRef.detectChanges(); // Trigger change detection if needed
+  }
+
+
+
+  copyLog(instrument) {
+    if (this.instrumentLogs[instrument.connectionParams.instrumentId]) {
+      // Join the filtered logs with a newline character
+      const logContent = this.instrumentLogs[instrument.connectionParams.instrumentId].filteredLogs.join('\n');
+      this.copyTextToClipboard(logContent);
+    } else {
+      console.error('No logs found for instrument:', instrument.connectionParams.instrumentId);
     }
   }
 
-  copyLog() {
-    const logContent = this.liveLogText.join('');  // Join the array elements into a single string
-    this.copyTextToClipboard(logContent);
+
+  clearLiveLog(instrument) {
+    this.utilitiesService.clearLiveLog(instrument.connectionParams.instrumentId);
+    // Clear logs and filtered logs for the specific instrument
+    if (this.instrumentLogs[instrument.connectionParams.instrumentId]) {
+      this.instrumentLogs[instrument.connectionParams.instrumentId].logs = [];
+      this.instrumentLogs[instrument.connectionParams.instrumentId].filteredLogs = [];
+    }
+    this.cdRef.detectChanges(); // Trigger change detection if needed
   }
+
 
   copyTextToClipboard(text: string) {
     navigator.clipboard.writeText(text).then(() => {
@@ -238,6 +287,10 @@ export class DashboardComponent implements OnInit, OnDestroy {
     }, (err) => {
       console.error('Error in copying text: ', err);
     });
+  }
+
+  getSafeHtml(logEntry) {
+    return this.sanitizer.bypassSecurityTrustHtml(logEntry);
   }
 
   ngOnDestroy() {

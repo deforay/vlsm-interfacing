@@ -16,11 +16,11 @@
         <li class="nav-item" *ngFor="let instrument of availableInstruments; let i = index">
           <a class="nav-link" [class.active]="selectedTabIndex === i" [attr.id]="'tab-' + i" data-toggle="tab"
             href="javascript:void(0);" role="tab" (click)="selectTab(i)">
-            <i [ngClass]="{'fa': true,
-                                'fa-plug': instrument.isConnected,
-                                'fa-exclamation-triangle': !instrument.isConnected,
+            <em [ngClass]="{'fa': true,
+                                'fa-check-circle': instrument.isConnected,
+                                'fa-times-circle': !instrument.isConnected,
                                 'connected': instrument.isConnected,
-                                'disconnected': !instrument.isConnected}" aria-hidden="true"></i>
+                                'disconnected': !instrument.isConnected}" aria-hidden="true"></em>
             {{instrument.connectionParams.instrumentId}}
           </a>
         </li>
@@ -34,10 +34,8 @@
           <div *ngIf="instrument.isConnected; else notConnected">
             <h5 class="card-title text-success">
               <span>{{instrument.connectionParams.instrumentId}}</span> Connected
-
             </h5>
-            <h6>({{instrument.connectionParams.host}}:{{instrument.connectionParams.port}})</h6>
-            <button (click)="close(instrument)" class="btn btn-danger">
+            <button (click)="disconnect(instrument)" class="btn btn-danger">
               <span>Disconnect {{instrument.connectionParams.instrumentId}}</span>
             </button>
           </div>
@@ -46,35 +44,72 @@
             <h5 class="card-title text-danger">
               <span>{{instrument.connectionParams.instrumentId}}</span> Not Connected!
             </h5>
-            <h6>({{instrument.connectionParams.host}}:{{instrument.connectionParams.port}})</h6>
-            <p class="card-text">Please try to Connect and wait for a few moments.</p>
-            <button (click)="reconnect(instrument)" class="btn btn-success" [disabled]="instrument.connectionInProcess">
+            <!-- <p class="card-text">Please click on Connect and wait for a few moments.</p> -->
+            <button (click)="reconnect(instrument)" class="btn btn-warning" [disabled]="instrument.connectionInProcess">
               <span>{{instrument.instrumentButtonText}}</span>
             </button>
             &nbsp;&nbsp;
-            <button *ngIf="instrument.connectionInProcess" (click)="close(instrument)" class="btn btn-danger">
+            <button *ngIf="instrument.connectionInProcess" (click)="disconnect(instrument)" class="btn btn-danger">
               <span>Cancel</span>
             </button>
             &nbsp;&nbsp;
 
           </ng-template>
+
+
+          <hr>
+          <!-- Log Display Section -->
+          <div class="instrument-logs">
+            <small>
+              <strong>Connection : </strong> {{instrument.connectionParams.connectionMode
+              ===
+              'tcpclient' ? 'TCP Client' : 'TCP Server'}} |
+              ({{instrument.connectionParams.host}}:{{instrument.connectionParams.port}})
+            </small>
+
+            <a (click)="copyLog(instrument)" class="btn btn-primary btn-sm"
+              style="float:right;margin-left:20px;margin-bottom:10px;">
+              <i class="fa fa-copy"></i>
+              <span>Copy Log</span>
+            </a>
+            <a (click)="clearLiveLog(instrument)" class="btn btn-danger btn-sm" style="float:right;">
+              <i class="fa fa-trash"></i>
+              <span>Clear Log</span>
+            </a>
+            <!-- Search Input -->
+            <input type="text" [(ngModel)]="instrument.searchText" (input)="filterInstrumentLogs(instrument)"
+              placeholder="Search {{ instrument.connectionParams.instrumentId }} logs...">
+            <div class="log-entries">
+              <ng-container *ngIf="instrumentLogs[instrument.connectionParams.instrumentId]">
+                <ng-container
+                  *ngFor="let logEntry of instrumentLogs[instrument.connectionParams.instrumentId].filteredLogs">
+                  <div class="log-entry" [innerHTML]="getSafeHtml(logEntry)"></div>
+                </ng-container>
+              </ng-container>
+
+            </div>
+          </div>
+
+          <div>
+
+          </div>
         </div>
       </div>
     </div>
-
+    <!--
     <input style="border:1px #777 dotted;" type="text" [(ngModel)]="searchText" (input)="filterLogs()"
-      placeholder="Search logs..." />
+      placeholder="Search logs..." /> -->
 
 
 
-    <div class="livelog">
+    <!-- <div class="livelog">
       <ng-container *ngIf="!(filteredLogText?.length > 0)">
         <span></span>
       </ng-container>
       <ng-container *ngFor="let x of filteredLogText">
         <span [innerHTML]="x"> </span>
       </ng-container>
-    </div>
+    </div> -->
   </div>
 
 
@@ -82,14 +117,7 @@
     <span style="padding-right:10px;" *ngIf="lastLimsSync"><strong>Last LIS Sync on :</strong> {{lastLimsSync}}</span>
     <span style="padding-right:10px;" *ngIf="lastResultReceived"><strong>Last Instrument Result Received on :</strong>
       {{lastResultReceived}}</span>
-    <a (click)="copyLog()" class="btn btn-outline-primary btn-sm" style="float:right;margin-left:20px;">
-      <i class="fa fa-copy"></i>
-      <span>Copy Log</span>
-    </a>
-    <a (click)="clearLiveLog()" class="btn btn-outline-danger btn-sm" style="float:right;">
-      <i class="fa fa-trash"></i>
-      <span>Clear Log</span>
-    </a>
+
 
 
 

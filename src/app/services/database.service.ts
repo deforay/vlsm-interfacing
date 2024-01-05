@@ -159,14 +159,25 @@ export class DatabaseService {
     (this.electronService.execSqliteQuery(t, Object.values(data))).then((results) => { success(results) });
   }
 
-  fetchRecentLogs(success, errorf) {
-    const t = 'SELECT * FROM app_log ORDER BY added_on DESC, id DESC LIMIT 500';
-    if (this.mysqlPool != null) {
-      this.execQuery(t, null, success, errorf);
+  fetchRecentLogs(instrumentId = null, success = null, errorf = null) {
+    let query;
+    if (instrumentId) {
+      // Adjust the SQL query to filter by instrumentId
+      query = 'SELECT * FROM app_log WHERE log like "%[' + instrumentId + ']%" ORDER BY added_on DESC, id DESC LIMIT 500';
     } else {
-      // Fetching from SQLITE
-      (this.electronService.execSqliteQuery(t, null)).then((results) => { success(results) });
+      // If no instrumentId is provided, fetch all logs
+      query = 'SELECT * FROM app_log ORDER BY added_on DESC, id DESC LIMIT 500';
+    }
+    if (this.mysqlPool != null) {
+      // Execute query with MySQL
+      this.execQuery(query, null, success, errorf);
+    } else {
+      // Execute query with SQLite
+      this.electronService.execSqliteQuery(query, [instrumentId])
+        .then((results) => { success(results) })
+        .catch((err) => { if (errorf) errorf(err); });
     }
   }
+
 
 }

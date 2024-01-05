@@ -9,20 +9,16 @@ import { ElectronService } from '../core/services';
 
 export class UtilitiesService {
 
-  protected log = null;
   protected timer = null;
   protected logtext = [];
+
+  protected logTextMap = new Map<string, BehaviorSubject<string[]>>();
 
   protected lastOrdersSubject = new BehaviorSubject([]);
   lastOrders = this.lastOrdersSubject.asObservable();
 
-  protected liveLogSubject = new BehaviorSubject([]);
-  liveLog = this.liveLogSubject.asObservable();
-
-
   constructor(public electronService: ElectronService,
     public dbService: DatabaseService) {
-    this.log = this.electronService.log;
   }
 
   sleep(ms) {
@@ -102,19 +98,32 @@ export class UtilitiesService {
     });
   }
 
-  fetchRecentLogs() {
-    const that = this;
-    that.dbService.fetchRecentLogs((res) => {
 
-      res.forEach(function (r) {
-        that.logtext.push(r.log);
-        that.liveLogSubject.next(that.logtext);
-      });
-
+  fetchRecentLogs(instrumentId = null) {
+    this.dbService.fetchRecentLogs(instrumentId, (res) => {
+      const logs = res.map(r => r.log); // Assuming r.log is the log message
+      this.getInstrumentLogSubject(instrumentId).next(logs);
     }, (err) => {
-      that.logger('error', 'Failed to fetch data ' + JSON.stringify(err));
+      this.logger('error', 'Failed to fetch recent logs: ' + JSON.stringify(err));
     });
   }
+
+
+
+
+  clearLiveLog(instrumentId = null) {
+    if (instrumentId) {
+      // Clear logs for a specific instrument
+      const logSubject = this.getInstrumentLogSubject(instrumentId);
+      logSubject.next([]);
+    } else {
+      // Clear logs for all instruments
+      this.logTextMap.forEach((subject) => {
+        subject.next([]);
+      });
+    }
+  }
+
 
   fetchLastSyncTimes(callback): any {
     const that = this;
@@ -129,51 +138,52 @@ export class UtilitiesService {
     });
   }
 
-  clearLiveLog() {
-    const that = this;
-    that.logtext = []
-    that.liveLogSubject.next(that.logtext);
+  getInstrumentLogSubject(instrumentId: string): BehaviorSubject<string[]> {
+    if (!this.logTextMap.has(instrumentId)) {
+      this.logTextMap.set(instrumentId, new BehaviorSubject<string[]>([]));
+    }
+    return this.logTextMap.get(instrumentId);
   }
-
 
   logger(logType = null, message = null, instrumentId = null) {
     const that = this;
-    const moment = require('moment');
-    const date = moment(new Date()).format('DD-MMM-YYYY HH:mm:ss');
-    let logFor = ` [${date}] `;
-    if (instrumentId) {
-      logFor = ` [${instrumentId}]  [${date}] `;
+    if (message) {
+      const moment = require('moment');
+      const date = moment(new Date()).format('DD-MMM-YYYY HH:mm:ss');
+      let logFor = ` [${date}] `;
+      if (instrumentId) {
+        logFor = ` [${instrumentId}]  [${date}] `;
+      }
+
+      let logMessage = '';
+
+      if (logType === 'info') {
+        that.electronService.logInfo(message, instrumentId);
+        logMessage = `<span class="text-info">[info]</span> ${logFor}${message}`;
+      } else if (logType === 'error') {
+        that.electronService.logError(message, instrumentId);
+        logMessage = `<span class="text-danger">[error]</span> ${logFor}${message}`;
+      } else if (logType === 'success') {
+        that.electronService.logInfo(message, instrumentId);
+        logMessage = `<span class="text-success">[success]</span> ${logFor}${message}`;
+      } else if (logType === 'ignore') {
+        logMessage = `${message}`;
+      }
+
+      //console.log(`${logFor}${message}`);
+
+      //that.logtext[that.logtext.length] = logMessage;
+      const logSubject = that.getInstrumentLogSubject(instrumentId);
+      const currentLogs = logSubject.value;
+      logSubject.next([logMessage, ...currentLogs]);
+
+      if (logType !== 'ignore') {
+        const dbLog: any = {};
+        dbLog.log = logMessage;
+
+        that.dbService.addApplicationLog(dbLog, (res) => { }, (err) => { });
+      }
     }
-
-    let logMessage = '';
-
-    that.log.transports.file.fileName = `${moment().format('YYYY-MM-DD')}.log`;
-
-    if (logType === 'info') {
-      this.log.info(message);
-      logMessage = `<span class="text-info">[info]</span> ${logFor}${message}<br>`;
-    } else if (logType === 'error') {
-      this.log.error(message);
-      logMessage = `<span class="text-danger">[error]</span> ${logFor}${message}<br>`;
-    } else if (logType === 'success') {
-      this.log.info(message);
-      logMessage = `<span class="text-success">[success]</span> ${logFor}${message}<br>`;
-    } else if (logType === 'ignore') {
-      logMessage = `${message}<br>`;
-    }
-
-
-    //that.logtext[that.logtext.length] = logMessage;
-    that.logtext.unshift(logMessage);
-    that.liveLogSubject.next(that.logtext);
-
-    if (logType !== 'ignore') {
-      const dbLog: any = {};
-      dbLog.log = logMessage;
-
-      that.dbService.addApplicationLog(dbLog, (res) => { }, (err) => { });
-    }
-
   }
 
 }

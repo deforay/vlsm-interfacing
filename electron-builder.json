@@ -1,5 +1,5 @@
 {
-  "asar": false,
+  "asar": true,
   "directories": {
     "output": "release/"
   },
@@ -9,19 +9,8 @@
     "!*.map",
     "!package.json",
     "!package-lock.json",
-    "!src/",
-    "!e2e/",
-    "!hooks/",
-    "!angular.json",
-    "!_config.yml",
-    "!karma.conf.js",
-    "!tsconfig.json",
-    "!tslint.json"
-  ],
-  "extraResources": [
     {
-      "from": "dist",
-      "to": "app",
+      "from": "../dist",
       "filter": [
         "**/*"
       ]

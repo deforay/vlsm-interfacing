@@ -46,12 +46,12 @@ export class TcpConnectionService {
       const statusSubject = new BehaviorSubject(false);
       // Subscribe to the BehaviorSubject
       statusSubject.subscribe(value => {
-        console.info(connectionParams.instrumentId + ' statusSubject ===> ' + value);
+        //console.info(connectionParams.instrumentId + ' statusSubject ===> ' + value);
       });
       const connectionAttemptStatusSubject = new BehaviorSubject(false);
       // Subscribe to the BehaviorSubject
       connectionAttemptStatusSubject.subscribe(value => {
-        console.info(connectionParams.instrumentId + ' connectionAttemptStatusSubject ===> ' + value);
+        //console.info(connectionParams.instrumentId + ' connectionAttemptStatusSubject ===> ' + value);
       });
 
       instrumentConnectionData = {

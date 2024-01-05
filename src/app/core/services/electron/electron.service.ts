@@ -6,7 +6,6 @@ import { ipcRenderer, net, webFrame } from 'electron';
 import * as childProcess from 'child_process';
 import * as fs from 'fs';
 import * as mysql from 'mysql';
-import log from 'electron-log';
 
 
 @Injectable({
@@ -19,26 +18,23 @@ export class ElectronService {
   fs: typeof fs;
   mysql: typeof mysql;
   net: typeof net;
-  log: typeof log;
   sqlite: any;
 
   constructor() {
+
+    const that = this;
     // Conditional imports
-    if (this.isElectron) {
-      this.ipcRenderer = window.require('electron').ipcRenderer;
-      this.webFrame = window.require('electron').webFrame;
+    if (that.isElectron) {
+      that.ipcRenderer = window.require('electron').ipcRenderer;
+      that.webFrame = window.require('electron').webFrame;
 
-      this.childProcess = window.require('child_process');
-      this.fs = window.require('fs');
+      that.childProcess = window.require('child_process');
+      that.fs = window.require('fs');
 
-      this.mysql = window.require('mysql');
-      this.net = window.require('net');
-      this.log = window.require('electron-log');
+      that.mysql = window.require('mysql');
+      that.net = window.require('net');
 
-      this.log.transports.file.level = 'info';
-      this.log.transports.console.level = 'info';
-
-      this.sqlite = window.require('sqlite3');
+      that.sqlite = window.require('sqlite3');
 
       // Notes :
       // * A NodeJS's dependency imported with 'window.require' MUST BE present in `dependencies` of both `app/package.json`
@@ -54,9 +50,7 @@ export class ElectronService {
 
     }
 
-
   }
-
 
   get isElectron(): boolean {
     return !!(window && window.process && window.process.type);
@@ -66,7 +60,6 @@ export class ElectronService {
     this.ipcRenderer.invoke('dialog', method, config);
   }
 
-
   execSqliteQuery(sql: any, args: any): any {
     return new Promise((resolve) => {
       this.ipcRenderer.once('sqlite3-reply', (_, arg) => {
@@ -74,6 +67,18 @@ export class ElectronService {
       });
       this.ipcRenderer.send('sqlite3-query', sql, args);
     });
+  }
+
+  logInfo(message: string, instrumentId: string = null) {
+    ipcRenderer.invoke('log-info', message, instrumentId);
+  }
+
+  logError(message: string, instrumentId: string = null) {
+    ipcRenderer.invoke('log-error', message, instrumentId);
+  }
+
+  logWarning(message: string, instrumentId: string = null) {
+    ipcRenderer.invoke('log-warning', message, instrumentId);
   }
 
 }

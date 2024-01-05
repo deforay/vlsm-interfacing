@@ -4,6 +4,7 @@ const electron_1 = require("electron");
 const path = require("path");
 const fs = require("fs");
 const Store = require("electron-store");
+const log = require("electron-log/main");
 //import { Sqlite3Helper } from '../src/app/core/sqlite3helper.main';
 let win = null;
 let store = null;
@@ -13,6 +14,12 @@ const args = process.argv.slice(1), serve = args.some(val => val === '--serve');
 function createWindow() {
     const electronScreen = electron_1.screen;
     const size = electronScreen.getPrimaryDisplay().workAreaSize;
+    log.initialize();
+    log.transports.file.level = 'info';
+    log.transports.console.level = 'info';
+    const today = new Date();
+    const dateString = `${today.getFullYear()}-${(today.getMonth() + 1).toString().padStart(2, '0')}-${today.getDate().toString().padStart(2, '0')}`;
+    log.transports.file.fileName = `${dateString}.log`;
     //const Store = require('electron-store');
     Store.initRenderer();
     store = new Store();
@@ -160,6 +167,27 @@ try {
                     event.reply('sqlite3-reply', (err && err.message) || rows);
                 });
             }
+        });
+        electron_1.ipcMain.handle('log-info', (event, message, instrumentId = null) => {
+            let appLog = log.scope('app');
+            if (instrumentId) {
+                appLog = log.scope(instrumentId);
+            }
+            appLog.info(message);
+        });
+        electron_1.ipcMain.handle('log-warning', (event, message, instrumentId = null) => {
+            let appLog = log.scope('app');
+            if (instrumentId) {
+                appLog = log.scope(instrumentId);
+            }
+            appLog.warn(message);
+        });
+        electron_1.ipcMain.handle('log-error', (event, message, instrumentId = null) => {
+            let appLog = log.scope('app');
+            if (instrumentId) {
+                appLog = log.scope(instrumentId);
+            }
+            appLog.error(message);
         });
     });
 }
