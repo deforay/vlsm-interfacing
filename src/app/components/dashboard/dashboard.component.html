@@ -48,7 +48,7 @@
             </h5>
             <h6>({{instrument.connectionParams.host}}:{{instrument.connectionParams.port}})</h6>
             <p class="card-text">Please try to Connect and wait for a few moments.</p>
-            <button (click)="reConnect(instrument)" class="btn btn-success" [disabled]="instrument.connectionInProcess">
+            <button (click)="reconnect(instrument)" class="btn btn-success" [disabled]="instrument.connectionInProcess">
               <span>{{instrument.instrumentButtonText}}</span>
             </button>
             &nbsp;&nbsp;

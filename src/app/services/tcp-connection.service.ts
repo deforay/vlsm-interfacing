@@ -109,7 +109,6 @@ export class TcpConnectionService {
 
       });
 
-
       instrumentConnectionData.connectionServer.on('error', function (e) {
         instrumentConnectionData.errorOccurred = true;
         that._handleClientConnectionIssue(instrumentConnectionData, connectionParams, 'Error while connecting ' + e.code, true);
@@ -155,9 +154,8 @@ export class TcpConnectionService {
           return;
         }
         const message = hadError ? 'Connection closed due to a transmission error' : 'Connection closed';
-        if (hadError) {
-          that._handleClientConnectionIssue(instrumentConnectionData, connectionParams, message, hadError);
-        }
+        that._handleClientConnectionIssue(instrumentConnectionData, connectionParams, message, hadError);
+
       });
     } else {
 
@@ -168,8 +166,9 @@ export class TcpConnectionService {
   private _handleClientConnectionIssue(instrumentConnectionData, connectionParams, message, isError) {
     instrumentConnectionData.statusSubject.next(false);
     this.disconnect(connectionParams.host, connectionParams.port);
-    this.utilitiesService.logger(isError ? 'error' : 'info', message, instrumentConnectionData.instrumentId);
-
+    if (isError) {
+      this.utilitiesService.logger('error', message, instrumentConnectionData.instrumentId);
+    }
     if (connectionParams.interfaceAutoConnect === 'yes') {
       instrumentConnectionData.connectionAttemptStatusSubject.next(true);
       this.utilitiesService.logger('info', "Interface AutoConnect is enabled: Will re-attempt connection in 30 seconds", instrumentConnectionData.instrumentId);
@@ -179,7 +178,7 @@ export class TcpConnectionService {
     }
   }
 
-  reConnect(connectionParams: ConnectionParams, handleTCPCallback: (connectionIdentifierKey: string, data: any) => void) {
+  reconnect(connectionParams: ConnectionParams, handleTCPCallback: (connectionIdentifierKey: string, data: any) => void) {
     let that = this;
     that.disconnect(connectionParams.host, connectionParams.port);
     that.connect(connectionParams, handleTCPCallback);

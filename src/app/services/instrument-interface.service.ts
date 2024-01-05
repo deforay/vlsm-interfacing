@@ -26,21 +26,28 @@ export class InstrumentInterfaceService {
   }
 
   // Method used to connect to the Testing Machine
-  connect(connectionParams: ConnectionParams) {
+  connect(instrument: any) {
     const that = this;
-    if (connectionParams) {
+    if (instrument && instrument.connectionParams) {
       // Bind 'this' explicitly to handleTCPResponse
       const boundHandleTCPResponse = this.handleTCPResponse.bind(this);
-      that.tcpService.connect(connectionParams, boundHandleTCPResponse);
+      that.tcpService.connect(instrument.connectionParams, boundHandleTCPResponse);
     }
   }
 
-  reConnect(connectionParams: ConnectionParams) {
+  reconnect(instrument: any) {
     const that = this;
-    if (connectionParams) {
+    if (instrument && instrument.connectionParams) {
       // Bind 'this' explicitly to handleTCPResponse
       const boundHandleTCPResponse = this.handleTCPResponse.bind(this);
-      that.tcpService.reConnect(connectionParams, boundHandleTCPResponse);
+      that.tcpService.reconnect(instrument.connectionParams, boundHandleTCPResponse);
+    }
+  }
+
+  disconnect(instrument: any) {
+    const that = this;
+    if (instrument && instrument.connectionParams && instrument.connectionParams.host && instrument.connectionParams.port) {
+      that.tcpService.disconnect(instrument.connectionParams.host, instrument.connectionParams.port);
     }
   }
 

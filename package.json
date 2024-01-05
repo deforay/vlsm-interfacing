@@ -35,12 +35,13 @@
     "rxjs": "7.8.1",
     "tslib": "2.6.2",
     "zone.js": "0.14.2",
+    "font-awesome": "^4.7.0",
     "electron-log": "^4.4.8",
     "electron-store": "^8.1.0",
-    "font-awesome": "^4.7.0",
     "hl7parser": "^1.0.1",
-    "mysql": "^2.18.1",
-    "sqlite3": "^5.1.6"
+    "mysql": "2.18.1",
+    "sqlite3": "^5.1.6",
+    "moment": "^2.29.4"
   },
   "devDependencies": {
     "@angular-builders/custom-webpack": "17.0.0",

@@ -20,7 +20,7 @@ import { DashboardComponent } from './components/dashboard/dashboard.component';
 import { DatabaseService } from './services/database.service';
 import { TcpConnectionService } from './services/tcp-connection.service';
 import { ElectronService } from './core/services';
-import { InstrumentInterfaceService } from './services/intrument-interface.service';
+import { InstrumentInterfaceService } from './services/instrument-interface.service';
 import { ElectronStoreService } from './services/electron-store.service';
 
 // AoT requires an exported function for factories

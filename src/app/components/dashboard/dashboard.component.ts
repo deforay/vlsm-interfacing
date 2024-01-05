@@ -1,7 +1,7 @@
 import { Component, OnInit, NgZone, OnDestroy, ChangeDetectorRef } from '@angular/core';
 import { Router } from '@angular/router';
 import { ElectronStoreService } from '../../services/electron-store.service';
-import { InstrumentInterfaceService } from '../../services/intrument-interface.service';
+import { InstrumentInterfaceService } from '../../services/instrument-interface.service';
 import { UtilitiesService } from '../../services/utilities.service';
 import { TcpConnectionService } from '../../services/tcp-connection.service';
 import { ConnectionParams } from '../../interfaces/connection-params.interface';
@@ -61,7 +61,7 @@ export class DashboardComponent implements OnInit, OnDestroy {
     that.electronStoreSubscription = that.store.electronStoreObservable().subscribe(electronStoreObject => {
 
       that._ngZone.run(() => {
-
+        this.cdRef.detectChanges();
         that.commonSettings = electronStoreObject.commonConfig;
         that.instrumentsSettings = electronStoreObject.instrumentsConfig;
         that.appVersion = electronStoreObject.appVersion;
@@ -87,9 +87,10 @@ export class DashboardComponent implements OnInit, OnDestroy {
             that.router.navigate(['/settings']);
           }
 
+
           if (instrument.connectionParams.interfaceAutoConnect !== undefined && instrument.connectionParams.interfaceAutoConnect !== null && instrument.connectionParams.interfaceAutoConnect === 'yes') {
             setTimeout(() => {
-              that.reConnect(instrument.connectionParams);
+              that.reconnect(instrument);
             }, 1000);
           }
           that.availableInstruments.push(instrument);
@@ -147,18 +148,27 @@ export class DashboardComponent implements OnInit, OnDestroy {
     this.liveLogText = null;
     this.utilitiesService.clearLiveLog();
   }
+
   connect(instrument: any) {
     const that = this;
     if (instrument && instrument.connectionParams && instrument.connectionParams.host && instrument.connectionParams.port) {
-      that.instrumentInterfaceService.connect(instrument.connectionParams);
+      that.instrumentInterfaceService.connect(instrument);
       that.updateInstrumentStatusSubscription(instrument);
     }
   }
 
-  reConnect(instrument: any) {
+  reconnect(instrument: any) {
     const that = this;
     if (instrument && instrument.connectionParams && instrument.connectionParams.host && instrument.connectionParams.port) {
-      that.instrumentInterfaceService.reConnect(instrument.connectionParams);
+      that.instrumentInterfaceService.reconnect(instrument);
+      that.updateInstrumentStatusSubscription(instrument);
+    }
+  }
+
+  disconnect(instrument: any) {
+    const that = this;
+    if (instrument && instrument.connectionParams && instrument.connectionParams.host && instrument.connectionParams.port) {
+      that.instrumentInterfaceService.disconnect(instrument);
       that.updateInstrumentStatusSubscription(instrument);
     }
   }
@@ -174,7 +184,7 @@ export class DashboardComponent implements OnInit, OnDestroy {
           }
           return inst;
         });
-        //this.cdRef.detectChanges();
+        this.cdRef.detectChanges();
       });
     });
 
@@ -192,7 +202,7 @@ export class DashboardComponent implements OnInit, OnDestroy {
             }
             return inst;
           });
-          //this.cdRef.detectChanges();
+          this.cdRef.detectChanges();
         });
       });
   }
