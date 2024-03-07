@@ -64,7 +64,8 @@
               <strong>Connection : </strong> {{instrument.connectionParams.connectionMode
               ===
               'tcpclient' ? 'TCP Client' : 'TCP Server'}} |
-              ({{instrument.connectionParams.host}}:{{instrument.connectionParams.port}})
+              {{instrument.connectionParams.host}}:{{instrument.connectionParams.port}} |
+              {{instrument.connectionParams.connectionProtocol}}
             </small>
 
             <a (click)="copyLog(instrument)" class="btn btn-primary btn-sm"

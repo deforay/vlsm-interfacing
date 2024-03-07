@@ -143,7 +143,7 @@ export class InstrumentInterfaceService {
           order.test_id = message.get('SAC.3').toString();
         }
 
-        order.test_type = 'HIVVL';
+        order.test_type = message.get('OBR.4.2')?.toString() || message.get('OBX.3.2')?.toString() || 'HIVVL';
 
         if (resultOutcome === 'Titer') {
           order.test_unit = singleObx.get('OBX.6.1').toString();
@@ -241,7 +241,7 @@ export class InstrumentInterfaceService {
           order.test_id = message.get('SAC.3').toString();
         }
 
-        order.test_type = 'HIVVL';
+        order.test_type = message.get('OBR.4.2')?.toString() || message.get('OBX.3.2')?.toString() || 'HIVVL';
 
         if (resultOutcome == 'Titer') {
           order.test_unit = singleObx.get('OBX.6.1').toString();
@@ -335,7 +335,7 @@ export class InstrumentInterfaceService {
           order.test_id = message.get('SAC.3').toString();
         }
 
-        order.test_type = 'HIVVL';
+        order.test_type = message.get('OBR.4.2')?.toString() || message.get('OBX.3.2')?.toString() || 'HIVVL';
 
         if (resultOutcome == 'Titer') {
           order.test_unit = singleObx.get('OBX.6.1').toString();
