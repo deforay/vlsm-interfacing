@@ -526,24 +526,12 @@ export class InstrumentInterfaceService {
 
         partData = partData.replace(/[\x05\x02\x03]/g, '');
         const astmArray = partData.split(/\r?\n/);
-        const dataArray = [];
-        astmArray.forEach(function (element) {
-          if (element !== '') {
-            element = element.replace(/^\d*/, '');
-            if (dataArray[element.substring(0, 1)] === undefined) {
-              dataArray[element.substring(0, 1)] = element.split('|');
-            } else {
-              const arr = element.split('|');
-              arr.shift();
-              dataArray[element.substring(0, 1)] += arr;
-            }
-          }
-        });
+        const dataArray = that.getASTMDataBlock(astmArray);
 
         //that.utilitiesService.logger('info', dataArray, instrumentConnectionData.instrumentId);
-        that.utilitiesService.logger('info', dataArray['R'], instrumentConnectionData.instrumentId);
+        //that.utilitiesService.logger('info', dataArray['R'][0], instrumentConnectionData.instrumentId);
 
-        if (dataArray === null || dataArray === undefined || dataArray['R'] === undefined) {
+        if (dataArray === null || dataArray === undefined || !dataArray['R'] || dataArray['R'].length == 0) {
           // console.error(partData);
           // console.error(astmArray);
           // console.error(dataArray);
@@ -580,9 +568,9 @@ export class InstrumentInterfaceService {
         const dataArray = that.getASTMDataBlock(astmArray);
 
         //that.utilitiesService.logger('info', dataArray, instrumentConnectionData.instrumentId);
-        //that.utilitiesService.logger('info',dataArray['R'], instrumentConnectionData.instrumentId);
+        //that.utilitiesService.logger('info',dataArray['R'][0], instrumentConnectionData.instrumentId);
 
-        if (dataArray === null || dataArray === undefined || dataArray['R'] === undefined) {
+        if (dataArray === null || dataArray === undefined || !dataArray['R'] || dataArray['R'].length == 0) {
           that.utilitiesService.logger('info', 'No ASTM Concatenated data received.', instrumentConnectionData.instrumentId);
           return;
         }
@@ -613,52 +601,77 @@ export class InstrumentInterfaceService {
   }
 
   private getASTMDataBlock(astmArray: any[]) {
-    let dataArray = [];
+    let dataArray = {};
+
     astmArray.forEach(function (element) {
       if (element !== '') {
-        element = element.replace(/^\d*/, '');
-        if (dataArray[element.substring(0, 1)] === undefined) {
-          dataArray[element.substring(0, 1)] = element.split('|');
+        // Remove leading digits and split the segment into its constituent fields
+        const segmentFields = element.replace(/^\d*/, '').split('|');
+
+        // Use the first character (segment type) as the key
+        const segmentType = segmentFields[0].charAt(0);
+
+        // Check if this type of segment has already been encountered
+        if (!dataArray[segmentType]) {
+          dataArray[segmentType] = [segmentFields]; // Initialize with the current segment's fields
         } else {
-          const arr = element.split('|');
-          arr.shift();
-          dataArray[element.substring(0, 1)] += arr;
+          dataArray[segmentType].push(segmentFields); // Append this segment's fields to the array of segments of the same type
         }
       }
     });
+
     return dataArray;
   }
 
-  private saveASTMDataBlock(dataArray: any[], partData: string, instrumentConnectionData: InstrumentConnectionStack) {
+
+  private saveASTMDataBlock(dataArray: {}, partData: string, instrumentConnectionData: InstrumentConnectionStack) {
     const that = this;
     const order: any = {};
-
+    console.log(dataArray);
     try {
 
-      if (that.utilitiesService.arrayKeyExists('R', dataArray) && typeof dataArray['R'] == 'string') {
-        dataArray['R'] = dataArray['R'].split(',');
-      }
 
-      if (that.utilitiesService.arrayKeyExists('O', dataArray) && typeof dataArray['O'] == 'string') {
-        dataArray['O'] = dataArray['O'].split(',');
-      }
 
-      if (that.utilitiesService.arrayKeyExists('C', dataArray) && typeof dataArray['C'] == 'string') {
-        dataArray['C'] = dataArray['C'].split(',');
-      }
+      if (dataArray['O'] && dataArray['O'].length > 0) {
 
-      if (dataArray['O'] !== undefined && dataArray['O'] !== null) {
+        const oSegmentFields = dataArray['O'][0]; // dataArray['O'] is an array of arrays (each sub-array is a segment's fields)
 
-        order.order_id = dataArray['O'][2];
-        order.test_id = dataArray['O'][1];
-        if (dataArray['R'] !== undefined && dataArray['R'] !== null) {
-          order.test_type = (dataArray['R'][2]) ? dataArray['R'][2].replace('^^^', '') : dataArray['R'][2];
-          order.test_unit = dataArray['R'][4];
-          order.results = dataArray['R'][3];
-          order.tested_by = dataArray['R'][10];
-          order.analysed_date_time = that.utilitiesService.formatRawDate(dataArray['R'][12]);
-          order.authorised_date_time = that.utilitiesService.formatRawDate(dataArray['R'][12]);
-          order.result_accepted_date_time = that.utilitiesService.formatRawDate(dataArray['R'][12]);
+        order.order_id = oSegmentFields[2];
+        order.test_id = oSegmentFields[1];
+
+        const universalTestIdentifier = oSegmentFields[4];
+        const testTypeDetails = universalTestIdentifier.split('^');
+        const testType = testTypeDetails.length > 1 ? testTypeDetails[3] : ''; // Adjust based on your ASTM format
+
+        order.test_type = testType;
+
+        if (dataArray['R'] && dataArray['R'].length > 0) {
+
+          const rSegmentFields = dataArray['R'][0];
+
+          if (!order.test_type) {
+            order.test_type = (rSegmentFields[2]) ? rSegmentFields[2].replace('^^^', '') : rSegmentFields[2];
+          }
+          order.test_unit = rSegmentFields[4];
+
+          let resultSegment = rSegmentFields[3];
+          let finalResult = null;
+
+          if (resultSegment) {
+            let resultSegmentComponents = resultSegment.split("^");
+            // Check if the primary result is non-empty and use it; otherwise, check the additional result
+            if (resultSegmentComponents[0].trim()) {
+              finalResult = resultSegmentComponents[0].trim();
+            } else if (resultSegmentComponents.length > 1 && resultSegmentComponents[1].trim()) {
+              finalResult = resultSegmentComponents[1].trim();
+            }
+          }
+
+          order.results = finalResult;
+          order.tested_by = rSegmentFields[10];
+          order.analysed_date_time = that.utilitiesService.formatRawDate(rSegmentFields[12]);
+          order.authorised_date_time = that.utilitiesService.formatRawDate(rSegmentFields[12]);
+          order.result_accepted_date_time = that.utilitiesService.formatRawDate(rSegmentFields[12]);
         } else {
           order.test_type = '';
           order.test_unit = '';
