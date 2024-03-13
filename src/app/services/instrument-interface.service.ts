@@ -347,15 +347,7 @@ export class InstrumentInterfaceService {
           order.test_id = message.get('SAC.3').toString();
         }
 
-        if(message.get('OBR') !== null){
-          order.test_type = message.get('OBR.4.2').toString();
-        }
-        if(message.get('OBX.3.2') !== null && !order.test_type){
-          order.test_type = message.get('OBX.3.2').toString();
-        }
-        if(!order.test_type){
-          order.test_type = 'HIVVL';
-        }
+        order.test_type = message.get('OBR.4.2')?.toString() || message.get('OBX.3.2')?.toString() || 'HIVVL';
 
         if (resultOutcome == 'Titer') {
           order.test_unit = singleObx.get('OBX.6.1').toString();
