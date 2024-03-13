@@ -281,6 +281,113 @@ export class InstrumentInterfaceService {
       });
     });
   }
+
+  processHL7DataRoche5800(instrumentConnectionData, rawHl7Text: string) {
+
+    const that = this;
+    const message = that.hl7parser.create(rawHl7Text.trim());
+    const msgID = message.get('MSH.10').toString();
+    const characterSet = message.get('MSH.18').toString();
+    const messageProfileIdentifier = message.get('MSH.21').toString();
+    that.tcpService.socketClient.write(that.hl7ACK(msgID, characterSet, messageProfileIdentifier));
+
+    const hl7DataArray = rawHl7Text.split('MSH|');
+
+    hl7DataArray.forEach(function (rawText: string) {
+
+      if (rawText.trim() === '') { return; }
+
+      rawText = 'MSH|' + rawText.trim();
+      const message = that.hl7parser.create(rawText);
+
+      if (message === '' || message === null || message.get('SPM') === null || message.get('OBX') === null) {
+        return;
+      }
+
+      const obx = message.get('OBX').toArray();
+
+      //obx.forEach(function (singleObx) {
+      //  console.log(singleObx);
+      //});
+
+      const spm = message.get('SPM');
+      let sampleNumber = 0;
+
+      //console.log(obx[1]);
+      spm.forEach(function (singleSpm) {
+        sampleNumber = (singleSpm.get(1).toInteger());
+        if (isNaN(sampleNumber)) {
+          sampleNumber = 1;
+        }
+        let index = (sampleNumber * 2) - 1
+
+        // Index access error if:
+        // index == 1 when sampleNumer == 1 and obx.length == 1
+        // Therefore we reduce index by 1
+        if(index >= obx.length) {
+          index-=1
+        }
+
+        let singleObx = obx[index]; // there are twice as many OBX .. so we take the even number - 1 OBX for each SPM
+
+        //console.log(singleObx.get('OBX.19').toString());
+
+        let resultOutcome = singleObx.get('OBX.5.1').toString();
+
+        const order: any = {};
+        order.raw_text = rawText;
+        order.order_id = singleSpm.get('SPM.2').toString().replace("&ROCHE", "");
+        order.test_id = singleSpm.get('SPM.2').toString().replace("&ROCHE", "");;
+
+        if (order.order_id === "") {
+          // const sac = message.get('SAC').toArray();
+          // const singleSAC = sac[0];
+          //Let us use the Sample Container ID as the Order ID
+          order.order_id = message.get('SAC.3').toString();
+          order.test_id = message.get('SAC.3').toString();
+        }
+
+        order.test_type = message.get('OBR.4.2')?.toString() || message.get('OBX.3.2')?.toString() || 'HIVVL';
+
+        if (resultOutcome == 'Titer') {
+          order.test_unit = singleObx.get('OBX.6.1').toString();
+          order.results = singleObx.get('OBX.5.1').toString();
+        } else if (resultOutcome == '<20' || resultOutcome == '< 20') {
+          order.test_unit = '';
+          order.results = 'Target Not Detected';
+        } else if (resultOutcome == '> Titer max') {
+          order.test_unit = '';
+          order.results = '> 10000000';
+        } else if (resultOutcome == 'Target Not Detected') {
+          order.test_unit = '';
+          order.results = 'Target Not Detected';
+        } else if (resultOutcome == 'Invalid') {
+          order.test_unit = '';
+          order.results = 'Invalid';
+        } else if (resultOutcome == 'Failed') {
+          order.test_unit = '';
+          order.results = 'Failed';
+        } else {
+          order.test_unit = singleObx.get('OBX.6.1').toString();
+          order.results = resultOutcome;
+        }
+
+        order.tested_by = singleObx.get('OBX.16').toString();
+        order.result_status = 1;
+        order.lims_sync_status = 0;
+        order.analysed_date_time = that.utilitiesService.formatRawDate(singleObx.get('OBX.19').toString());
+        //order.specimen_date_time = this.formatRawDate(message.get('OBX').get(0).get('OBX.19').toString());
+        order.authorised_date_time = that.utilitiesService.formatRawDate(singleObx.get('OBX.19').toString());
+        order.result_accepted_date_time = that.utilitiesService.formatRawDate(singleObx.get('OBX.19').toString());
+        order.test_location = instrumentConnectionData.labName;
+        order.machine_used = instrumentConnectionData.analyzerMachineName;
+
+        that.saveOrder(order, instrumentConnectionData);
+
+      });
+    });
+  }
+
   processHL7DataRoche68008800(instrumentConnectionData: InstrumentConnectionStack, rawHl7Text: string) {
 
     const that = this;
@@ -393,7 +500,6 @@ export class InstrumentInterfaceService {
     });
   }
 
-
   private receiveASTM(astmProtocolType: string, instrumentConnectionData: InstrumentConnectionStack, data: Buffer) {
     let that = this;
     that.utilitiesService.logger('info', 'Receiving ' + astmProtocolType, instrumentConnectionData.instrumentId);
@@ -412,7 +518,7 @@ export class InstrumentInterfaceService {
       };
 
       that.dbService.addRawData(rawData, (res) => {
-        that.utilitiesService.logger('success', 'Successfully saved raw data', instrumentConnectionData.instrumentId);
+        that.utilitiesService.logger('success', 'Successfully saved raw astm data', instrumentConnectionData.instrumentId);
       }, (err) => {
         that.utilitiesService.logger('error', 'Failed to save raw data : ' + JSON.stringify(err), instrumentConnectionData.instrumentId);
       });
@@ -467,7 +573,7 @@ export class InstrumentInterfaceService {
       };
 
       that.dbService.addRawData(rawData, (res) => {
-        that.utilitiesService.logger('success', 'Successfully saved raw data', instrumentConnectionData.instrumentId);
+        that.utilitiesService.logger('success', 'Successfully saved raw hl7 data', instrumentConnectionData.instrumentId);
       }, (err) => {
         that.utilitiesService.logger('error', 'Failed to save raw data ' + JSON.stringify(err), instrumentConnectionData.instrumentId);
       });
@@ -481,6 +587,12 @@ export class InstrumentInterfaceService {
         && instrumentConnectionData.machineType !== ""
         && instrumentConnectionData.machineType === 'abbott-alinity-m') {
         that.processHL7DataAlinity(instrumentConnectionData, that.strData);
+      }
+      else if (instrumentConnectionData.machineType !== undefined
+        && instrumentConnectionData.machineType !== null
+        && instrumentConnectionData.machineType !== ""
+        && instrumentConnectionData.machineType === 'roche-cobas-5800') {
+        that.processHL7DataRoche5800(instrumentConnectionData, that.strData);
       }
       else if (instrumentConnectionData.machineType !== undefined
         && instrumentConnectionData.machineType !== null
@@ -695,7 +807,6 @@ export class InstrumentInterfaceService {
       that.utilitiesService.logger('error', error, instrumentConnectionData.instrumentId);
       console.error(error);
       return false;
-
     }
   }
 }
