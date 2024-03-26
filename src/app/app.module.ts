@@ -22,6 +22,10 @@ import { TcpConnectionService } from './services/tcp-connection.service';
 import { ElectronService } from './core/services';
 import { InstrumentInterfaceService } from './services/instrument-interface.service';
 import { ElectronStoreService } from './services/electron-store.service';
+import { NgxPaginationModule } from 'ngx-pagination';
+import { MatPaginatorModule } from '@angular/material/paginator';
+import { MatSortModule } from '@angular/material/sort';
+import { MatTableModule } from '@angular/material/table';
 
 // AoT requires an exported function for factories
 const httpLoaderFactory = (http: HttpClient): TranslateHttpLoader => new TranslateHttpLoader(http, './assets/i18n/', '.json');
@@ -30,6 +34,10 @@ const httpLoaderFactory = (http: HttpClient): TranslateHttpLoader => new Transla
   declarations: [AppComponent, SettingsComponent, DashboardComponent],
   imports: [
     BrowserModule,
+    MatTableModule,
+    MatSortModule,
+    MatPaginatorModule,
+    NgxPaginationModule,
     FormsModule,
     HttpClientModule,
     CoreModule,

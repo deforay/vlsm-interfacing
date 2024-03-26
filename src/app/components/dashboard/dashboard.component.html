@@ -131,30 +131,59 @@
 
   <div class="scard">
     <div class="scard-body">
-      <h4>
+      <h4 >
 
         Recent Results
-
-        <button (click)="fetchLastOrders();" class="btn btn-sm btn-primary" style="float:right;">
+        <button (click)="fetchLastOrders();" class="btn btn-sm btn-primary" style="float:right; margin-bottom: 5px;">
           <span>Fetch Recent Records</span>
         </button>
+        <div style="position: relative;">
+          <input type="text" [(ngModel)]="searchText" (keyup)="filterData()" placeholder="Search Results..." class="custom-input" style="width: 100%; height: 30px;">
+          <!-- <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" style="position: absolute; left: 10px; top: 50%; transform: translateY(-50%); width: 20px; height: 20px; margin-left:70%;">
+              <path d="M15.5 14h-.79l-.28-.27A6.471 6.471 0 0 0 16 9.5 6.5 6.5 0 1 0 9.5 16c1.61 0 3.07-.59 4.21-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"/>
+          </svg>
+          <input type="text" [(ngModel)]="searchText" (keyup)="filterData()" placeholder="Search Results" style="border-radius: 15px; width: 200px; height: 25px; padding-left: 35px; padding-bottom: 5px; margin-left: 70%;" class="custom-input"> -->
+
+        
+        </div>
+      
 
 
       </h4>
-      <table style="font-size: 0.9em;" id="dashtable"
+      <table style="font-size: 0.9em; margin-bottom: 10px;" id="dashtable"
         class="table dashtable table-striped table-hover table-bordered table-responsive">
         <thead>
           <tr class="thead-dark">
-            <th style="width:8%;">Instrument</th>
-            <th style="width:8%;">Sample/Order ID</th>
-            <th style="width:10%;">Test Result</th>
-            <th style="width:10%;">Result Unit</th>
-            <th style="width:10%;">Test Type</th>
-            <th style="width:10%;">Tested By</th>
-            <th style="width:10%;">Tested On</th>
-            <th style="width:10%;">Received On</th>
-            <th style="width:5%;">LIS Sync Status</th>
-            <th style="width:5%;">LIS Sync Datetime</th>
+            <th style="width:8%;" (click)="sortData('machine_used')">Instrument &nbsp;<span class="clickable-icon">
+              <i class="fa fa-sort" [ngClass]="{'fa-sort-asc': sortedColumn === 'machine_used' && isAscending, 'fa-sort-desc': sortedColumn === 'machine_used' && !isAscending}"></i>
+            </span></th>
+            <th style="width:8%;" (click)="sortData('order_id')">Sample/Order ID &nbsp;<span class="clickable-icon">
+              <i class="fa fa-sort" [ngClass]="{'fa-sort-asc': sortedColumn === 'order_id' && isAscending, 'fa-sort-desc': sortedColumn === 'order_id' && !isAscending}"></i>
+            </span></th>
+            <th style="width:10%;" (click)="sortData('results')">Test Result &nbsp;<span class="clickable-icon">
+              <i class="fa fa-sort" [ngClass]="{'fa-sort-asc': sortedColumn === 'results' && isAscending, 'fa-sort-desc': sortedColumn === 'results' && !isAscending}"></i>
+            </span></th>
+            <th style="width:10%;" (click)="sortData('test_unit')">Result Unit &nbsp;<span class="clickable-icon">
+              <i class="fa fa-sort" [ngClass]="{'fa-sort-asc': sortedColumn === 'test_unit' && isAscending, 'fa-sort-desc': sortedColumn === 'test_unit' && !isAscending}"></i>
+            </span></th>
+            <th style="width:10%;" (click)="sortData('test_type')">Test Type &nbsp;<span class="clickable-icon">
+              <i class="fa fa-sort" [ngClass]="{'fa-sort-asc': sortedColumn === 'test_type' && isAscending, 'fa-sort-desc': sortedColumn === 'test_type' && !isAscending}"></i>
+            </span></th>
+            <th style="width:10%;" (click)="sortData('tested_by')">Tested By &nbsp;<span class="clickable-icon">
+              <i class="fa fa-sort" [ngClass]="{'fa-sort-asc': sortedColumn === 'tested_by' && isAscending, 'fa-sort-desc': sortedColumn === 'tested_by' && !isAscending}"></i>
+            </span></th>
+            <th style="width:10%;" (click)="sortData('analysed_date_time')">Tested On &nbsp;<span class="clickable-icon">
+              <i class="fa fa-sort" [ngClass]="{'fa-sort-asc': sortedColumn === 'analysed_date_time' && isAscending, 'fa-sort-desc': sortedColumn === 'analysed_date_time' && !isAscending}"></i>
+            </span></th>
+            <th style="width:10%;" (click)="sortData('added_on')">Received On &nbsp;<span class="clickable-icon">
+              <i class="fa fa-sort" [ngClass]="{'fa-sort-asc': sortedColumn === 'added_on' && isAscending, 'fa-sort-desc': sortedColumn === 'added_on' && !isAscending}"></i>
+            </span></th>
+            <th style="width:5%;" (click)="sortData('lims_sync_status')">LIS Sync Status &nbsp;<span class="clickable-icon">
+              <i class="fa fa-sort" [ngClass]="{'fa-sort-asc': sortedColumn === 'lims_sync_status' && isAscending, 'fa-sort-desc': sortedColumn === 'lims_sync_status' && !isAscending}"></i>
+            </span></th>
+            <th style="width:5%;" (click)="sortData('lims_sync_date_time')">LIS Sync Datetime &nbsp;<span class="clickable-icon">
+              <i class="fa fa-sort" [ngClass]="{'fa-sort-asc': sortedColumn === 'lims_sync_date_time' && isAscending, 'fa-sort-desc': sortedColumn === 'lims_sync_date_time' && !isAscending}"></i>
+            </span></th>
           </tr>
         </thead>
         <tbody>
@@ -179,6 +208,11 @@
           </ng-container>
         </tbody>
       </table>
+      <mat-paginator [length]="totalItems"
+               [pageSize]="pageSize"
+               [pageIndex]="currentPage - 1"
+               (page)="pageChanged($event)">
+      </mat-paginator>
     </div>
   </div>
   <br>

@@ -6,19 +6,23 @@ import { InstrumentInterfaceService } from '../../services/instrument-interface.
 import { UtilitiesService } from '../../services/utilities.service';
 import { TcpConnectionService } from '../../services/tcp-connection.service';
 import { ConnectionParams } from '../../interfaces/connection-params.interface';
-
+import { MatPaginator } from '@angular/material/paginator';
+import { MatTableDataSource } from '@angular/material/table';
+import { ViewChild } from '@angular/core';
 @Component({
   selector: 'app-dashboard',
   templateUrl: './dashboard.component.html',
   styleUrls: ['./dashboard.component.scss']
 })
 export class DashboardComponent implements OnInit, OnDestroy {
+  @ViewChild(MatPaginator) paginator: MatPaginator;
   public commonSettings = null;
   public instrumentsSettings = null;
   public appVersion: string = null;
   public lastLimsSync = '';
   public lastResultReceived = '';
   public interval: any;
+  public data: any;
   public lastOrders: any;
   public availableInstruments = [];
   public instrumentLogs = [];
@@ -26,6 +30,15 @@ export class DashboardComponent implements OnInit, OnDestroy {
   public selectedTabIndex = 0;
   private electronStoreSubscription: any;
   public searchText: string = '';
+  public sortedColumn: string;
+  public isAscending: boolean = true;
+  dataSource: MatTableDataSource<any>;
+  public pageSize: number = 5; 
+  public currentPage: number = 1;
+  public totalItems: number;
+  @ViewChild(MatPaginator) matPaginator: MatPaginator;
+  
+  
 
   constructor(
     private cdRef: ChangeDetectorRef,
@@ -38,6 +51,46 @@ export class DashboardComponent implements OnInit, OnDestroy {
     private router: Router) {
 
   }
+
+
+
+  filterData() {
+    console.log(this.searchText)
+    if (this.searchText.trim()) {
+      const searchTextLowerCase = this.searchText.toLowerCase();
+      this.lastOrders = this.data.filter(order =>
+        Object.values(order).some(value =>
+          value && value.toString().toLowerCase().includes(searchTextLowerCase)
+        )
+      );
+    } else {
+      this.fetchLastOrders(); 
+    }
+  }
+
+  
+
+  sortData(column: string) {
+    if (this.sortedColumn === column) {
+      this.isAscending = !this.isAscending;
+    } else {
+      this.isAscending = true;
+      this.sortedColumn = column;
+    }
+    this.lastOrders.sort((a, b) => {
+      const valA = (typeof a[column] === 'string' ? a[column].toLowerCase() : a[column]);
+      const valB = (typeof b[column] === 'string' ? b[column].toLowerCase() : b[column]);
+
+      if (valA < valB) {
+        return this.isAscending ? -1 : 1;
+      } else if (valA > valB) {
+        return this.isAscending ? 1 : -1;
+      } else {
+        return 0;
+      }
+    });
+  }
+  
 
   ngOnInit() {
 
@@ -124,6 +177,10 @@ export class DashboardComponent implements OnInit, OnDestroy {
     });
   }
 
+  pageChanged(event) {
+    this.currentPage = event.pageIndex + 1;
+  }
+
   fetchLastOrders() {
     const that = this;
     that.utilitiesService.fetchLastOrders();
@@ -137,6 +194,10 @@ export class DashboardComponent implements OnInit, OnDestroy {
       next: lastFewOrders => {
         that._ngZone.run(() => {
           that.lastOrders = lastFewOrders[0];
+          that.data = lastFewOrders[0];
+          that.dataSource = new MatTableDataSource<any>(that.lastOrders);
+          that.dataSource.paginator = that.matPaginator; 
+          that.totalItems = that.lastOrders.length;
         });
       },
       error: error => {
