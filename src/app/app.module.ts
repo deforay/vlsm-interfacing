@@ -17,6 +17,7 @@ import { HomeModule } from './home/home.module';
 import { AppComponent } from './app.component';
 import { SettingsComponent } from './components/settings/settings.component';
 import { DashboardComponent } from './components/dashboard/dashboard.component';
+import { RawDataComponentComponent } from './components/raw-data-component/raw-data-component.component';
 import { DatabaseService } from './services/database.service';
 import { TcpConnectionService } from './services/tcp-connection.service';
 import { ElectronService } from './core/services';
@@ -26,17 +27,20 @@ import { NgxPaginationModule } from 'ngx-pagination';
 import { MatPaginatorModule } from '@angular/material/paginator';
 import { MatSortModule } from '@angular/material/sort';
 import { MatTableModule } from '@angular/material/table';
+import { BrowserAnimationsModule } from '@angular/platform-browser/animations';
+
 
 // AoT requires an exported function for factories
 const httpLoaderFactory = (http: HttpClient): TranslateHttpLoader => new TranslateHttpLoader(http, './assets/i18n/', '.json');
 
 @NgModule({
-  declarations: [AppComponent, SettingsComponent, DashboardComponent],
+  declarations: [AppComponent, SettingsComponent, DashboardComponent,RawDataComponentComponent],
   imports: [
     BrowserModule,
     MatTableModule,
     MatSortModule,
     MatPaginatorModule,
+    BrowserAnimationsModule,
     NgxPaginationModule,
     FormsModule,
     HttpClientModule,

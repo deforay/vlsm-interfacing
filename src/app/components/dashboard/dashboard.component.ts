@@ -8,14 +8,16 @@ import { TcpConnectionService } from '../../services/tcp-connection.service';
 import { ConnectionParams } from '../../interfaces/connection-params.interface';
 import { MatPaginator } from '@angular/material/paginator';
 import { MatTableDataSource } from '@angular/material/table';
+import { MatSort } from '@angular/material/sort';
 import { ViewChild } from '@angular/core';
+import { Observable } from 'rxjs';
 @Component({
   selector: 'app-dashboard',
   templateUrl: './dashboard.component.html',
   styleUrls: ['./dashboard.component.scss']
 })
 export class DashboardComponent implements OnInit, OnDestroy {
-  @ViewChild(MatPaginator) paginator: MatPaginator;
+
   public commonSettings = null;
   public instrumentsSettings = null;
   public appVersion: string = null;
@@ -29,14 +31,21 @@ export class DashboardComponent implements OnInit, OnDestroy {
   public connectionParams: ConnectionParams = null;
   public selectedTabIndex = 0;
   private electronStoreSubscription: any;
-  public searchText: string = '';
-  public sortedColumn: string;
-  public isAscending: boolean = true;
-  dataSource: MatTableDataSource<any>;
-  public pageSize: number = 5; 
-  public currentPage: number = 1;
-  public totalItems: number;
-  @ViewChild(MatPaginator) matPaginator: MatPaginator;
+  public displayedColumns: string[] = [
+    'machine_used',
+    'order_id',
+    'results',
+    'test_unit',
+    'test_type',
+    'tested_by',
+    'analysed_date_time',
+    'added_on',
+    'lims_sync_status',
+    'lims_sync_date_time'
+  ];
+  dataSource = new MatTableDataSource<any>();
+  @ViewChild(MatPaginator, { static: true }) paginator: MatPaginator;
+  @ViewChild(MatSort, { static: true }) sort: MatSort;
   
   
 
@@ -53,44 +62,6 @@ export class DashboardComponent implements OnInit, OnDestroy {
   }
 
 
-
-  filterData() {
-    console.log(this.searchText)
-    if (this.searchText.trim()) {
-      const searchTextLowerCase = this.searchText.toLowerCase();
-      this.lastOrders = this.data.filter(order =>
-        Object.values(order).some(value =>
-          value && value.toString().toLowerCase().includes(searchTextLowerCase)
-        )
-      );
-    } else {
-      this.fetchLastOrders(); 
-    }
-  }
-
-  
-
-  sortData(column: string) {
-    if (this.sortedColumn === column) {
-      this.isAscending = !this.isAscending;
-    } else {
-      this.isAscending = true;
-      this.sortedColumn = column;
-    }
-    this.lastOrders.sort((a, b) => {
-      const valA = (typeof a[column] === 'string' ? a[column].toLowerCase() : a[column]);
-      const valB = (typeof b[column] === 'string' ? b[column].toLowerCase() : b[column]);
-
-      if (valA < valB) {
-        return this.isAscending ? -1 : 1;
-      } else if (valA > valB) {
-        return this.isAscending ? 1 : -1;
-      } else {
-        return 0;
-      }
-    });
-  }
-  
 
   ngOnInit() {
 
@@ -115,7 +86,7 @@ export class DashboardComponent implements OnInit, OnDestroy {
     that.electronStoreSubscription = that.store.electronStoreObservable().subscribe(electronStoreObject => {
 
       that._ngZone.run(() => {
-        this.cdRef.detectChanges();
+        
         that.commonSettings = electronStoreObject.commonConfig;
         that.instrumentsSettings = electronStoreObject.instrumentsConfig;
         that.appVersion = electronStoreObject.appVersion;
@@ -173,13 +144,12 @@ export class DashboardComponent implements OnInit, OnDestroy {
         // let us refresh last orders every 5 minutes
         that.interval = setInterval(() => { that.fetchLastOrders(); }, 1000 * 60 * 5);
       });
+      this.cdRef.detectChanges();
 
     });
   }
 
-  pageChanged(event) {
-    this.currentPage = event.pageIndex + 1;
-  }
+
 
   fetchLastOrders() {
     const that = this;
@@ -194,10 +164,13 @@ export class DashboardComponent implements OnInit, OnDestroy {
       next: lastFewOrders => {
         that._ngZone.run(() => {
           that.lastOrders = lastFewOrders[0];
+          console.log(that.lastOrders)
           that.data = lastFewOrders[0];
-          that.dataSource = new MatTableDataSource<any>(that.lastOrders);
-          that.dataSource.paginator = that.matPaginator; 
-          that.totalItems = that.lastOrders.length;
+          this.dataSource.data = that.lastOrders;
+          this.dataSource.paginator = this.paginator;
+          this.dataSource.sort = this.sort;
+          
+          
         });
       },
       error: error => {
@@ -205,6 +178,10 @@ export class DashboardComponent implements OnInit, OnDestroy {
       }
     });
 
+  }
+
+  filterData($event:any){
+    this.dataSource.filter = $event.target.value;
   }
 
   updateLogsForInstrument(instrumentId: string, newLogs: any) {

@@ -104,6 +104,16 @@ export class DatabaseService {
     (this.electronService.execSqliteQuery(t, Object.values(data))).then((results) => { success(results) });
 
   }
+  fetchrawData(success, errorf) {
+    const that = 'SELECT * FROM raw_data ORDER BY added_on DESC';
+    if (this.mysqlPool != null) {
+      this.execQuery(that, null, success, errorf);
+    } else {
+      (this.electronService.execSqliteQuery(that, null)).then((results) => { success(results) });
+    }
+  }
+
+
 
   fetchLastOrders(success, errorf) {
     const t = 'SELECT * FROM orders ORDER BY added_on DESC LIMIT 1000';

@@ -131,92 +131,100 @@
 
   <div class="scard">
     <div class="scard-body">
-      <h4 >
+      <h4>
 
         Recent Results
         <button (click)="fetchLastOrders();" class="btn btn-sm btn-primary" style="float:right; margin-bottom: 5px;">
           <span>Fetch Recent Records</span>
         </button>
         <div style="position: relative;">
-          <input type="text" [(ngModel)]="searchText" (keyup)="filterData()" placeholder="Search Results..." class="custom-input" style="width: 100%; height: 30px;">
-          <!-- <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" style="position: absolute; left: 10px; top: 50%; transform: translateY(-50%); width: 20px; height: 20px; margin-left:70%;">
-              <path d="M15.5 14h-.79l-.28-.27A6.471 6.471 0 0 0 16 9.5 6.5 6.5 0 1 0 9.5 16c1.61 0 3.07-.59 4.21-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"/>
-          </svg>
-          <input type="text" [(ngModel)]="searchText" (keyup)="filterData()" placeholder="Search Results" style="border-radius: 15px; width: 200px; height: 25px; padding-left: 35px; padding-bottom: 5px; margin-left: 70%;" class="custom-input"> -->
-
-        
+          <input type="text" [(ngModel)]="searchText" (keyup)="filterData($event)" placeholder="Search Results..."
+            class="custom-input" style="width: 100%; height: 30px;">
         </div>
-      
 
 
       </h4>
-      <table style="font-size: 0.9em; margin-bottom: 10px;" id="dashtable"
-        class="table dashtable table-striped table-hover table-bordered table-responsive">
-        <thead>
-          <tr class="thead-dark">
-            <th style="width:8%;" (click)="sortData('machine_used')">Instrument &nbsp;<span class="clickable-icon">
-              <i class="fa fa-sort" [ngClass]="{'fa-sort-asc': sortedColumn === 'machine_used' && isAscending, 'fa-sort-desc': sortedColumn === 'machine_used' && !isAscending}"></i>
-            </span></th>
-            <th style="width:8%;" (click)="sortData('order_id')">Sample/Order ID &nbsp;<span class="clickable-icon">
-              <i class="fa fa-sort" [ngClass]="{'fa-sort-asc': sortedColumn === 'order_id' && isAscending, 'fa-sort-desc': sortedColumn === 'order_id' && !isAscending}"></i>
-            </span></th>
-            <th style="width:10%;" (click)="sortData('results')">Test Result &nbsp;<span class="clickable-icon">
-              <i class="fa fa-sort" [ngClass]="{'fa-sort-asc': sortedColumn === 'results' && isAscending, 'fa-sort-desc': sortedColumn === 'results' && !isAscending}"></i>
-            </span></th>
-            <th style="width:10%;" (click)="sortData('test_unit')">Result Unit &nbsp;<span class="clickable-icon">
-              <i class="fa fa-sort" [ngClass]="{'fa-sort-asc': sortedColumn === 'test_unit' && isAscending, 'fa-sort-desc': sortedColumn === 'test_unit' && !isAscending}"></i>
-            </span></th>
-            <th style="width:10%;" (click)="sortData('test_type')">Test Type &nbsp;<span class="clickable-icon">
-              <i class="fa fa-sort" [ngClass]="{'fa-sort-asc': sortedColumn === 'test_type' && isAscending, 'fa-sort-desc': sortedColumn === 'test_type' && !isAscending}"></i>
-            </span></th>
-            <th style="width:10%;" (click)="sortData('tested_by')">Tested By &nbsp;<span class="clickable-icon">
-              <i class="fa fa-sort" [ngClass]="{'fa-sort-asc': sortedColumn === 'tested_by' && isAscending, 'fa-sort-desc': sortedColumn === 'tested_by' && !isAscending}"></i>
-            </span></th>
-            <th style="width:10%;" (click)="sortData('analysed_date_time')">Tested On &nbsp;<span class="clickable-icon">
-              <i class="fa fa-sort" [ngClass]="{'fa-sort-asc': sortedColumn === 'analysed_date_time' && isAscending, 'fa-sort-desc': sortedColumn === 'analysed_date_time' && !isAscending}"></i>
-            </span></th>
-            <th style="width:10%;" (click)="sortData('added_on')">Received On &nbsp;<span class="clickable-icon">
-              <i class="fa fa-sort" [ngClass]="{'fa-sort-asc': sortedColumn === 'added_on' && isAscending, 'fa-sort-desc': sortedColumn === 'added_on' && !isAscending}"></i>
-            </span></th>
-            <th style="width:5%;" (click)="sortData('lims_sync_status')">LIS Sync Status &nbsp;<span class="clickable-icon">
-              <i class="fa fa-sort" [ngClass]="{'fa-sort-asc': sortedColumn === 'lims_sync_status' && isAscending, 'fa-sort-desc': sortedColumn === 'lims_sync_status' && !isAscending}"></i>
-            </span></th>
-            <th style="width:5%;" (click)="sortData('lims_sync_date_time')">LIS Sync Datetime &nbsp;<span class="clickable-icon">
-              <i class="fa fa-sort" [ngClass]="{'fa-sort-asc': sortedColumn === 'lims_sync_date_time' && isAscending, 'fa-sort-desc': sortedColumn === 'lims_sync_date_time' && !isAscending}"></i>
-            </span></th>
-          </tr>
-        </thead>
-        <tbody>
-          <ng-container *ngIf="!(lastOrders?.length > 0)">
-            <tr>
-              <td colspan="10" class="center"> No data available in database </td>
-            </tr>
-          </ng-container>
-          <ng-container *ngFor="let rows of lastOrders">
-            <tr>
-              <td>{{rows.machine_used}}</td>
-              <td>{{rows.order_id}}</td>
-              <td>{{rows.results}}</td>
-              <td>{{rows.test_unit}}</td>
-              <td>{{rows.test_type}}</td>
-              <td>{{rows.tested_by}}</td>
-              <td>{{rows.analysed_date_time}}</td>
-              <td>{{rows.added_on}}</td>
-              <td>{{rows.lims_sync_status}}</td>
-              <td>{{rows.lims_sync_date_time}}</td>
-            </tr>
-          </ng-container>
-        </tbody>
-      </table>
-      <mat-paginator [length]="totalItems"
-               [pageSize]="pageSize"
-               [pageIndex]="currentPage - 1"
-               (page)="pageChanged($event)">
-      </mat-paginator>
+      <mat-table #table [dataSource]="dataSource" class="mat-elevation-z8" matSort>
+        <!-- Instrument Column -->
+        <ng-container matColumnDef="machine_used">
+          <mat-header-cell *matHeaderCellDef style="background-color: #eee8e867;" mat-sort-header> Instrument
+          </mat-header-cell>
+          <mat-cell *matCellDef="let row"> {{row.machine_used}} </mat-cell>
+        </ng-container>
+
+        <!-- Sample/Order ID Column -->
+        <ng-container matColumnDef="order_id">
+          <mat-header-cell *matHeaderCellDef style="background-color: #eee8e867;" mat-sort-header> Sample/Order ID
+          </mat-header-cell>
+          <mat-cell *matCellDef="let row"> {{row.order_id}} </mat-cell>
+        </ng-container>
+
+        <!-- Test Result Column -->
+        <ng-container matColumnDef="results">
+          <mat-header-cell *matHeaderCellDef style="background-color: #eee8e867;" mat-sort-header> Test Result
+          </mat-header-cell>
+          <mat-cell *matCellDef="let row"> {{row.results}} </mat-cell>
+        </ng-container>
+
+        <!-- Result Unit Column -->
+        <ng-container matColumnDef="test_unit">
+          <mat-header-cell *matHeaderCellDef style="background-color: #eee8e867;" mat-sort-header> Result Unit
+          </mat-header-cell>
+          <mat-cell *matCellDef="let row"> {{row.test_unit}} </mat-cell>
+        </ng-container>
+
+        <!-- Test Type Column -->
+        <ng-container matColumnDef="test_type">
+          <mat-header-cell *matHeaderCellDef style="background-color: #eee8e867;" mat-sort-header> Test Type
+          </mat-header-cell>
+          <mat-cell *matCellDef="let row"> {{row.test_type}} </mat-cell>
+        </ng-container>
+
+        <!-- Tested By Column -->
+        <ng-container matColumnDef="tested_by">
+          <mat-header-cell *matHeaderCellDef style="background-color: #eee8e867;" mat-sort-header> Tested By
+          </mat-header-cell>
+          <mat-cell *matCellDef="let row"> {{row.tested_by}} </mat-cell>
+        </ng-container>
+
+        <!-- Tested On Column -->
+        <ng-container matColumnDef="analysed_date_time">
+          <mat-header-cell *matHeaderCellDef style="background-color: #eee8e867;" mat-sort-header> Tested On
+          </mat-header-cell>
+          <mat-cell *matCellDef="let row"> {{row.analysed_date_time}} </mat-cell>
+        </ng-container>
+
+        <!-- Received On Column -->
+        <ng-container matColumnDef="added_on">
+          <mat-header-cell *matHeaderCellDef style="background-color: #eee8e867;" mat-sort-header> Received On
+          </mat-header-cell>
+          <mat-cell *matCellDef="let row"> {{row.added_on}} </mat-cell>
+        </ng-container>
+
+        <!-- LIS Sync Status Column -->
+        <ng-container matColumnDef="lims_sync_status">
+          <mat-header-cell *matHeaderCellDef style="background-color: #eee8e867;" mat-sort-header> LIS Sync Status
+          </mat-header-cell>
+          <mat-cell *matCellDef="let row"> {{row.lims_sync_status}} </mat-cell>
+        </ng-container>
+
+        <!-- LIS Sync Datetime Column -->
+        <ng-container matColumnDef="lims_sync_date_time">
+          <mat-header-cell *matHeaderCellDef style="background-color: #eee8e867;" mat-sort-header> LIS Sync Datetime
+          </mat-header-cell>
+          <mat-cell *matCellDef="let row"> {{row.lims_sync_date_time}} </mat-cell>
+        </ng-container>
+
+        <mat-header-row *matHeaderRowDef="displayedColumns" class="row-with-spacing"></mat-header-row>
+        <mat-row *matRowDef="let row; columns: displayedColumns;" class="row-with-spacing"></mat-row>
+      </mat-table>
+      <button routerLink="/raw-data-component" class="btn btn-sm btn-primary" style="float:left; margin-bottom: 5px;">
+        <span>View Raw Data</span>
+      </button>
     </div>
   </div>
   <br>
-
+  <mat-paginator [pageSizeOptions]="[50, 100, 250, 500, 100]" [pageSize]="500" showFirstLastButtons aria-label="Select Page"></mat-paginator>
   <small class="float-end" *ngIf="appVersion">v{{appVersion}}</small>
   <br>
   <br>

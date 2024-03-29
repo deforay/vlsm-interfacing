@@ -17,6 +17,9 @@ export class UtilitiesService {
   protected lastOrdersSubject = new BehaviorSubject([]);
   lastOrders = this.lastOrdersSubject.asObservable();
 
+  protected lastrawDataSubject = new BehaviorSubject([]);
+  lastrawData  = this.lastrawDataSubject.asObservable();
+
   constructor(public electronService: ElectronService,
     public dbService: DatabaseService) {
   }
@@ -93,6 +96,16 @@ export class UtilitiesService {
     that.dbService.fetchLastOrders((res) => {
       res = [res]; // converting it into an array
       that.lastOrdersSubject.next(res);
+    }, (err) => {
+      that.logger('error', 'Failed to fetch data ' + JSON.stringify(err));
+    });
+  }
+
+  fetchrawData() {
+    const that = this;
+    that.dbService.fetchrawData((res) => {
+      res = [res]; // converting it into an array
+      that.lastrawDataSubject.next(res);
     }, (err) => {
       that.logger('error', 'Failed to fetch data ' + JSON.stringify(err));
     });

@@ -4,6 +4,7 @@ import { PageNotFoundComponent } from './shared/components';
 
 import { HomeRoutingModule } from './home/home-routing.module';
 import { DashboardComponent } from './components/dashboard/dashboard.component';
+import { RawDataComponentComponent } from './components/raw-data-component/raw-data-component.component';
 import { SettingsComponent } from './components/settings/settings.component';
 
 const routes: Routes = [
@@ -19,6 +20,10 @@ const routes: Routes = [
   {
     path: 'settings',
     component: SettingsComponent
+  },
+  {
+    path: 'raw-data-component',
+    component: RawDataComponentComponent
   },
   {
     path: '**',
