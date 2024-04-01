@@ -1,7 +1,9 @@
 import { Injectable } from '@angular/core';
 import { DatabaseService } from './database.service';
-import { BehaviorSubject, Observable } from 'rxjs';
+import { BehaviorSubject, Observable,of } from 'rxjs';
 import { ElectronService } from '../core/services';
+
+
 
 @Injectable({
   providedIn: 'root'
@@ -137,6 +139,9 @@ export class UtilitiesService {
     }
   }
 
+  reSyncRecord(orderId: string): Observable<any> {
+    return of(this.dbService.reSyncRecord(orderId));
+  }
 
   fetchLastSyncTimes(callback): any {
     const that = this;

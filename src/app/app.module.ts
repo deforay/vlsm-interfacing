@@ -28,7 +28,10 @@ import { MatPaginatorModule } from '@angular/material/paginator';
 import { MatSortModule } from '@angular/material/sort';
 import { MatTableModule } from '@angular/material/table';
 import { BrowserAnimationsModule } from '@angular/platform-browser/animations';
-
+// import {DemoMaterialModule} from './app/material-module';
+import {MAT_FORM_FIELD_DEFAULT_OPTIONS} from '@angular/material/form-field';
+import {MatSelectModule} from '@angular/material/select';
+import {MatCheckboxModule} from '@angular/material/checkbox';
 
 // AoT requires an exported function for factories
 const httpLoaderFactory = (http: HttpClient): TranslateHttpLoader => new TranslateHttpLoader(http, './assets/i18n/', '.json');
@@ -37,7 +40,9 @@ const httpLoaderFactory = (http: HttpClient): TranslateHttpLoader => new Transla
   declarations: [AppComponent, SettingsComponent, DashboardComponent,RawDataComponentComponent],
   imports: [
     BrowserModule,
+    MatCheckboxModule,
     MatTableModule,
+    MatSelectModule,
     MatSortModule,
     MatPaginatorModule,
     BrowserAnimationsModule,
@@ -61,7 +66,9 @@ const httpLoaderFactory = (http: HttpClient): TranslateHttpLoader => new Transla
     DatabaseService,
     TcpConnectionService,
     InstrumentInterfaceService,
-    ElectronStoreService],
+    ElectronStoreService,
+    { provide: MAT_FORM_FIELD_DEFAULT_OPTIONS, useValue: { appearance: 'fill' } },
+  ],
   bootstrap: [AppComponent]
 })
 export class AppModule { }

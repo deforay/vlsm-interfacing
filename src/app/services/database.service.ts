@@ -1,6 +1,8 @@
 import { Injectable } from '@angular/core';
 import { ElectronService } from '../core/services';
 import { ElectronStoreService } from './electron-store.service';
+import { Observable } from 'rxjs';
+
 
 @Injectable({
   providedIn: 'root'
@@ -124,6 +126,23 @@ export class DatabaseService {
       (this.electronService.execSqliteQuery(t, null)).then((results) => { success(results) });
     }
   }
+
+  reSyncRecord(orderId: string): void {
+    const updateQuery = `UPDATE orders SET lims_sync_status = '0' WHERE order_id = ?`;
+    this.execQuery(
+      updateQuery,
+      [orderId],
+      (result) => {
+        console.log('Record re-synced successfully:', result);
+      },
+      (error) => {
+        console.error('Error while re-syncing record:', error);
+      }
+    );
+  }
+  
+  
+  
 
   fetchLastSyncTimes(success, errorf) {
     const t = 'SELECT MAX(lims_sync_date_time) as lastLimsSync, MAX(added_on) as lastResultReceived FROM `orders`';

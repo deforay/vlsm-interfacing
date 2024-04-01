@@ -11,6 +11,13 @@ import { MatTableDataSource } from '@angular/material/table';
 import { MatSort } from '@angular/material/sort';
 import { ViewChild } from '@angular/core';
 import { Observable } from 'rxjs';
+import { SelectionModel } from "@angular/cdk/collections";
+import { FormControl } from "@angular/forms";
+import { MatCheckboxChange } from '@angular/material/checkbox';
+export enum SelectType {
+  single,
+  multiple
+}
 @Component({
   selector: 'app-dashboard',
   templateUrl: './dashboard.component.html',
@@ -32,6 +39,7 @@ export class DashboardComponent implements OnInit, OnDestroy {
   public selectedTabIndex = 0;
   private electronStoreSubscription: any;
   public displayedColumns: string[] = [
+    'select',
     'machine_used',
     'order_id',
     'results',
@@ -43,6 +51,12 @@ export class DashboardComponent implements OnInit, OnDestroy {
     'lims_sync_status',
     'lims_sync_date_time'
   ];
+  selectType = [
+    { text: "Single", value: SelectType.single },
+    { text: "Multiple", value: SelectType.multiple }
+  ];
+  selection = new SelectionModel<any>(true, []);
+  displayType = SelectType.single;
   dataSource = new MatTableDataSource<any>();
   @ViewChild(MatPaginator, { static: true }) paginator: MatPaginator;
   @ViewChild(MatSort, { static: true }) sort: MatSort;
@@ -60,8 +74,24 @@ export class DashboardComponent implements OnInit, OnDestroy {
     private router: Router) {
 
   }
+  selectHandler(row: any, event: MatCheckboxChange) {
+    if (row === null) {
+      if (event.checked) {
+        this.dataSource.data.forEach(row => this.selection.select(row));
+      } else {
+        this.selection.clear();
+      }
+    } else {
+      this.selection.toggle(row);
+    }
+  }
+  
+  
 
-
+  onChange(typeValue: number) {
+    this.displayType = typeValue;
+    this.selection.clear();
+  }
 
   ngOnInit() {
 
@@ -149,6 +179,28 @@ export class DashboardComponent implements OnInit, OnDestroy {
     });
   }
 
+
+  
+  reSyncSelectedRecords() {
+    this.selection.selected.forEach(selectedRow => {
+      if (this.utilitiesService) {
+        this.utilitiesService.reSyncRecord(selectedRow.order_id).subscribe({
+          next: (response) => {
+            selectedRow.lims_sync_status = '0';
+            this.dataSource.data = [...this.dataSource.data];
+            // Clear selection after re-sync
+            this.selection.clear();
+          },
+          error: (error) => {
+            console.error('Error during re-sync:', error);
+          }
+        });
+      } else {
+        console.error('Utilities service is undefined.');
+      }
+    });
+  }
+  
 
 
   fetchLastOrders() {

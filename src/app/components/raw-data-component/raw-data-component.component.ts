@@ -48,19 +48,14 @@ export class RawDataComponentComponent  {
   fetchrawData() {
     const that = this;
     that.utilitiesService.fetchrawData();
-
-    
     that.utilitiesService.lastrawData.subscribe({
       next: lastFewrawData => {
-        
           that.lastrawData = lastFewrawData[0];
           console.log(that.lastrawData)
           that.data = lastFewrawData[0];
           this.dataSource.data = that.lastrawData;
           this.dataSource.paginator = this.paginator;
           this.dataSource.sort = this.sort;
-          
-      
       },
       error: error => {
         console.error('Error fetching last orders:', error);
