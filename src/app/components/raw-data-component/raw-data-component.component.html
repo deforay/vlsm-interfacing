@@ -12,8 +12,8 @@
         Raw Data
       </h4>
       <div style="position: relative;">
-        <input type="text" [(ngModel)]="searchText" (keyup)="filterData($event)" placeholder="Search Raw Data..."
-          class="search-input" style="width: 100%; height: 30px;">
+        <input type="text" (keyup)="filterData($event)" placeholder="Search Raw Data..." class="search-input"
+          style="width: 100%; height: 30px;">
       </div><br>
       <mat-table #table [dataSource]="dataSource" class="mat-elevation-z8" matSort>
         <ng-container matColumnDef="machine">
