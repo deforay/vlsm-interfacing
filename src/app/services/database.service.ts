@@ -209,4 +209,26 @@ export class DatabaseService {
   }
 
 
+  /**
+   * Fetches an order that is ready to be sent.
+   */
+  getOrdersToSend(success = null, errorf = null) {
+    const query = 'SELECT * FROM orders WHERE result_status = 99 ORDER BY created_date ASC';
+
+    this.execQuery(query, [],
+      (results) => {
+        if (results.length > 0) {
+          success(results); // Assuming execQuery returns an array of results
+        } else {
+          success(null); // No orders to send
+        }
+      },
+      (err) => {
+        errorf(err);
+      }
+    );
+  }
+
+
+
 }

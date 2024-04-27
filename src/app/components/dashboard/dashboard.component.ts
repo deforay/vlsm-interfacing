@@ -24,7 +24,6 @@ export enum SelectType {
   styleUrls: ['./dashboard.component.scss']
 })
 export class DashboardComponent implements OnInit, OnDestroy {
-
   public commonSettings = null;
   public instrumentsSettings = null;
   public appVersion: string = null;
@@ -116,7 +115,7 @@ export class DashboardComponent implements OnInit, OnDestroy {
     that.electronStoreSubscription = that.store.electronStoreObservable().subscribe(electronStoreObject => {
 
       that._ngZone.run(() => {
-        
+        this.cdRef.detectChanges();
         that.commonSettings = electronStoreObject.commonConfig;
         that.instrumentsSettings = electronStoreObject.instrumentsConfig;
         that.appVersion = electronStoreObject.appVersion;
@@ -137,9 +136,6 @@ export class DashboardComponent implements OnInit, OnDestroy {
 
           instrument.isConnected = false;
           instrument.instrumentButtonText = 'Connect';
-          //instrument.logs = []; // Initialize logs
-          //instrument.filteredLogs = []; // Initialize filtered logs
-          //instrument.searchText = ''; // Initialize search text
 
           if (null === that.commonSettings || undefined === that.commonSettings || !instrument.connectionParams.port || (instrument.connectionParams.connectionProtocol === 'tcpclient' && !instrument.connectionParams.host)) {
             that.router.navigate(['/settings']);
@@ -286,6 +282,13 @@ export class DashboardComponent implements OnInit, OnDestroy {
     }
   }
 
+  sendASTMOrders(instrument: any) {
+    const that = this;
+    if (instrument && instrument.connectionParams && instrument.connectionParams.host && instrument.connectionParams.port) {
+      that.instrumentInterfaceService.fetchAndSendASTMOrders(instrument);
+    }
+  }
+
   updateInstrumentStatusSubscription(instrument: any) {
     const that = this;
     that.tcpService.getStatusObservable(instrument.connectionParams.host, instrument.connectionParams.port).subscribe(status => {
@@ -360,7 +363,7 @@ export class DashboardComponent implements OnInit, OnDestroy {
   }
 
 
-  clearLiveLog(instrument) {
+  clearLiveLog(instrument: any) {
     this.utilitiesService.clearLiveLog(instrument.connectionParams.instrumentId);
     // Clear logs and filtered logs for the specific instrument
     if (this.instrumentLogs[instrument.connectionParams.instrumentId]) {
@@ -379,7 +382,7 @@ export class DashboardComponent implements OnInit, OnDestroy {
     });
   }
 
-  getSafeHtml(logEntry) {
+  getSafeHtml(logEntry: string) {
     return this.sanitizer.bypassSecurityTrustHtml(logEntry);
   }
 

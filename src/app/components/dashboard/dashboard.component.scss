@@ -65,9 +65,10 @@
   font-size: 0.9em;
 }
 
-.custom-input::placeholder {
-  
-  font-size: 16px; 
+.search-input,
+.search-input::placeholder {
+
+  font-size: 14px;
 }
 
 
@@ -93,10 +94,11 @@
 }
 
 .header-cell {
-  background-color: #808080; /* Gray color, adjust as needed */
+  background-color: #808080;
+  /* Gray color, adjust as needed */
 }
 
 .row-with-spacing {
-  margin-bottom: 25px; /* Adjust the value as per your preference */
+  margin-bottom: 25px;
+  /* Adjust the value as per your preference */
 }
-

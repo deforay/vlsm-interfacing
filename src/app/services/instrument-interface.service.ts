@@ -14,23 +14,36 @@ export class InstrumentInterfaceService {
 
   public hl7parser = require('hl7parser');
 
-  protected ACK = Buffer.from('06', 'hex');
-  protected EOT = '04';
-  protected NAK = '21';
+  // protected ACK = Buffer.from('06', 'hex');
+  // protected EOT = '04';
+  protected NAK = '\x15'; // Negative Acknowledge
+  protected STX = '\x02'; // Start of Text
+  protected ETX = '\x03'; // End of Text
+  protected EOT = '\x04'; // End of Transmission
+  protected ENQ = '\x05'; // Enquiry
+  protected ACK = '\x06'; // Acknowledge
+  protected LF = '\x0A'; // Line Feed
+  protected CR = '\x0D'; // Carriage Return
+
+  protected START = '##START##';
 
   protected strData = '';
+
+  private astmSequenceNumbers: Map<string, number> = new Map();
+
 
   constructor(public dbService: DatabaseService,
     public tcpService: TcpConnectionService,
     public utilitiesService: UtilitiesService) {
   }
 
+
   // Method used to connect to the Testing Machine
   connect(instrument: any) {
     const that = this;
     if (instrument && instrument.connectionParams) {
       // Bind 'this' explicitly to handleTCPResponse
-      const boundHandleTCPResponse = this.handleTCPResponse.bind(this);
+      const boundHandleTCPResponse = that.handleTCPResponse.bind(that);
       that.tcpService.connect(instrument.connectionParams, boundHandleTCPResponse);
     }
   }
@@ -39,7 +52,7 @@ export class InstrumentInterfaceService {
     const that = this;
     if (instrument && instrument.connectionParams) {
       // Bind 'this' explicitly to handleTCPResponse
-      const boundHandleTCPResponse = this.handleTCPResponse.bind(this);
+      const boundHandleTCPResponse = that.handleTCPResponse.bind(that);
       that.tcpService.reconnect(instrument.connectionParams, boundHandleTCPResponse);
     }
   }
@@ -172,7 +185,7 @@ export class InstrumentInterfaceService {
         order.result_status = 1;
         order.lims_sync_status = 0;
         order.analysed_date_time = that.utilitiesService.formatRawDate(singleObx.get('OBX.19').toString());
-        //order.specimen_date_time = this.formatRawDate(message.get('OBX').get(0).get('OBX.19').toString());
+        //order.specimen_date_time = that.formatRawDate(message.get('OBX').get(0).get('OBX.19').toString());
         order.authorised_date_time = that.utilitiesService.formatRawDate(singleObx.get('OBX.19').toString());
         order.result_accepted_date_time = that.utilitiesService.formatRawDate(singleObx.get('OBX.19').toString());
         order.test_location = instrumentConnectionData.labName;
@@ -183,7 +196,7 @@ export class InstrumentInterfaceService {
       });
     });
   }
-  processHL7Data(instrumentConnectionData, rawHl7Text: string) {
+  processHL7Data(instrumentConnectionData: InstrumentConnectionStack, rawHl7Text: string) {
 
     const that = this;
     const message = that.hl7parser.create(rawHl7Text.trim());
@@ -270,11 +283,11 @@ export class InstrumentInterfaceService {
         order.result_status = 1;
         order.lims_sync_status = 0;
         order.analysed_date_time = that.utilitiesService.formatRawDate(singleObx.get('OBX.19').toString());
-        //order.specimen_date_time = this.formatRawDate(message.get('OBX').get(0).get('OBX.19').toString());
+        //order.specimen_date_time = that.formatRawDate(message.get('OBX').get(0).get('OBX.19').toString());
         order.authorised_date_time = that.utilitiesService.formatRawDate(singleObx.get('OBX.19').toString());
         order.result_accepted_date_time = that.utilitiesService.formatRawDate(singleObx.get('OBX.19').toString());
         order.test_location = instrumentConnectionData.labName;
-        order.machine_used = instrumentConnectionData.analyzerMachineName;
+        order.machine_used = instrumentConnectionData.instrumentId;
 
         that.saveOrder(order, instrumentConnectionData);
 
@@ -282,7 +295,7 @@ export class InstrumentInterfaceService {
     });
   }
 
-  processHL7DataRoche5800(instrumentConnectionData, rawHl7Text: string) {
+  processHL7DataRoche5800(instrumentConnectionData: InstrumentConnectionStack, rawHl7Text: string) {
 
     const that = this;
     const message = that.hl7parser.create(rawHl7Text.trim());
@@ -324,8 +337,8 @@ export class InstrumentInterfaceService {
         // Index access error if:
         // index == 1 when sampleNumer == 1 and obx.length == 1
         // Therefore we reduce index by 1
-        if(index >= obx.length) {
-          index-=1
+        if (index >= obx.length) {
+          index -= 1
         }
 
         let singleObx = obx[index]; // there are twice as many OBX .. so we take the even number - 1 OBX for each SPM
@@ -376,11 +389,11 @@ export class InstrumentInterfaceService {
         order.result_status = 1;
         order.lims_sync_status = 0;
         order.analysed_date_time = that.utilitiesService.formatRawDate(singleObx.get('OBX.19').toString());
-        //order.specimen_date_time = this.formatRawDate(message.get('OBX').get(0).get('OBX.19').toString());
+        //order.specimen_date_time = that.formatRawDate(message.get('OBX').get(0).get('OBX.19').toString());
         order.authorised_date_time = that.utilitiesService.formatRawDate(singleObx.get('OBX.19').toString());
         order.result_accepted_date_time = that.utilitiesService.formatRawDate(singleObx.get('OBX.19').toString());
         order.test_location = instrumentConnectionData.labName;
-        order.machine_used = instrumentConnectionData.analyzerMachineName;
+        order.machine_used = instrumentConnectionData.instrumentId;
 
         that.saveOrder(order, instrumentConnectionData);
 
@@ -471,7 +484,7 @@ export class InstrumentInterfaceService {
         order.result_status = 1;
         order.lims_sync_status = 0;
         order.analysed_date_time = that.utilitiesService.formatRawDate(singleObx.get('OBX.19').toString());
-        //order.specimen_date_time = this.formatRawDate(message.get('OBX').get(0).get('OBX.19').toString());
+        //order.specimen_date_time = that.formatRawDate(message.get('OBX').get(0).get('OBX.19').toString());
         order.authorised_date_time = that.utilitiesService.formatRawDate(singleObx.get('OBX.19').toString());
         order.result_accepted_date_time = that.utilitiesService.formatRawDate(singleObx.get('OBX.19').toString());
         order.test_location = instrumentConnectionData.labName;
@@ -480,33 +493,16 @@ export class InstrumentInterfaceService {
         that.saveOrder(order, instrumentConnectionData);
 
       });
-
-
-
-      // order.order_id = r.sampleID;
-      // order.test_id = r.sampleID;
-      // order.test_type = r.testName;
-      // order.test_unit = r.unit;
-      // //order.createdDate = '';
-      // order.results = r.result;
-      // order.tested_by = r.operator;
-      // order.result_status = 1;
-      // order.analysed_date_time = r.timestamp;
-      // order.specimen_date_time = r.specimenDate;
-      // order.authorised_date_time = r.timestamp;
-      // order.result_accepted_date_time = r.timestamp;
-      // order.test_location = this.labName;
-      // order.machine_used = this.analyzerMachineName;
     });
   }
 
+
   private receiveASTM(astmProtocolType: string, instrumentConnectionData: InstrumentConnectionStack, data: Buffer) {
     let that = this;
-    that.utilitiesService.logger('info', 'Receiving ' + astmProtocolType, instrumentConnectionData.instrumentId);
+    //that.utilitiesService.logger('info', 'Receiving ' + astmProtocolType, instrumentConnectionData.instrumentId);
+    let astmText = that.utilitiesService.hex2ascii(data.toString('hex'));
 
-    const hexData = data.toString('hex');
-
-    if (hexData === that.EOT) {
+    if (astmText === that.EOT) {
       instrumentConnectionData.connectionSocket.write(that.ACK);
       that.utilitiesService.logger('info', 'Received EOT. Sending ACK.', instrumentConnectionData.instrumentId);
       that.utilitiesService.logger('info', 'Processing ' + astmProtocolType, instrumentConnectionData.instrumentId);
@@ -517,9 +513,9 @@ export class InstrumentInterfaceService {
         machine: instrumentConnectionData.instrumentId,
       };
 
-      that.dbService.addRawData(rawData, (res) => {
+      that.dbService.addRawData(rawData, () => {
         that.utilitiesService.logger('success', 'Successfully saved raw astm data', instrumentConnectionData.instrumentId);
-      }, (err) => {
+      }, (err: any) => {
         that.utilitiesService.logger('error', 'Failed to save raw data : ' + JSON.stringify(err), instrumentConnectionData.instrumentId);
       });
 
@@ -531,22 +527,21 @@ export class InstrumentInterfaceService {
           that.processASTMConcatenatedData(instrumentConnectionData, that.strData);
           break;
         default:
-          // Handle unexpected protocol
+          // Unexpected protocol
           break;
       }
       that.strData = "";
-    } else if (hexData === that.NAK) {
+    } else if (astmText === that.NAK) {
       instrumentConnectionData.connectionSocket.write(that.ACK);
       that.utilitiesService.logger('error', 'NAK Received', instrumentConnectionData.instrumentId);
       that.utilitiesService.logger('info', 'Sending ACK', instrumentConnectionData.instrumentId);
     } else {
-      let text = that.utilitiesService.hex2ascii(hexData);
-      const regex = /^\d*H/;
-      if (regex.test(text.replace(/[\x05\x02\x03]/g, ''))) {
-        text = '##START##' + text;
+      const regexToCheckIfHeader = /^\d*H/;
+      if (regexToCheckIfHeader.test(astmText.replace(/[\x05\x02\x03]/g, ''))) {
+        astmText = that.START + astmText;
       }
-      that.strData += text;
-      that.utilitiesService.logger('info', 'Receiving....' + text, instrumentConnectionData.instrumentId);
+      that.strData += astmText;
+      that.utilitiesService.logger('info', astmProtocolType.toUpperCase() + ' | Receiving....' + astmText, instrumentConnectionData.instrumentId);
       instrumentConnectionData.connectionSocket.write(that.ACK);
       that.utilitiesService.logger('info', 'Sending ACK', instrumentConnectionData.instrumentId);
     }
@@ -572,9 +567,9 @@ export class InstrumentInterfaceService {
         machine: instrumentConnectionData.instrumentId,
       };
 
-      that.dbService.addRawData(rawData, (res) => {
+      that.dbService.addRawData(rawData, () => {
         that.utilitiesService.logger('success', 'Successfully saved raw hl7 data', instrumentConnectionData.instrumentId);
-      }, (err) => {
+      }, (err: any) => {
         that.utilitiesService.logger('error', 'Failed to save raw data ' + JSON.stringify(err), instrumentConnectionData.instrumentId);
       });
 
@@ -627,9 +622,9 @@ export class InstrumentInterfaceService {
     //that.utilitiesService.logger('info', astmData, instrumentConnectionData.instrumentId);
 
     const that = this;
-    const fullDataArray = astmData.split('##START##');
+    const fullDataArray = astmData.split(that.START);
 
-    // that.utilitiesService.logger('info', "AFTER SPLITTING USING ##START##", instrumentConnectionData.instrumentId);
+    // that.utilitiesService.logger('info', "AFTER SPLITTING USING " + that.START, instrumentConnectionData.instrumentId);
     // that.utilitiesService.logger('info', fullDataArray, instrumentConnectionData.instrumentId);
 
     fullDataArray.forEach(function (partData) {
@@ -662,14 +657,13 @@ export class InstrumentInterfaceService {
   }
 
   processASTMConcatenatedData(instrumentConnectionData: InstrumentConnectionStack, astmData: string) {
-
-    //this.logger('info', astmData, instrumentConnectionData.instrumentId);
-
     const that = this;
-    astmData = that.utilitiesService.replaceControlCharacters(astmData);
-    const fullDataArray = astmData.split('##START##');
 
-    // that.utilitiesService.logger('info', "AFTER SPLITTING USING ##START##", instrumentConnectionData.instrumentId);
+    //that.logger('info', astmData, instrumentConnectionData.instrumentId);
+    astmData = that.utilitiesService.replaceControlCharacters(astmData);
+    const fullDataArray = astmData.split(that.START);
+
+    // that.utilitiesService.logger('info', "AFTER SPLITTING USING " + that.START, instrumentConnectionData.instrumentId);
     // that.utilitiesService.logger('info', fullDataArray, instrumentConnectionData.instrumentId);
 
     fullDataArray.forEach(function (partData) {
@@ -716,7 +710,7 @@ export class InstrumentInterfaceService {
     let dataArray = {};
 
     astmArray.forEach(function (element) {
-      if (element !== '') {
+      if (element !== '' && element !== null && element !== undefined) {
         // Remove leading digits and split the segment into its constituent fields
         const segmentFields = element.replace(/^\d*/, '').split('|');
 
@@ -741,9 +735,6 @@ export class InstrumentInterfaceService {
     const order: any = {};
     console.log(dataArray);
     try {
-
-
-
       if (dataArray['O'] && dataArray['O'].length > 0) {
 
         const oSegmentFields = dataArray['O'][0]; // dataArray['O'] is an array of arrays (each sub-array is a segment's fields)
@@ -807,6 +798,112 @@ export class InstrumentInterfaceService {
       that.utilitiesService.logger('error', error, instrumentConnectionData.instrumentId);
       console.error(error);
       return false;
+
     }
   }
+
+
+  // TEST ORDERS SECTION
+
+
+  // Method to fetch orders and send as ASTM messages
+  fetchAndSendASTMOrders(instrument: any) {
+    let that = this;
+    // Fetching orders from the database
+    that.dbService.getOrdersToSend(
+      (orders: any[]) => { // Assuming getOrdersToSend now returns an array of orders
+        if (!orders || orders.length === 0) {
+          that.utilitiesService.logger('error', "No orders to send for " + instrument.connectionParams.instrumentId, instrument.connectionParams.instrumentId);
+          return;
+        }
+
+        orders.forEach(order => {
+          // Generate the ASTM message for each order
+          const astmMessage = that.generateASTMMessageForOrder(order);
+
+          // Frame the ASTM message with control characters
+          const framedMessage = that.frameASTMMessage(astmMessage, instrument.connectionParams.instrumentId);
+
+          // Send the framed message over TCP
+          // Assuming tcpService has a method like sendData that takes host, port, and the message
+          that.tcpService.sendData(instrument.connectionParams.host, instrument.connectionParams.port, framedMessage);
+        });
+      },
+      (err: any) => {
+        console.error("Error fetching orders to send:", err);
+      }
+    );
+  }
+
+
+  // Method to generate ASTM message for an order
+  private generateASTMMessageForOrder(order: any): string {
+    // Assuming order fields map directly to ASTM message fields
+    // This will vary based on your specific ASTM message format requirements
+    let message = `H|\\^&|||${order.test_location}|||||||P|1\r`;
+    message += `P|1||||${order.order_id}|||||||||||||||||||||||\r`;
+    message += `O|1|${order.test_id}|${order.test_id}||${order.test_type}||||||||||||||O\r`;
+    message += `L|1|N\r`;
+
+    return message;
+  }
+
+  // Method to frame ASTM message with control characters and checksum
+  private frameASTMMessage(message: string, instrumentId: string): string {
+    let that = this;
+    const sequenceNumber = that.getAndUpdateSequenceNumber(instrumentId);
+    const header = that.STX + sequenceNumber;
+    const footer = that.ETX;
+    const checksum = that.calculateChecksum(header + message + footer);
+    return header + message + footer + checksum + that.CR + that.LF + that.EOT;
+  }
+
+  // Method to calculate the checksum of an ASTM message
+  private calculateChecksum(message: string): string {
+    let checksum = 0;
+
+    // Remove STX if present
+    const startIndex = message.startsWith('\x02') ? 1 : 0;
+    // Ensure ETX is present, and trim anything after ETX
+    const endIndex = message.indexOf('\x03') !== -1 ? message.indexOf('\x03') + 1 : message.length;
+    // Adjust message to only include content from start index to ETX (inclusive)
+    const adjustedMessage = message.substring(startIndex, endIndex);
+
+    // Calculate checksum
+    for (let i = 0; i < adjustedMessage.length; i++) {
+      checksum += adjustedMessage.charCodeAt(i);
+    }
+    checksum &= 0xFF; // Keep only the last 8 bits
+
+    // Convert to 2-digit hexadecimal string, uppercased
+    const hexChecksum = checksum.toString(16).toUpperCase().padStart(2, '0');
+
+    // console.log("ADJUSTED MESSAGE: " + adjustedMessage);
+    // console.log("CHECKSUM: " + hexChecksum);
+
+    return hexChecksum;
+  }
+
+
+
+  private getAndUpdateSequenceNumber(instrumentId: string): string {
+    let that = this;
+    // Ensure the instrumentId is tracked
+    if (!that.astmSequenceNumbers.has(instrumentId)) {
+      that.astmSequenceNumbers.set(instrumentId, 1);
+    } else {
+      let currentSequence = that.astmSequenceNumbers.get(instrumentId)!;
+      //currentSequence = (currentSequence % 7) + 1; // Cycle from 1 to 7
+      that.astmSequenceNumbers.set(instrumentId, currentSequence + 1);
+    }
+    return that.astmSequenceNumbers.get(instrumentId)!.toString(); // No padding needed
+  }
+
+  resetSequenceNumber(instrumentId: string) {
+    let that = this;
+    // Reset the sequence number to 1 (or 0, depending on protocol specifics)
+    console.error("Resetting sequence number for " + instrumentId);
+    that.astmSequenceNumbers.set(instrumentId, 100);
+  }
+
 }
