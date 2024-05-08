@@ -38,12 +38,12 @@
             <button (click)="disconnect(instrument)" class="btn btn-danger">
               <span>Disconnect {{instrument.connectionParams.instrumentId}}</span>
             </button>
-            &nbsp;&nbsp;
+            <!-- &nbsp;&nbsp;
             <button
               *ngIf="['astm-elecsys', 'astm-concatenated'].includes(instrument.connectionParams.connectionProtocol)"
               (click)="sendASTMOrders(instrument)" class="btn btn-success">
               <span>Send Test Order(s)</span>
-            </button>
+            </button> -->
           </div>
 
           <ng-template #notConnected>
