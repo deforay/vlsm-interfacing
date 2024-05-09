@@ -40,6 +40,30 @@
             </div>
           </div>
           <br>
+          <!-- <div class="card text-bg-light">
+            <div class="card-body">
+              <h5 class="card-title">Push Results to External API</h5>
+              <div class="row">
+                <div class="form-group col col-sm-6">
+                  <label class="col-form-label-sm">Enable API Push</label>
+                  <select formControlName="enable_api" class="form-control form-control-sm" required>
+                    <option value="yes">Yes</option>
+                    <option value="no">No</option>
+                  </select>
+                </div>
+                <div *ngIf="settingsForm.get('commonSettings.enable_api').value === 'yes'"  class="form-group col col-sm-6">
+                  <label class="col-form-label-sm">API URL</label>
+                  <input type="text" formControlName="api_url" name="api_url" class="form-control form-control-sm"
+                    placeholder="API URL" required />
+                </div>
+                <div *ngIf="settingsForm.get('commonSettings.enable_api').value === 'yes'" class="form-group col col-sm-6">
+                  <label class="col-form-label-sm">API Auth Token(optional)</label>
+                  <input type="text" formControlName="api_auth" name="api_auth" class="form-control form-control-sm"
+                    placeholder="API Auth"  />
+                </div>
+              </div>
+            </div>
+          </div><br> -->
           <div class="card text-bg-light">
             <div class="card-body">
               <h5 class="card-title">MySQL Configuration</h5>

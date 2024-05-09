@@ -1,5 +1,5 @@
 import { Component, OnInit } from '@angular/core';
-import { FormBuilder, FormGroup, FormArray, Validators, AbstractControl, ValidatorFn } from '@angular/forms';
+import { FormBuilder, FormGroup, FormArray, Validators, AbstractControl, ValidatorFn, FormControl } from '@angular/forms';
 import { Router } from '@angular/router';
 import { ElectronService } from '../../core/services';
 import { ElectronStoreService } from '../../services/electron-store.service';
@@ -34,6 +34,9 @@ export class SettingsComponent implements OnInit {
       commonSettings: this.formBuilder.group({
         labID: ['', Validators.required],
         labName: ['', Validators.required],
+        // enable_api: ['no'], 
+        // api_url:[''],
+        // api_auth:[''],
         mysqlHost: [''],
         mysqlPort: [''],
         mysqlDb: [''],
@@ -50,7 +53,20 @@ export class SettingsComponent implements OnInit {
       commonSettings: commonSettingsStore
     });
 
+    // this.settingsForm.get('commonSettings.enable_api').valueChanges.subscribe(value => {
+    //   if (value === 'yes') {
+    //     this.settingsForm.get('commonSettings.api_url').setValidators([Validators.required]);
+    //     this.settingsForm.get('commonSettings.api_auth').setValidators([Validators.required]);
+    //   } else {
+    //     this.settingsForm.get('commonSettings.api_url').clearValidators();
+    //     this.settingsForm.get('commonSettings.api_auth').clearValidators();
+    //   }
+    //   this.settingsForm.get('commonSettings.api_url').updateValueAndValidity();
+    //   this.settingsForm.get('commonSettings.api_auth').updateValueAndValidity();
+    // });
+
   }
+
 
   ngOnInit(): void { }
 
