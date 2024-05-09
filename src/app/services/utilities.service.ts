@@ -3,8 +3,6 @@ import { DatabaseService } from './database.service';
 import { BehaviorSubject, Observable,of } from 'rxjs';
 import { ElectronService } from '../core/services';
 
-
-
 @Injectable({
   providedIn: 'root'
 })

@@ -1,5 +1,4 @@
 import { Injectable } from '@angular/core';
-import { DatabaseService } from './database.service';
 import { BehaviorSubject, Observable } from 'rxjs';
 import { ElectronService } from '../core/services';
 import { ConnectionParams } from '../interfaces/connection-params.interface';
@@ -23,7 +22,6 @@ export class TcpConnectionService {
   public connectionStack: Map<string, InstrumentConnectionStack> = new Map();
 
   constructor(public electronService: ElectronService,
-    public dbService: DatabaseService,
     public utilitiesService: UtilitiesService) {
     this.net = this.electronService.net;
   }
@@ -231,6 +229,22 @@ export class TcpConnectionService {
         instrumentConnectionData.connectionServer = null;
       }
     }
+  }
+
+
+  sendData(host, port, data: string) {
+    const that = this;
+    const connectionIdentifierKey = that._generateConnectionIdentifierKey(host, port);
+
+    const instrumentConnectionData = that.connectionStack.get(connectionIdentifierKey);
+
+    instrumentConnectionData.connectionSocket.write(data, 'utf8', (err) => {
+      if (err) {
+        console.error('Failed to send data:', err);
+      } else {
+        console.log('Data sent successfully');
+      }
+    });
   }
 
   private _generateConnectionIdentifierKey(host: string, port: number): string {

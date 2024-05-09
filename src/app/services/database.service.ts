@@ -1,7 +1,6 @@
 import { Injectable } from '@angular/core';
 import { ElectronService } from '../core/services';
 import { ElectronStoreService } from './electron-store.service';
-import { Observable } from 'rxjs';
 
 
 @Injectable({
@@ -140,9 +139,9 @@ export class DatabaseService {
       }
     );
   }
-  
-  
-  
+
+
+
 
   fetchLastSyncTimes(success, errorf) {
     const t = 'SELECT MAX(lims_sync_date_time) as lastLimsSync, MAX(added_on) as lastResultReceived FROM `orders`';
@@ -207,6 +206,28 @@ export class DatabaseService {
         .catch((err) => { if (errorf) errorf(err); });
     }
   }
+
+
+  /**
+   * Fetches an order that is ready to be sent.
+   */
+  getOrdersToSend(success = null, errorf = null) {
+    const query = 'SELECT * FROM orders WHERE result_status = 99 ORDER BY created_date ASC';
+
+    this.execQuery(query, [],
+      (results) => {
+        if (results.length > 0) {
+          success(results); // Assuming execQuery returns an array of results
+        } else {
+          success(null); // No orders to send
+        }
+      },
+      (err) => {
+        errorf(err);
+      }
+    );
+  }
+
 
 
 }

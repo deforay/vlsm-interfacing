@@ -1,10 +1,10 @@
 {
   "name": "vlsm-interfacing",
-  "version": "2.2.0",
+  "version": "2.2.1",
   "description": "Interfacing Tool By VLSM",
   "homepage": "https://github.com/deforay/vlsm-interfacing",
   "author": {
-    "name": "VLSM",
+    "name": "VLSM Machine Interfacing Tool",
     "email": "support@deforay.com"
   },
   "keywords": [
