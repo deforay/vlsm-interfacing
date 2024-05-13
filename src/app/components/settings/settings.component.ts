@@ -4,6 +4,7 @@ import { Router } from '@angular/router';
 import { ElectronService } from '../../core/services';
 import { ElectronStoreService } from '../../services/electron-store.service';
 import * as os from 'os';
+import { ipcRenderer } from 'electron';
 
 
 @Component({
@@ -64,11 +65,17 @@ export class SettingsComponent implements OnInit {
     //   this.settingsForm.get('commonSettings.api_url').updateValueAndValidity();
     //   this.settingsForm.get('commonSettings.api_auth').updateValueAndValidity();
     // });
+    ipcRenderer.on('imported-settings', (event, importedSettings) => {
+      console.log('Imported Settings:', importedSettings);
+      this.updateSettings(importedSettings);
+    });
 
   }
 
 
-  ngOnInit(): void { }
+  ngOnInit(): void { 
+    
+  }
 
   uniqueInstrumentNameValidator(): ValidatorFn {
     return (control: AbstractControl): { [key: string]: any } | null => {
@@ -176,7 +183,7 @@ export class SettingsComponent implements OnInit {
     this.instrumentsSettings.removeAt(index);
   }
 
-  updateSettings(): void {
+  updateSettings(settings: any): void {
     const that = this;
     if (that.settingsForm.valid) {
       const updatedSettings = that.settingsForm.value;
@@ -208,6 +215,15 @@ export class SettingsComponent implements OnInit {
       console.error('Form is not valid');
     }
   }
+
+  exportSettings(): void {
+    this.electronStoreService.exportSettings(); 
+}
+
+
+importSettings(): void {
+  this.electronStoreService.importSettings();
+}
 
   checkMysqlConnection() {
 

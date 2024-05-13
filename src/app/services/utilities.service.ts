@@ -95,6 +95,7 @@ export class UtilitiesService {
     const that = this;
     that.dbService.fetchLastOrders((res) => {
       res = [res]; // converting it into an array
+      console.log(res)
       that.lastOrdersSubject.next(res);
     }, (err) => {
       that.logger('error', 'Failed to fetch data ' + JSON.stringify(err));

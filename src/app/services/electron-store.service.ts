@@ -1,4 +1,5 @@
 import { Injectable } from '@angular/core';
+import { ipcRenderer } from 'electron';
 import * as Store from 'electron-store';
 import { BehaviorSubject, Observable } from 'rxjs';
 
@@ -39,4 +40,28 @@ export class ElectronStoreService {
   electronStoreObservable(): Observable<any> {
     return this.electronStoreSubject.asObservable();
   }
+
+  exportSettings(): void {
+    const settings = this.getAll();
+    const settingsJSON = JSON.stringify(settings, null, 2);
+    ipcRenderer.invoke('export-settings', settingsJSON)
+      .then(response => {
+        console.log('Export response:', response);
+      })
+      .catch(err => {
+        console.error('Error exporting settings:', err);
+      });
+  }
+
+  importSettings(): void {
+    ipcRenderer.invoke('import-settings')
+      .then(response => {
+        console.log('Import response:', response);
+      })
+      .catch(err => {
+        console.error('Error importing settings:', err);
+      });
+  }
+
+  
 }

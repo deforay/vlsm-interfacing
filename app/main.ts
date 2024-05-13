@@ -3,6 +3,7 @@ import * as path from 'path';
 import * as fs from 'fs';
 import * as Store from 'electron-store';
 import * as log from 'electron-log/main';
+
 //import { Sqlite3Helper } from '../src/app/core/sqlite3helper.main';
 
 
@@ -83,6 +84,8 @@ function createWindow(): BrowserWindow {
   return win;
 }
 
+
+
 try {
 
   const gotTheLock = app.requestSingleInstanceLock();
@@ -121,6 +124,10 @@ try {
       createWindow();
     }
   });
+
+  
+
+  
   app.whenReady().then(() => {
 
     // Register a 'dialog' event listener.
@@ -138,6 +145,62 @@ try {
       }
 
     });
+
+    ipcMain.handle('export-settings', async (event, settingsJSON) => {
+      try {
+          const today = new Date();
+          const timestamp = `${today.getFullYear()}${(today.getMonth() + 1).toString().padStart(2, '0')}${today.getDate().toString().padStart(2, '0')}-${today.getHours().toString().padStart(2, '0')}${today.getMinutes().toString().padStart(2, '0')}`;
+          const defaultPath = `interface-settings-${timestamp}.json`;
+  
+          const { filePath, canceled } = await dialog.showSaveDialog({
+              title: 'Export Settings',
+              defaultPath: defaultPath,
+              filters: [{ name: 'JSON Files', extensions: ['json'] }]
+          });
+  
+          if (canceled) {
+              return { status: 'cancelled', message: 'Export cancelled.' };
+          } else {
+              fs.writeFileSync(filePath, settingsJSON, 'utf-8');
+              return { status: 'success', message: 'Settings successfully exported.' };
+          }
+      } catch (err) {
+          console.error('Failed to save settings:', err);
+          return { status: 'error', message: 'Failed to export settings.' };
+      }
+  });
+
+  ipcMain.handle('import-settings', async (event) => {
+    try {
+      const { filePaths, canceled } = await dialog.showOpenDialog({
+        title: 'Import Settings',
+        filters: [{ name: 'JSON Files', extensions: ['json'] }],
+        properties: ['openFile']
+      });
+  
+      if (canceled || !filePaths || filePaths.length === 0) {
+        return { status: 'cancelled', message: 'Import cancelled.' };
+      }
+  
+      const filePath = filePaths[0];
+      const data = fs.readFileSync(filePath, 'utf-8');
+      const importedSettings = JSON.parse(data);
+  
+      win.webContents.send('imported-settings', importedSettings);
+  
+      for (const key in importedSettings) {
+        if (importedSettings.hasOwnProperty(key)) {
+          store.set(key, importedSettings[key]);
+        }
+      }
+      return { status: 'success', message: 'Settings successfully imported.' };
+    } catch (err) {
+      console.error('Failed to import settings:', err);
+      return { status: 'error', message: 'Failed to import settings.' };
+    }
+  });
+  
+
 
     database.run('CREATE TABLE IF NOT EXISTS `orders` ( \
       `id` INTEGER NOT NULL, \

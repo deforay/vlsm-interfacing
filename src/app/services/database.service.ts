@@ -8,6 +8,9 @@ import { ElectronStoreService } from './electron-store.service';
 })
 export class DatabaseService {
 
+  private readonly STORED_IN_MYSQL = 1;
+  private readonly NOT_STORED_IN_MYSQL = 0;
+
   private mysqlPool = null;
   private dbConfig = null;
   public commonSettings = null;
@@ -105,6 +108,10 @@ export class DatabaseService {
     (this.electronService.execSqliteQuery(t, Object.values(data))).then((results) => { success(results) });
 
   }
+
+ 
+
+
   fetchrawData(success, errorf) {
     const that = 'SELECT * FROM raw_data ORDER BY added_on DESC';
     if (this.mysqlPool != null) {

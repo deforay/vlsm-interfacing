@@ -1,4 +1,13 @@
 "use strict";
+var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, generator) {
+    function adopt(value) { return value instanceof P ? value : new P(function (resolve) { resolve(value); }); }
+    return new (P || (P = Promise))(function (resolve, reject) {
+        function fulfilled(value) { try { step(generator.next(value)); } catch (e) { reject(e); } }
+        function rejected(value) { try { step(generator["throw"](value)); } catch (e) { reject(e); } }
+        function step(result) { result.done ? resolve(result.value) : adopt(result.value).then(fulfilled, rejected); }
+        step((generator = generator.apply(thisArg, _arguments || [])).next());
+    });
+};
 Object.defineProperty(exports, "__esModule", { value: true });
 const electron_1 = require("electron");
 const path = require("path");
@@ -113,6 +122,55 @@ try {
                 console.error('Database opening error: ', err);
             }
         });
+        electron_1.ipcMain.handle('export-settings', (event, settingsJSON) => __awaiter(void 0, void 0, void 0, function* () {
+            try {
+                const today = new Date();
+                const timestamp = `${today.getFullYear()}${(today.getMonth() + 1).toString().padStart(2, '0')}${today.getDate().toString().padStart(2, '0')}-${today.getHours().toString().padStart(2, '0')}${today.getMinutes().toString().padStart(2, '0')}`;
+                const defaultPath = `interface-settings-${timestamp}.json`;
+                const { filePath, canceled } = yield electron_1.dialog.showSaveDialog({
+                    title: 'Export Settings',
+                    defaultPath: defaultPath,
+                    filters: [{ name: 'JSON Files', extensions: ['json'] }]
+                });
+                if (canceled) {
+                    return { status: 'cancelled', message: 'Export cancelled.' };
+                }
+                else {
+                    fs.writeFileSync(filePath, settingsJSON, 'utf-8');
+                    return { status: 'success', message: 'Settings successfully exported.' };
+                }
+            }
+            catch (err) {
+                console.error('Failed to save settings:', err);
+                return { status: 'error', message: 'Failed to export settings.' };
+            }
+        }));
+        electron_1.ipcMain.handle('import-settings', (event) => __awaiter(void 0, void 0, void 0, function* () {
+            try {
+                const { filePaths, canceled } = yield electron_1.dialog.showOpenDialog({
+                    title: 'Import Settings',
+                    filters: [{ name: 'JSON Files', extensions: ['json'] }],
+                    properties: ['openFile']
+                });
+                if (canceled || !filePaths || filePaths.length === 0) {
+                    return { status: 'cancelled', message: 'Import cancelled.' };
+                }
+                const filePath = filePaths[0];
+                const data = fs.readFileSync(filePath, 'utf-8');
+                const importedSettings = JSON.parse(data);
+                win.webContents.send('imported-settings', importedSettings);
+                for (const key in importedSettings) {
+                    if (importedSettings.hasOwnProperty(key)) {
+                        store.set(key, importedSettings[key]);
+                    }
+                }
+                return { status: 'success', message: 'Settings successfully imported.' };
+            }
+            catch (err) {
+                console.error('Failed to import settings:', err);
+                return { status: 'error', message: 'Failed to import settings.' };
+            }
+        }));
         database.run('CREATE TABLE IF NOT EXISTS `orders` ( \
       `id` INTEGER NOT NULL, \
       `order_id` TEXT NOT NULL, \
