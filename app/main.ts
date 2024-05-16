@@ -53,6 +53,7 @@ function createWindow(): BrowserWindow {
     },
   });
 
+ 
   if (serve) {
     const debug = require('electron-debug');
     debug();
@@ -227,6 +228,7 @@ try {
       `printed_at` INTEGER DEFAULT NULL, \
       `raw_text` mediumtext, \
       `added_on` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP, \
+      `mysql_insert`INTEGER DEFAULT "1", \
       PRIMARY KEY("id" AUTOINCREMENT) \
       );');
 

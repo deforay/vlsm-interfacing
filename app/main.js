@@ -20,6 +20,8 @@ let store = null;
 let sqlitePath = null;
 let sqliteDbName = 'interface.db';
 const args = process.argv.slice(1), serve = args.some(val => val === '--serve');
+let tray = null;
+let isQuitting = false;
 function createWindow() {
     const electronScreen = electron_1.screen;
     const size = electronScreen.getPrimaryDisplay().workAreaSize;
@@ -92,7 +94,25 @@ try {
     // initialization and is ready to create browser windows.
     // Some APIs can only be used after this event occurs.
     // Added 400 ms to fix the black background issue while using transparent window. More detais at https://github.com/electron/electron/issues/15947
-    electron_1.app.on('ready', () => setTimeout(createWindow, 400));
+    electron_1.app.whenReady().then(() => {
+        setTimeout(createWindow, 400);
+        // Initialize Tray
+        tray = new electron_1.Tray(path.join(__dirname, 'assets', 'icons', 'favicon.ico'));
+        const contextMenu = electron_1.Menu.buildFromTemplate([
+            { label: 'Show', click: () => { win.show(); } },
+            // Add more menu items if needed
+        ]);
+        tray.setToolTip('Your Application');
+        tray.setContextMenu(contextMenu);
+        tray.on('click', () => {
+            if (win) {
+                win.show();
+            }
+            else {
+                console.error('Window is null');
+            }
+        });
+    });
     // Quit when all windows are closed.
     electron_1.app.on('window-all-closed', () => {
         // On OS X it is common for applications and their menu bar
@@ -196,6 +216,7 @@ try {
       `printed_at` INTEGER DEFAULT NULL, \
       `raw_text` mediumtext, \
       `added_on` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP, \
+      `mysql_insert`INTEGER DEFAULT "1", \
       PRIMARY KEY("id" AUTOINCREMENT) \
       );');
         database.run('CREATE TABLE IF NOT EXISTS `raw_data` ( \
