@@ -52,16 +52,9 @@ export class ElectronStoreService {
         console.error('Error exporting settings:', err);
       });
   }
+  
 
-  importSettings(): void {
-    ipcRenderer.invoke('import-settings')
-      .then(response => {
-        console.log('Import response:', response);
-      })
-      .catch(err => {
-        console.error('Error importing settings:', err);
-      });
-  }
+
 
   
 }

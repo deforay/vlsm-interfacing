@@ -4,7 +4,7 @@ import { Router } from '@angular/router';
 import { ElectronService } from '../../core/services';
 import { ElectronStoreService } from '../../services/electron-store.service';
 import * as os from 'os';
-
+import { ipcRenderer } from 'electron';
 
 @Component({
   selector: 'app-settings',
@@ -190,7 +190,7 @@ export class SettingsComponent implements OnInit {
     console.log('Reset instrument variables.');
   }
 
-  updateSettings(): void {
+  updateSettings(settings: any): void {
     const that = this;
     if (that.settingsForm.valid) {
       const updatedSettings = that.settingsForm.value;
@@ -260,4 +260,23 @@ export class SettingsComponent implements OnInit {
 
     });
   }
+
+  exportSettings(){
+    this.electronStoreService.exportSettings();
+  }
+  
+  importSettings(): void {
+    ipcRenderer.invoke('import-settings')
+      .then(response => {
+        console.log('Import response:', response);
+      })
+      .catch(err => {
+        console.error('Error importing settings:', err);
+      });
+    ipcRenderer.on('imported-settings', (event, importedSettings) => {
+      console.log('Imported Settings:', importedSettings);
+      this.updateSettings(importedSettings);
+    });
+  }
+
 }
