@@ -638,10 +638,7 @@ export class InstrumentInterfaceService {
         //that.utilitiesService.logger('info', dataArray, instrumentConnectionData.instrumentId);
         //that.utilitiesService.logger('info', dataArray['R'][0], instrumentConnectionData.instrumentId);
 
-        if (dataArray === null || dataArray === undefined || !dataArray['R'] || dataArray['R'].length == 0) {
-          // console.error(partData);
-          // console.error(astmArray);
-          // console.error(dataArray);
+        if (dataArray === null || dataArray === undefined) {
           that.utilitiesService.logger('info', 'No ASTM Elecsys data received.', instrumentConnectionData.instrumentId);
           return;
         }
@@ -676,7 +673,7 @@ export class InstrumentInterfaceService {
         //that.utilitiesService.logger('info', dataArray, instrumentConnectionData.instrumentId);
         //that.utilitiesService.logger('info',dataArray['R'][0], instrumentConnectionData.instrumentId);
 
-        if (dataArray === null || dataArray === undefined || !dataArray['R'] || dataArray['R'].length == 0) {
+        if (dataArray === null || dataArray === undefined) {
           that.utilitiesService.logger('info', 'No ASTM Concatenated data received.', instrumentConnectionData.instrumentId);
           return;
         }
@@ -733,7 +730,6 @@ export class InstrumentInterfaceService {
   private saveASTMDataBlock(dataArray: {}, partData: string, instrumentConnectionData: InstrumentConnectionStack) {
     const that = this;
     const order: any = {};
-    console.log(dataArray);
     try {
       if (dataArray['O'] && dataArray['O'].length > 0) {
 
@@ -741,6 +737,8 @@ export class InstrumentInterfaceService {
 
         order.order_id = oSegmentFields[2];
         order.test_id = oSegmentFields[1];
+
+        const resultStatus = oSegmentFields[25]; // X = Failed, F = Final, P = Preliminary
 
         const universalTestIdentifier = oSegmentFields[4];
         const testTypeDetails = universalTestIdentifier.split('^');
@@ -776,13 +774,13 @@ export class InstrumentInterfaceService {
           order.authorised_date_time = that.utilitiesService.formatRawDate(rSegmentFields[12]);
           order.result_accepted_date_time = that.utilitiesService.formatRawDate(rSegmentFields[12]);
         } else {
-          order.test_type = '';
-          order.test_unit = '';
+          order.test_type = testType;
+          order.test_unit = null;
           order.results = 'Failed';
-          order.tested_by = '';
-          order.analysed_date_time = '';
-          order.authorised_date_time = '';
-          order.result_accepted_date_time = '';
+          order.tested_by = null;
+          order.analysed_date_time = null;
+          order.authorised_date_time = null;
+          order.result_accepted_date_time = null;
         }
         order.raw_text = partData;
         order.result_status = 1;

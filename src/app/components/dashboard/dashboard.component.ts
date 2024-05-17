@@ -59,8 +59,8 @@ export class DashboardComponent implements OnInit, OnDestroy {
   dataSource = new MatTableDataSource<any>();
   @ViewChild(MatPaginator, { static: true }) paginator: MatPaginator;
   @ViewChild(MatSort, { static: true }) sort: MatSort;
-  
-  
+
+
 
   constructor(
     private cdRef: ChangeDetectorRef,
@@ -84,8 +84,8 @@ export class DashboardComponent implements OnInit, OnDestroy {
       this.selection.toggle(row);
     }
   }
-  
-  
+
+
 
   onChange(typeValue: number) {
     this.displayType = typeValue;
@@ -176,7 +176,7 @@ export class DashboardComponent implements OnInit, OnDestroy {
   }
 
 
-  
+
   reSyncSelectedRecords() {
     this.selection.selected.forEach(selectedRow => {
       if (this.utilitiesService) {
@@ -196,7 +196,7 @@ export class DashboardComponent implements OnInit, OnDestroy {
       }
     });
   }
-  
+
 
 
   fetchLastOrders() {
@@ -212,13 +212,12 @@ export class DashboardComponent implements OnInit, OnDestroy {
       next: lastFewOrders => {
         that._ngZone.run(() => {
           that.lastOrders = lastFewOrders[0];
-          console.log(that.lastOrders)
           that.data = lastFewOrders[0];
           this.dataSource.data = that.lastOrders;
           this.dataSource.paginator = this.paginator;
           this.dataSource.sort = this.sort;
-          
-          
+
+
         });
       },
       error: error => {
@@ -228,7 +227,7 @@ export class DashboardComponent implements OnInit, OnDestroy {
 
   }
 
-  filterData($event:any){
+  filterData($event: any) {
     this.dataSource.filter = $event.target.value;
   }
 

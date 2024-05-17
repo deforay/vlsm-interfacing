@@ -1,6 +1,6 @@
 import { Injectable } from '@angular/core';
 import { DatabaseService } from './database.service';
-import { BehaviorSubject, Observable,of } from 'rxjs';
+import { BehaviorSubject, Observable, of } from 'rxjs';
 import { ElectronService } from '../core/services';
 
 @Injectable({
@@ -18,7 +18,7 @@ export class UtilitiesService {
   lastOrders = this.lastOrdersSubject.asObservable();
 
   protected lastrawDataSubject = new BehaviorSubject([]);
-  lastrawData  = this.lastrawDataSubject.asObservable();
+  lastrawData = this.lastrawDataSubject.asObservable();
 
   constructor(public electronService: ElectronService,
     public dbService: DatabaseService) {
@@ -95,7 +95,6 @@ export class UtilitiesService {
     const that = this;
     that.dbService.fetchLastOrders((res) => {
       res = [res]; // converting it into an array
-      console.log(res)
       that.lastOrdersSubject.next(res);
     }, (err) => {
       that.logger('error', 'Failed to fetch data ' + JSON.stringify(err));
