@@ -20,6 +20,7 @@ let store = null;
 let sqlitePath = null;
 let sqliteDbName = 'interface.db';
 const args = process.argv.slice(1), serve = args.some(val => val === '--serve');
+let tray = null;
 function createWindow() {
     const electronScreen = electron_1.screen;
     const size = electronScreen.getPrimaryDisplay().workAreaSize;
@@ -92,7 +93,31 @@ try {
     // initialization and is ready to create browser windows.
     // Some APIs can only be used after this event occurs.
     // Added 400 ms to fix the black background issue while using transparent window. More detais at https://github.com/electron/electron/issues/15947
-    electron_1.app.on('ready', () => setTimeout(createWindow, 400));
+    // app.whenReady().then(() => {
+    //   createWindow();
+    // });
+    electron_1.app.on('ready', () => {
+        createWindow();
+        const trayIconPath = '/home/nateshk/Music/vlsm-interfacing/src/assets/icons/favicon.png';
+        try {
+            const icon = electron_1.nativeImage.createFromPath(trayIconPath);
+            tray = new electron_1.Tray(icon);
+            const contextMenu = electron_1.Menu.buildFromTemplate([
+                { label: 'Show', click: () => { win.show(); } },
+                { label: 'Minimize', click: () => { win.minimize(); } },
+                { label: 'Quit', click: () => { electron_1.app.quit(); } },
+            ]);
+            tray.setToolTip('Your Application');
+            tray.setContextMenu(contextMenu);
+            tray.on('click', () => {
+                win.show();
+            });
+            console.log('Tray icon setup successful.');
+        }
+        catch (error) {
+            console.error('Error setting up tray icon:', error);
+        }
+    });
     // Quit when all windows are closed.
     electron_1.app.on('window-all-closed', () => {
         // On OS X it is common for applications and their menu bar
@@ -102,10 +127,9 @@ try {
         }
     });
     electron_1.app.on('activate', () => {
-        // On OS X it's common to re-create a window in the app when the
-        // dock icon is clicked and there are no other windows open.
         if (win === null) {
             createWindow();
+            tray = new electron_1.Tray(path.join(__dirname, 'assets', 'icons', 'favicon.ico'));
         }
     });
     electron_1.app.whenReady().then(() => {
@@ -196,6 +220,7 @@ try {
       `printed_at` INTEGER DEFAULT NULL, \
       `raw_text` mediumtext, \
       `added_on` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP, \
+      `mysql_insert`INTEGER DEFAULT "1", \
       PRIMARY KEY("id" AUTOINCREMENT) \
       );');
         database.run('CREATE TABLE IF NOT EXISTS `raw_data` ( \
