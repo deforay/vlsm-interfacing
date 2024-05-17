@@ -34,7 +34,7 @@ export class SettingsComponent implements OnInit {
       commonSettings: this.formBuilder.group({
         labID: ['', Validators.required],
         labName: ['', Validators.required],
-        // enable_api: ['no'], 
+        // enable_api: ['no'],
         // api_url:[''],
         // api_auth:[''],
         mysqlHost: [''],
