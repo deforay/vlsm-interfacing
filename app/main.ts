@@ -1,4 +1,4 @@
-import { app, BrowserWindow, screen, ipcMain, dialog } from 'electron';
+import { app, BrowserWindow, screen, ipcMain, dialog,Tray, Menu,nativeImage } from 'electron';
 import * as path from 'path';
 import * as fs from 'fs';
 import * as Store from 'electron-store';
@@ -13,6 +13,7 @@ let sqlitePath: string = null;
 let sqliteDbName: string = 'interface.db';
 const args = process.argv.slice(1),
   serve = args.some(val => val === '--serve');
+  let tray: Tray = null;
 
 
 
@@ -107,7 +108,40 @@ try {
   // initialization and is ready to create browser windows.
   // Some APIs can only be used after this event occurs.
   // Added 400 ms to fix the black background issue while using transparent window. More detais at https://github.com/electron/electron/issues/15947
-  app.on('ready', () => setTimeout(createWindow, 400));
+
+// app.whenReady().then(() => {
+  
+//   createWindow();
+  
+// });
+app.on('ready', () => {
+  createWindow();
+
+  const trayIconPath = '/home/nateshk/Music/vlsm-interfacing/src/assets/icons/favicon.png'; 
+  try {
+    const icon = nativeImage.createFromPath(trayIconPath);
+    tray = new Tray(icon);
+    const contextMenu = Menu.buildFromTemplate([
+      { label: 'Show', click: () => { win.show(); } },
+      { label: 'Minimize', click: () => { win.minimize(); } },
+      { label: 'Quit', click: () => { app.quit(); } },
+    ]);
+    tray.setToolTip('Your Application');
+    tray.setContextMenu(contextMenu);
+
+    tray.on('click', () => {
+      win.show();
+    });
+
+    console.log('Tray icon setup successful.');
+  } catch (error) {
+    console.error('Error setting up tray icon:', error);
+  }
+});
+
+
+
+
 
   // Quit when all windows are closed.
   app.on('window-all-closed', () => {
@@ -119,13 +153,11 @@ try {
   });
 
   app.on('activate', () => {
-    // On OS X it's common to re-create a window in the app when the
-    // dock icon is clicked and there are no other windows open.
     if (win === null) {
       createWindow();
+      tray = new Tray(path.join(__dirname, 'assets', 'icons', 'favicon.ico'));
     }
   });
-
   
 
   
