@@ -9,6 +9,8 @@ import { ElectronService } from '../core/services';
 
 export class UtilitiesService {
 
+
+
   protected timer = null;
   protected logtext = [];
 
@@ -20,9 +22,21 @@ export class UtilitiesService {
   protected lastrawDataSubject = new BehaviorSubject([]);
   lastrawData = this.lastrawDataSubject.asObservable();
 
+ 
+
   constructor(public electronService: ElectronService,
     public dbService: DatabaseService) {
+     
+    
+    
   }
+
+ 
+  
+
+ 
+
+
 
   sleep(ms) {
     return new Promise(resolve => setTimeout(resolve, ms));

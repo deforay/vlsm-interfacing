@@ -43,6 +43,8 @@ export class ElectronStoreService {
 
   exportSettings(): void {
     const settings = this.getAll();
+    const sensitiveFields = ['mysqlPassword'];
+    this.removeSensitiveFields(settings);
     const settingsJSON = JSON.stringify(settings, null, 2);
     ipcRenderer.invoke('export-settings', settingsJSON)
       .then(response => {
@@ -51,6 +53,13 @@ export class ElectronStoreService {
       .catch(err => {
         console.error('Error exporting settings:', err);
       });
+  }
+  
+  removeSensitiveFields(settings: any): void {
+    // Check if commonSettings exists and remove the password field
+    if (settings && settings.commonSettings) {
+      delete settings.commonSettings.mysqlPassword;
+    }
   }
   
 
