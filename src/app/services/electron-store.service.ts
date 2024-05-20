@@ -33,8 +33,18 @@ export class ElectronStoreService {
     this.electronStoreSubject.next(this.getAll());
   };
 
+  // getAll(): any {
+  //   return this.store.store;
+  // }
+
   getAll(): any {
-    return this.store.store;
+    const storeCopy = { ...this.store.store };
+
+    if (storeCopy.encryptionKey) {
+      delete storeCopy.encryptionKey;
+    }
+
+    return storeCopy;
   }
 
   electronStoreObservable(): Observable<any> {
@@ -56,9 +66,16 @@ export class ElectronStoreService {
   }
   
   removeSensitiveFields(settings: any): void {
-    // Check if commonSettings exists and remove the password field
+    // List of sensitive fields to be removed
+    const sensitiveFields = ['mysqlPassword', 'encryptionKey'];
+
+    // Check if commonSettings exists and remove the sensitive fields
     if (settings && settings.commonSettings) {
-      delete settings.commonSettings.mysqlPassword;
+      sensitiveFields.forEach(field => {
+        if (settings.commonSettings[field]) {
+          delete settings.commonSettings[field];
+        }
+      });
     }
   }
   
