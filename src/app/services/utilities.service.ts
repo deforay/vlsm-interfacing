@@ -22,19 +22,20 @@ export class UtilitiesService {
   protected lastrawDataSubject = new BehaviorSubject([]);
   lastrawData = this.lastrawDataSubject.asObservable();
 
- 
 
-  constructor(public electronService: ElectronService,
+
+  constructor(
+    public electronService: ElectronService,
     public dbService: DatabaseService) {
-     
-    
-    
+
+
+
   }
 
- 
-  
 
- 
+
+
+
 
 
 

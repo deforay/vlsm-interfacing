@@ -1,8 +1,7 @@
 import { Injectable, } from '@angular/core';
 import { ElectronService } from '../core/services';
 import { ElectronStoreService } from './electron-store.service';
-import * as CryptoJS from 'crypto-js';
-import * as crypto from 'crypto';
+import { CryptoService } from './crypto.service'
 
 
 @Injectable({
@@ -10,21 +9,14 @@ import * as crypto from 'crypto';
 })
 export class DatabaseService {
 
-  private encryptionKey: string;
-
-
-  private readonly STORED_IN_MYSQL = 1;
-  private readonly NOT_STORED_IN_MYSQL = 0;
-
   private mysqlPool = null;
   private dbConfig = null;
   public commonSettings = null;
 
   constructor(private electronService: ElectronService,
     private store: ElectronStoreService,
-  )
-     {
-      this.encryptionKey = this.getEncryptionKey();
+    private cryptoService: CryptoService
+  ) {
 
     this.store.electronStoreObservable().subscribe(config => {
       this.commonSettings = config.commonConfig;
@@ -32,50 +24,21 @@ export class DatabaseService {
     });
   }
 
-  private getEncryptionKey(): string {
-    let key = this.store.get('encryptionKey');
-    if (!key) {
-      key = this.generateEncryptionKey();
-      this.store.set('encryptionKey', key);
-    }
-    return key;
-  }
-
-  private generateEncryptionKey(): string {
-    return crypto.randomBytes(32).toString('hex'); 
-  }
-
-
-  encrypt(data: string): string {
-
-    return CryptoJS.AES.encrypt(data,this.encryptionKey).toString();
-
-  }
-
-  decrypt(data: string): string {
-
-    const bytes = CryptoJS.AES.decrypt(data,this.encryptionKey);
-
-    return bytes.toString(CryptoJS.enc.Utf8);
-
-  }
-  
-
-
 
   private init() {
     const mysql = this.electronService.mysql;
- 
+
 
     // Initialize mysql connection pool only if settings are available
     if (this.commonSettings && this.commonSettings.mysqlHost && this.commonSettings.mysqlUser && this.commonSettings.mysqlDb) {
 
       let decryptedPassword = this.commonSettings.mysqlPassword;
-    const encryptedPrefix = "ENC(";
-    if (decryptedPassword.startsWith(encryptedPrefix)) {
-      decryptedPassword = this.decrypt(decryptedPassword.slice(encryptedPrefix.length, -1));
-    }
-      
+
+      decryptedPassword = this.cryptoService.decrypt(decryptedPassword);
+
+
+      console.log(decryptedPassword);
+
 
       this.dbConfig = {
         connectionLimit: 10,
@@ -95,7 +58,7 @@ export class DatabaseService {
       console.log(this.dbConfig);
 
       this.mysqlPool = mysql.createPool(this.dbConfig);
-      
+
 
       this.mysqlPool.on('connection', (connection) => {
         connection.query("SET SESSION sql_mode=(SELECT REPLACE(@@sql_mode, 'ONLY_FULL_GROUP_BY', ''))");

@@ -9,7 +9,7 @@ const log = require("electron-log/main");
 let sqlitePath = null;
 let sqliteDbName = 'interface.db';
 let store = null;
-const migrationsDir = path.join(__dirname, 'migrations');
+const migrationsDir = path.join(__dirname, 'sqlite-migrations');
 function ensureDirectoryExistence(filePath) {
     const dirname = path.dirname(filePath);
     if (fs.existsSync(dirname)) {

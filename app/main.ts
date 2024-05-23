@@ -167,6 +167,11 @@ try {
         }
       });
 
+      // Register a 'dialog' event listener.
+      ipcMain.handle('dialog', (event, method, params) => {
+        return dialog[method](params);
+      });
+
       ipcMain.on('sqlite3-query', (event, sql, args) => {
         if (args === null || args === undefined) {
           db.all(sql, (err, rows) => {

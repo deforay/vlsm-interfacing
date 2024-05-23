@@ -155,6 +155,10 @@ try {
                     return { status: 'error', message: 'Failed to import settings.' };
                 }
             }));
+            // Register a 'dialog' event listener.
+            electron_1.ipcMain.handle('dialog', (event, method, params) => {
+                return electron_1.dialog[method](params);
+            });
             electron_1.ipcMain.on('sqlite3-query', (event, sql, args) => {
                 if (args === null || args === undefined) {
                     db.all(sql, (err, rows) => {
