@@ -33,8 +33,18 @@ export class ElectronStoreService {
     this.electronStoreSubject.next(this.getAll());
   };
 
+  // getAll(): any {
+  //   return this.store.store;
+  // }
+
   getAll(): any {
-    return this.store.store;
+    const storeCopy = { ...this.store.store };
+
+    if (storeCopy.encryptionKey) {
+      delete storeCopy.encryptionKey;
+    }
+
+    return storeCopy;
   }
 
   electronStoreObservable(): Observable<any> {
@@ -43,14 +53,35 @@ export class ElectronStoreService {
 
   exportSettings(): void {
     const settings = this.getAll();
+    const sensitiveFields = ['mysqlPassword'];
+    this.removeSensitiveFields(settings);
     const settingsJSON = JSON.stringify(settings, null, 2);
     ipcRenderer.invoke('export-settings', settingsJSON)
       .then(response => {
         console.log('Export response:', response);
+      
       })
       .catch(err => {
         console.error('Error exporting settings:', err);
       });
+  }
+  
+  removeSensitiveFields(settings: any): void {
+    // List of sensitive fields to be removed
+    const sensitiveFields = ['mysqlPassword', 'encryptionKey'];
+
+    // Check if commonSettings exists and remove the sensitive fields
+    if (settings && settings.commonSettings) {
+      sensitiveFields.forEach(field => {
+        if (settings.commonSettings[field]) {
+          delete settings.commonSettings[field];
+        }
+      });
+    }
+  }
+
+  showNotification(title: string, message: string): void {
+    new Notification(title, { body: message });
   }
   
 

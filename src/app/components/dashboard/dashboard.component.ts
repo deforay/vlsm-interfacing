@@ -103,6 +103,7 @@ export class DashboardComponent implements OnInit, OnDestroy {
     // Fetch initial settings if not already present
     if (!initialSettings.commonConfig || !initialSettings.instrumentsConfig) {
       const initialCommonSettings = that.store.get('commonConfig');
+     
       const initialInstrumentsSettings = that.store.get('instrumentsConfig');
 
       if (!initialCommonSettings || !initialInstrumentsSettings) {
@@ -200,6 +201,7 @@ export class DashboardComponent implements OnInit, OnDestroy {
 
 
   fetchLastOrders() {
+    console.log("123")
     const that = this;
     that.utilitiesService.fetchLastOrders();
 
@@ -213,6 +215,7 @@ export class DashboardComponent implements OnInit, OnDestroy {
         that._ngZone.run(() => {
           that.lastOrders = lastFewOrders[0];
           that.data = lastFewOrders[0];
+          console.log(this.data)
           this.dataSource.data = that.lastOrders;
           this.dataSource.paginator = this.paginator;
           this.dataSource.sort = this.sort;

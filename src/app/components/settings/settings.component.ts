@@ -5,6 +5,8 @@ import { ElectronService } from '../../core/services';
 import { ElectronStoreService } from '../../services/electron-store.service';
 import * as os from 'os';
 import { ipcRenderer } from 'electron';
+import { UtilitiesService } from '../../services/utilities.service';
+import { DatabaseService } from '../../services/database.service';
 
 @Component({
   selector: 'app-settings',
@@ -21,7 +23,9 @@ export class SettingsComponent implements OnInit {
     private formBuilder: FormBuilder,
     private electronService: ElectronService,
     private router: Router,
-    private electronStoreService: ElectronStoreService
+    private electronStoreService: ElectronStoreService,
+    private utilitiesService: UtilitiesService,
+    private database : DatabaseService
   ) {
     const commonSettingsStore = this.electronStoreService.get('commonConfig');
     const instrumentSettingsStore = this.electronStoreService.get('instrumentsConfig');
@@ -195,6 +199,14 @@ export class SettingsComponent implements OnInit {
     if (that.settingsForm.valid) {
       const updatedSettings = that.settingsForm.value;
 
+    
+
+    const password = updatedSettings.commonSettings.mysqlPassword;
+    const encryptedPrefix = "ENC(";
+    if (!password.startsWith(encryptedPrefix)) {
+      updatedSettings.commonSettings.mysqlPassword = encryptedPrefix + this.database.encrypt(password) + ")";
+  
+    }
 
       // Ensure all required keys exist in each instrument setting
       updatedSettings.instrumentsSettings = updatedSettings.instrumentsSettings.map(instrument => {
