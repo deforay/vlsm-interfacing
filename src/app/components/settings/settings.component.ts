@@ -190,7 +190,7 @@ export class SettingsComponent implements OnInit {
     console.log('Reset instrument variables.');
   }
 
-  updateSettings(settings: any): void {
+  updateSettings(): void {
     const that = this;
     if (that.settingsForm.valid) {
       const updatedSettings = that.settingsForm.value;
@@ -261,10 +261,10 @@ export class SettingsComponent implements OnInit {
     });
   }
 
-  exportSettings(){
+  exportSettings() {
     this.electronStoreService.exportSettings();
   }
-  
+
   importSettings(): void {
     ipcRenderer.invoke('import-settings')
       .then(response => {
@@ -275,7 +275,7 @@ export class SettingsComponent implements OnInit {
       });
     ipcRenderer.on('imported-settings', (event, importedSettings) => {
       console.log('Imported Settings:', importedSettings);
-      this.updateSettings(importedSettings);
+      this.updateSettings();
     });
   }
 

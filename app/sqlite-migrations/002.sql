@@ -1,0 +1,2 @@
+
+ALTER TABLE orders ADD COLUMN mysql_inserted INTEGER DEFAULT 1;
