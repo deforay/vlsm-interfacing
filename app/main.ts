@@ -117,7 +117,9 @@ try {
 app.on('ready', () => {
   createWindow();
 
-  const trayIconPath = '/home/nateshk/Music/vlsm-interfacing/src/assets/icons/favicon.png'; 
+  const trayIconPath = 'dist/assets/icons/favicon.png'; 
+  
+
   try {
     const icon = nativeImage.createFromPath(trayIconPath);
     tray = new Tray(icon);
@@ -155,7 +157,7 @@ app.on('ready', () => {
   app.on('activate', () => {
     if (win === null) {
       createWindow();
-      tray = new Tray(path.join(__dirname, 'assets', 'icons', 'favicon.ico'));
+      tray = new Tray(path.join(__dirname, 'dist', 'assets', 'icons', 'favicon.png'));
     }
   });
   
@@ -178,6 +180,8 @@ app.on('ready', () => {
       }
 
     });
+
+    
 
     ipcMain.handle('export-settings', async (event, settingsJSON) => {
       try {
@@ -232,8 +236,9 @@ app.on('ready', () => {
       return { status: 'error', message: 'Failed to import settings.' };
     }
   });
-  
 
+
+ 
 
     database.run('CREATE TABLE IF NOT EXISTS `orders` ( \
       `id` INTEGER NOT NULL, \

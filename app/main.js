@@ -98,7 +98,7 @@ try {
     // });
     electron_1.app.on('ready', () => {
         createWindow();
-        const trayIconPath = '/home/nateshk/Music/vlsm-interfacing/src/assets/icons/favicon.png';
+        const trayIconPath = 'dist/assets/icons/favicon.png';
         try {
             const icon = electron_1.nativeImage.createFromPath(trayIconPath);
             tray = new electron_1.Tray(icon);
@@ -129,7 +129,7 @@ try {
     electron_1.app.on('activate', () => {
         if (win === null) {
             createWindow();
-            tray = new electron_1.Tray(path.join(__dirname, 'assets', 'icons', 'favicon.ico'));
+            tray = new electron_1.Tray(path.join(__dirname, 'dist', 'assets', 'icons', 'favicon.png'));
         }
     });
     electron_1.app.whenReady().then(() => {

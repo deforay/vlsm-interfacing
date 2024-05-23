@@ -59,6 +59,7 @@ export class ElectronStoreService {
     ipcRenderer.invoke('export-settings', settingsJSON)
       .then(response => {
         console.log('Export response:', response);
+      
       })
       .catch(err => {
         console.error('Error exporting settings:', err);
@@ -77,6 +78,10 @@ export class ElectronStoreService {
         }
       });
     }
+  }
+
+  showNotification(title: string, message: string): void {
+    new Notification(title, { body: message });
   }
   
 
