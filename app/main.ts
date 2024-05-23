@@ -92,7 +92,7 @@ try {
 
       createWindow();
 
-      const trayIconPath = path.join(__dirname, 'assets', 'icons', 'favicon.png');
+      const trayIconPath = 'dist/assets/icons/favicon.png';
       try {
         const icon = nativeImage.createFromPath(trayIconPath);
         tray = new Tray(icon);

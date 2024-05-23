@@ -87,7 +87,7 @@ try {
                 return;
             }
             createWindow();
-            const trayIconPath = path.join(__dirname, 'assets', 'icons', 'favicon.png');
+            const trayIconPath = 'dist/assets/icons/favicon.png';
             try {
                 const icon = electron_1.nativeImage.createFromPath(trayIconPath);
                 tray = new electron_1.Tray(icon);

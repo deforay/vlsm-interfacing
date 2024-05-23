@@ -5,7 +5,9 @@ import { ElectronService } from '../../core/services';
 import { ElectronStoreService } from '../../services/electron-store.service';
 import * as os from 'os';
 import { ipcRenderer } from 'electron';
-import { CryptoService } from '../../services/crypto.service'
+import { UtilitiesService } from '../../services/utilities.service';
+import { DatabaseService } from '../../services/database.service';
+import { CryptoService } from '../../services/crypto.service';
 
 @Component({
   selector: 'app-settings',
@@ -23,7 +25,9 @@ export class SettingsComponent implements OnInit {
     private electronService: ElectronService,
     private router: Router,
     private electronStoreService: ElectronStoreService,
-    private cryptoService: CryptoService
+    private utilitiesService: UtilitiesService,
+    private database : DatabaseService,
+    private cryptoService : CryptoService
   ) {
     const commonSettingsStore = this.electronStoreService.get('commonConfig');
     const instrumentSettingsStore = this.electronStoreService.get('instrumentsConfig');
@@ -197,8 +201,11 @@ export class SettingsComponent implements OnInit {
     if (that.settingsForm.valid) {
       const updatedSettings = that.settingsForm.value;
 
+     // Check if the password has already been encrypted
+    if (!this.cryptoService.isEncrypted(updatedSettings.commonSettings.mysqlPassword)) {
       // Encrypt the MySQL password before saving
       updatedSettings.commonSettings.mysqlPassword = this.cryptoService.encrypt(updatedSettings.commonSettings.mysqlPassword);
+    }
 
       // Ensure all required keys exist in each instrument setting
       updatedSettings.instrumentsSettings = updatedSettings.instrumentsSettings.map(instrument => {
@@ -234,18 +241,12 @@ export class SettingsComponent implements OnInit {
     const that = this;
     const mysql = that.electronService.mysql;
     const commonSettings = that.settingsForm.get('commonSettings').value;
-    let passwd = commonSettings.mysqlPassword;
-    if (that.cryptoService.isEncrypted(passwd)) {
-      passwd = that.cryptoService.decrypt(passwd);
-    }
     const connection = mysql.createConnection({
       host: commonSettings.mysqlHost,
       user: commonSettings.mysqlUser,
-      password: passwd,
+      password: commonSettings.mysqlPassword,
       port: commonSettings.mysqlPort
     });
-
-
 
     connection.connect(function (err: string) {
 
@@ -271,7 +272,7 @@ export class SettingsComponent implements OnInit {
     });
   }
 
-  exportSettings() {
+  exportSettings(){
     this.electronStoreService.exportSettings();
   }
 
