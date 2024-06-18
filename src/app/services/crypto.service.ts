@@ -39,6 +39,10 @@ export class CryptoService {
     if (!key) {
       key = this.getEncryptionKey();
     }
+    if (this.isEncrypted(data)) {
+      //console.error('Data is already encrypted');
+      return data;
+    }
     const encrypted = CryptoJS.AES.encrypt(data, key).toString();
     return `${this.prefix}${encrypted}${this.suffix}`;
   }
@@ -51,7 +55,8 @@ export class CryptoService {
       key = this.getEncryptionKey();
     }
     if (!this.isEncrypted(data)) {
-      throw new Error('Data does not appear to be encrypted');
+      //console.error('Data does not appear to be encrypted');
+      return data;
     }
     const encryptedData = data.slice(this.prefix.length, -this.suffix.length);
     const bytes = CryptoJS.AES.decrypt(encryptedData, key);

@@ -26,8 +26,8 @@ export class SettingsComponent implements OnInit {
     private router: Router,
     private electronStoreService: ElectronStoreService,
     private utilitiesService: UtilitiesService,
-    private database : DatabaseService,
-    private cryptoService : CryptoService
+    private database: DatabaseService,
+    private cryptoService: CryptoService
   ) {
     const commonSettingsStore = this.electronStoreService.get('commonConfig');
     const instrumentSettingsStore = this.electronStoreService.get('instrumentsConfig');
@@ -201,11 +201,8 @@ export class SettingsComponent implements OnInit {
     if (that.settingsForm.valid) {
       const updatedSettings = that.settingsForm.value;
 
-     // Check if the password has already been encrypted
-    if (!this.cryptoService.isEncrypted(updatedSettings.commonSettings.mysqlPassword)) {
       // Encrypt the MySQL password before saving
       updatedSettings.commonSettings.mysqlPassword = this.cryptoService.encrypt(updatedSettings.commonSettings.mysqlPassword);
-    }
 
       // Ensure all required keys exist in each instrument setting
       updatedSettings.instrumentsSettings = updatedSettings.instrumentsSettings.map(instrument => {
@@ -227,7 +224,7 @@ export class SettingsComponent implements OnInit {
       new Notification('Success', {
         body: 'Updated Interface Tool settings'
       });
-      this.resetInstrumentVariables();
+      that.resetInstrumentVariables();
       that.router.navigate(['/dashboard']).then(() => {
         window.location.reload();
       });
@@ -241,10 +238,11 @@ export class SettingsComponent implements OnInit {
     const that = this;
     const mysql = that.electronService.mysql;
     const commonSettings = that.settingsForm.get('commonSettings').value;
+    let password = that.cryptoService.decrypt(commonSettings.mysqlPassword);
     const connection = mysql.createConnection({
       host: commonSettings.mysqlHost,
       user: commonSettings.mysqlUser,
-      password: commonSettings.mysqlPassword,
+      password: password,
       port: commonSettings.mysqlPort
     });
 
@@ -272,7 +270,7 @@ export class SettingsComponent implements OnInit {
     });
   }
 
-  exportSettings(){
+  exportSettings() {
     this.electronStoreService.exportSettings();
   }
 

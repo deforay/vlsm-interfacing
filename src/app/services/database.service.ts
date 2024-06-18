@@ -36,10 +36,6 @@ export class DatabaseService {
 
       decryptedPassword = this.cryptoService.decrypt(decryptedPassword);
 
-
-      console.log(decryptedPassword);
-
-
       this.dbConfig = {
         connectionLimit: 10,
         waitForConnections: true, // Whether to wait for a connection to become available
@@ -121,99 +117,6 @@ export class DatabaseService {
     (this.electronService.execSqliteQuery(t, Object.values(data))).then((results) => { success(results) });
 
   }
-
-  //   addOrderTest(data, success, errorf) {
-  //     const mysqlInsert = 0;
-
-
-  //     this.insertIntoSQLite(data, mysqlInsert, success, errorf);
-
-
-  //     if (this.mysqlPool !== null) {
-  //         const mysqlQuery = 'INSERT INTO orders (' + Object.keys(data).join(',') + ', mysql_insert) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)';
-  //         this.execQuery(mysqlQuery, [...Object.values(data), mysqlInsert],
-  //             (result) => {
-  //                 // Update mysqlInsert if MySQL insert succeeds
-  //                 const mysqlInsert = 1;
-  //                 // Update sqlite with mysqlInsert status
-  //                 this.updateSQLiteMysqlInsert(data.orderId, mysqlInsert);
-  //             },
-  //             (error) => {
-  //                 // MySQL insert failed, mysqlInsert remains 0
-  //                 this.updateSQLiteMysqlInsert(data.orderId, mysqlInsert);
-  //                 errorf(error);
-  //             }
-  //         );
-  //     }
-  //   }
-
-  //   insertIntoSQLite(data, mysqlInsert, success, errorf) {
-  //     const sqliteQuery = 'INSERT INTO orders (' + Object.keys(data).join(',') + ', mysql_insert) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)';
-  //     this.electronService.execSqliteQuery(sqliteQuery, [...Object.values(data), mysqlInsert])
-  //         .then((results) => {
-  //             console.log('Insert successful:', results); // Log success message
-  //             success(results);
-  //         })
-  //         .catch((error) => {
-  //             console.error('Insert failed:', error); // Log error message
-  //             errorf(error);
-  //         });
-  // }
-
-
-  //   updateSQLiteMysqlInsert(orderId, mysqlInsert) {
-  //     const updateQuery = 'UPDATE orders SET mysql_insert = ? WHERE orderId = ?';
-  //     const params = [mysqlInsert, orderId];
-  //     this.electronService.execSqliteQuery(updateQuery, params)
-  //         .then(() => {
-  //             console.log('SQLite mysql_insert column updated successfully.');
-  //             this.sqliteMysqlSync();
-  //         })
-  //         .catch((error) => {
-  //             console.error('Error updating SQLite mysql_insert column:', error);
-  //         });
-  //   }
-
-  //   sqliteMysqlSync() {
-  //     const selectQuery = 'SELECT * FROM orders WHERE mysql_insert = 0';
-
-
-  //     const insertQuery = 'INSERT INTO mysql_orders (...) VALUES (...)';
-
-  //     this.electronService.execSqliteQuery(selectQuery, null)
-  //         .then((data) => {
-  //             if (data.length > 0) {
-  //                 // Insert into MySQL
-  //                 this.electronService.execSqliteQuery(insertQuery, data)
-  //                     .then(() => {
-
-  //                         const updateQuery = 'UPDATE orders SET mysql_insert = 1 WHERE mysql_insert = 0';
-  //                         this.electronService.execSqliteQuery(updateQuery, null)
-  //                             .then(() => {
-  //                                 console.log('SQLite-MYSQL synchronization successful.');
-
-  //                             })
-  //                             .catch((error) => {
-  //                                 console.error('Error updating SQLite mysql_insert column:', error);
-  //                             });
-  //                     })
-  //                     .catch((error) => {
-  //                         console.error('Error inserting into MySQL:', error);
-  //                     });
-  //             } else {
-  //                 console.log('No data to synchronize.');
-  //             }
-  //         })
-  //         .catch((error) => {
-  //             console.error('Error selecting data from SQLite:', error);
-  //         });
-  //   }
-
-
-
-
-
-
 
   fetchrawData(success, errorf) {
     const that = 'SELECT * FROM raw_data ORDER BY added_on DESC';
