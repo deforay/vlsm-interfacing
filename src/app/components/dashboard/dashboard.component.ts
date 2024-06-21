@@ -12,6 +12,8 @@ import { MatSort } from '@angular/material/sort';
 import { ViewChild } from '@angular/core';
 import { SelectionModel } from "@angular/cdk/collections";
 import { MatCheckboxChange } from '@angular/material/checkbox';
+import { distinctUntilChanged } from 'rxjs/operators';
+
 export enum SelectType {
   single,
   multiple
@@ -104,6 +106,12 @@ export class DashboardComponent implements OnInit, OnDestroy {
 
     // Refresh last orders every 5 minutes
     this.interval = setInterval(() => { this.fetchLastOrders(); }, 1000 * 60 * 5);
+
+    // Refresh last orders every 5 minutes
+    this.interval = setInterval(() => {
+      this.fetchLastOrders();
+      this.resyncTestResultsToMySQL();
+    }, 1000 * 60 * 5);
   }
 
 
@@ -321,6 +329,24 @@ export class DashboardComponent implements OnInit, OnDestroy {
           this.cdRef.detectChanges();
         });
       });
+
+    that.tcpService.getTransmissionStatusObservable(instrument.connectionParams.host, instrument.connectionParams.port)
+      .pipe(distinctUntilChanged())
+      .subscribe(status => {
+        that._ngZone.run(() => {
+          // Update the availableInstruments array
+          that.availableInstruments = this.availableInstruments.map(inst => {
+            if (inst.connectionParams.instrumentId === instrument.connectionParams.instrumentId) {
+              return {
+                ...inst,
+                transmissionInProgress: status
+              };
+            }
+            return inst;
+          });
+          this.cdRef.detectChanges();
+        });
+      });
   }
 
   selectTab(index: number): void {
@@ -373,6 +399,17 @@ export class DashboardComponent implements OnInit, OnDestroy {
     this.cdRef.detectChanges(); // Trigger change detection if needed
   }
 
+
+  resyncTestResultsToMySQL() {
+    this.utilitiesService.resyncTestResultsToMySQL(
+      (message) => {
+        console.log(message);
+      },
+      (error) => {
+        console.error(error);
+      }
+    );
+  }
 
   copyTextToClipboard(text: string) {
     navigator.clipboard.writeText(text).then(() => {

@@ -108,14 +108,64 @@ export class DatabaseService {
   }
 
 
-  addOrderTest(data, success, errorf) {
+  recordTestResults(data, success, errorf) {
     const t = 'INSERT INTO orders (' + Object.keys(data).join(',') + ') VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)';
+
+    const handleSQLiteInsert = (mysqlInserted) => {
+      data.mysql_inserted = mysqlInserted ? 1 : 0;
+      const placeholders = Object.values(data).map(() => '?').join(',');
+      const sqliteQuery = `INSERT INTO orders (${Object.keys(data).join(',')}, mysql_inserted) VALUES (${placeholders}, ?)`;
+      this.electronService.execSqliteQuery(sqliteQuery, [...Object.values(data), data.mysql_inserted])
+        .then(success)
+        .catch(errorf);
+    };
+
     if (this.mysqlPool != null) {
-      this.execQuery(t, Object.values(data), success, errorf);
+      this.execQuery(t, Object.values(data),
+        () => handleSQLiteInsert(true),
+        () => handleSQLiteInsert(false)
+      );
+    } else {
+      handleSQLiteInsert(false);
     }
+  }
 
-    (this.electronService.execSqliteQuery(t, Object.values(data))).then((results) => { success(results) });
+  resyncTestResultsToMySQL(success, errorf) {
+    const sqliteQuery = 'SELECT * FROM orders WHERE mysql_inserted = 0';
 
+    this.electronService.execSqliteQuery(sqliteQuery, [])
+      .then((records) => {
+        if (records.length === 0) {
+          success('No records to resync.');
+          return;
+        }
+
+        records.forEach((record) => {
+          const t = 'INSERT INTO orders (' + Object.keys(record).join(',') + ') VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)';
+
+          this.execQuery(t, Object.values(record),
+            () => {
+              const updateQuery = 'UPDATE orders SET mysql_inserted = 1 WHERE order_id = ?';
+              this.electronService.execSqliteQuery(updateQuery, [record.order_id])
+                .then(() => {
+                  console.log('Record successfully resynced and updated in SQLite:', record.order_id);
+                })
+                .catch((error) => {
+                  console.error('Error updating SQLite after successful MySQL insert:', error);
+                });
+            },
+            (mysqlError) => {
+              console.error('Error inserting record into MySQL:', mysqlError);
+              // No need to update SQLite as the mysql_inserted is already 0
+            }
+          );
+        });
+
+        success('Resync process completed.');
+      })
+      .catch((err) => {
+        errorf('Error fetching records from SQLite:', err);
+      });
   }
 
   fetchrawData(success, errorf) {
@@ -126,8 +176,6 @@ export class DatabaseService {
       (this.electronService.execSqliteQuery(that, null)).then((results) => { success(results) });
     }
   }
-
-
 
   fetchLastOrders(success, errorf) {
     const t = 'SELECT * FROM orders ORDER BY added_on DESC LIMIT 1000';

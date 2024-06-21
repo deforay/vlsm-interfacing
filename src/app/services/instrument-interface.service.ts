@@ -499,6 +499,7 @@ export class InstrumentInterfaceService {
 
   private receiveASTM(astmProtocolType: string, instrumentConnectionData: InstrumentConnectionStack, data: Buffer) {
     let that = this;
+    instrumentConnectionData.transmissionStatusSubject.next(true);
     //that.utilitiesService.logger('info', 'Receiving ' + astmProtocolType, instrumentConnectionData.instrumentId);
     let astmText = that.utilitiesService.hex2ascii(data.toString('hex'));
 
@@ -530,7 +531,8 @@ export class InstrumentInterfaceService {
           // Unexpected protocol
           break;
       }
-      that.strData = "";
+      that.strData = '';
+      instrumentConnectionData.transmissionStatusSubject.next(false);
     } else if (astmText === that.NAK) {
       instrumentConnectionData.connectionSocket.write(that.ACK);
       that.utilitiesService.logger('error', 'NAK Received', instrumentConnectionData.instrumentId);
@@ -549,6 +551,7 @@ export class InstrumentInterfaceService {
 
   private receiveHL7(instrumentConnectionData: InstrumentConnectionStack, data: Buffer) {
     let that = this;
+    instrumentConnectionData.transmissionStatusSubject.next(true);
     that.utilitiesService.logger('info', 'Receiving HL7 data', instrumentConnectionData.instrumentId);
     const hl7Text = that.utilitiesService.hex2ascii(data.toString('hex'));
     that.strData += hl7Text;
@@ -559,7 +562,7 @@ export class InstrumentInterfaceService {
     // it means the stream has ended and we can proceed with saving this data
     if (that.strData.includes('\x1c')) {
       // Let us store this Raw Data before we process it
-
+      instrumentConnectionData.transmissionStatusSubject.next(false);
       that.utilitiesService.logger('info', 'Received File Separator Character. Ready to process HL7 data', instrumentConnectionData.instrumentId);
 
       const rawData: RawMachineData = {
@@ -600,6 +603,7 @@ export class InstrumentInterfaceService {
       }
 
       that.strData = '';
+      instrumentConnectionData.transmissionStatusSubject.next(false);
     }
   }
 
@@ -690,7 +694,7 @@ export class InstrumentInterfaceService {
   private saveOrder(order: any, instrumentConnectionData: InstrumentConnectionStack) {
     const that = this;
     if (order.results) {
-      that.dbService.addOrderTest(order, (res) => {
+      that.dbService.recordTestResults(order, (res) => {
         that.utilitiesService.logger('success', 'Successfully saved result : ' + order.test_id + '|' + order.order_id, instrumentConnectionData.instrumentId);
         return true;
       }, (err) => {

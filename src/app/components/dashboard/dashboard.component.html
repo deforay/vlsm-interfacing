@@ -16,11 +16,16 @@
         <li class="nav-item" *ngFor="let instrument of availableInstruments; let i = index">
           <a class="nav-link" [class.active]="selectedTabIndex === i" [attr.id]="'tab-' + i" data-toggle="tab"
             href="javascript:void(0);" role="tab" (click)="selectTab(i)">
-            <em [ngClass]="{'fa': true,
-                                'fa-check-circle': instrument.isConnected,
-                                'fa-times-circle': !instrument.isConnected,
-                                'connected': instrument.isConnected,
-                                'disconnected': !instrument.isConnected}" aria-hidden="true"></em>
+            <em [ngClass]="{
+              'fa': true,
+              'fa-sync': instrument.isConnected && instrument.transmissionInProgress,
+              'fa-check-circle': instrument.isConnected && !instrument.transmissionInProgress,
+              'fa-times-circle': !instrument.isConnected,
+              'fa-spin': instrument.isConnected && instrument.transmissionInProgress,
+              'connected': instrument.isConnected,
+              'disconnected': !instrument.isConnected
+            }" aria-hidden="true"></em>
+
             {{instrument.connectionParams.instrumentId}}
           </a>
         </li>

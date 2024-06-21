@@ -10,8 +10,9 @@ export interface InstrumentConnectionStack {
   machineType?: string;
   statusSubject: BehaviorSubject<boolean>;
   connectionAttemptStatusSubject: BehaviorSubject<boolean>;
+  transmissionStatusSubject: BehaviorSubject<boolean>;
   connectionSocket?: any;
   connectionServer?: any;
-  reconnectAttempts: number;
   errorOccurred: boolean;
+  reconnectAttempts: number;
 }

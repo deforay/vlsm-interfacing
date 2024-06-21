@@ -27,15 +27,12 @@ export class UtilitiesService {
   constructor(
     public electronService: ElectronService,
     public dbService: DatabaseService) {
-
-
-
   }
 
 
-
-
-
+  resyncTestResultsToMySQL(success, errorf) {
+    this.dbService.resyncTestResultsToMySQL(success, errorf);
+  }
 
 
 

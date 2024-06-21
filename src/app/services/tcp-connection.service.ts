@@ -40,15 +40,16 @@ export class TcpConnectionService {
     }
     else {
       const statusSubject = new BehaviorSubject(false);
+      const transmissionStatusSubject = new BehaviorSubject(false);
       // Subscribe to the BehaviorSubject
-      statusSubject.subscribe(value => {
-        //console.info(connectionParams.instrumentId + ' statusSubject ===> ' + value);
-      });
+      // statusSubject.subscribe(value => {
+      //   //console.info(connectionParams.instrumentId + ' statusSubject ===> ' + value);
+      // });
       const connectionAttemptStatusSubject = new BehaviorSubject(false);
       // Subscribe to the BehaviorSubject
-      connectionAttemptStatusSubject.subscribe(value => {
-        //console.info(connectionParams.instrumentId + ' connectionAttemptStatusSubject ===> ' + value);
-      });
+      // connectionAttemptStatusSubject.subscribe(value => {
+      //   //console.info(connectionParams.instrumentId + ' connectionAttemptStatusSubject ===> ' + value);
+      // });
 
       instrumentConnectionData = {
         connectionMode: connectionParams.connectionMode,
@@ -58,10 +59,11 @@ export class TcpConnectionService {
         machineType: connectionParams.machineType,
         statusSubject: statusSubject,
         connectionAttemptStatusSubject: connectionAttemptStatusSubject,
+        transmissionStatusSubject: transmissionStatusSubject,
         connectionSocket: null,
         connectionServer: null,
         errorOccurred: false,
-        reconnectAttempts: 0 // Initialize reconnect attempts
+        reconnectAttempts: 0, // Initialize reconnect attempts
       };
 
       that.connectionStack.set(connectionIdentifierKey, instrumentConnectionData);
@@ -139,7 +141,6 @@ export class TcpConnectionService {
       instrumentConnectionData.connectionSocket.on('timeout', () => {
         that.utilitiesService.logger('info', 'Client socket timeout', instrumentConnectionData.instrumentId);
         that._handleClientConnectionIssue(instrumentConnectionData, connectionParams, 'Server socket timeout', true);
-        instrumentConnectionData.connectionSocket.end();
       });
 
       // Successful connection
@@ -262,14 +263,21 @@ export class TcpConnectionService {
 
     const instrumentConnectionData = that.connectionStack.get(connectionIdentifierKey);
 
-    instrumentConnectionData.connectionSocket.write(data, 'utf8', (err) => {
-      if (err) {
-        console.error('Failed to send data:', err);
-      } else {
-        console.log('Data sent successfully');
-      }
-    });
+    if (instrumentConnectionData) {
+      instrumentConnectionData.transmissionStatusSubject.next(true); // Set flag when transmission starts
+
+      instrumentConnectionData.connectionSocket.write(data, 'utf8', (err) => {
+        instrumentConnectionData.transmissionStatusSubject.next(false); // Reset flag when transmission ends
+
+        if (err) {
+          console.error('Failed to send data:', err);
+        } else {
+          console.log('Data sent successfully');
+        }
+      });
+    }
   }
+
 
   private _generateConnectionIdentifierKey(host: string, port: number): string {
     return `${host}:${port}`;
@@ -285,5 +293,11 @@ export class TcpConnectionService {
     const connectionIdentifierKey = this._generateConnectionIdentifierKey(host, port);
     const instrumentConnectionData = this.connectionStack.get(connectionIdentifierKey);
     return instrumentConnectionData.connectionAttemptStatusSubject.asObservable();
+  }
+
+  getTransmissionStatusObservable(host: string, port: number): Observable<boolean> {
+    const connectionIdentifierKey = this._generateConnectionIdentifierKey(host, port);
+    const instrumentConnectionData = this.connectionStack.get(connectionIdentifierKey);
+    return instrumentConnectionData.transmissionStatusSubject.asObservable();
   }
 }
