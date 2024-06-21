@@ -12,5 +12,6 @@ export interface InstrumentConnectionStack {
   connectionAttemptStatusSubject: BehaviorSubject<boolean>;
   connectionSocket?: any;
   connectionServer?: any;
+  reconnectAttempts: number;
   errorOccurred: boolean;
 }

@@ -91,89 +91,91 @@ export class DashboardComponent implements OnInit, OnDestroy {
   }
 
   ngOnInit() {
+    this.loadSettings();
 
-    const that = this;
+    // Scroll to the top of the page when the component initializes
+    window.scrollTo(0, 0);
 
-    const initialSettings = that.store.getAll();
+    // Fetch last few orders and logs on load
+    setTimeout(() => {
+      this.fetchLastOrders();
+      this.fetchRecentLogs();
+    }, 600);
 
-    that.utilitiesService.logger('ignore', "<hr/>");
+    // Refresh last orders every 5 minutes
+    this.interval = setInterval(() => { this.fetchLastOrders(); }, 1000 * 60 * 5);
+  }
 
-    // Fetch initial settings if not already present
-    if (!initialSettings.commonConfig || !initialSettings.instrumentsConfig) {
-      const initialCommonSettings = that.store.get('commonConfig');
 
-      const initialInstrumentsSettings = that.store.get('instrumentsConfig');
+  setupInstruments() {
+    this.availableInstruments = [];
 
-      if (!initialCommonSettings || !initialInstrumentsSettings) {
-        // Handle the case where settings are not found
-        console.warn('Settings not found, redirecting to settings page');
-        that.router.navigate(['/settings']);
+    this.instrumentsSettings.forEach((instrumentSetting, index) => {
+      let instrument: any = {};
+      instrument.connectionParams = {
+        instrumentIndex: index,
+        connectionMode: instrumentSetting.interfaceConnectionMode,
+        connectionProtocol: instrumentSetting.interfaceCommunicationProtocol,
+        host: instrumentSetting.analyzerMachineHost ?? '127.0.0.1',
+        port: instrumentSetting.analyzerMachinePort,
+        instrumentId: instrumentSetting.analyzerMachineName,
+        machineType: instrumentSetting.analyzerMachineType,
+        labName: this.commonSettings.labName,
+        interfaceAutoConnect: this.commonSettings.interfaceAutoConnect
+      };
+
+      instrument.isConnected = false;
+      instrument.instrumentButtonText = 'Connect';
+
+      if (!this.commonSettings || !instrument.connectionParams.port || (instrument.connectionParams.connectionProtocol === 'tcpclient' && !instrument.connectionParams.host)) {
+        this.router.navigate(['/settings']);
+        return;
       }
-    }
 
-    that.electronStoreSubscription = that.store.electronStoreObservable().subscribe(electronStoreObject => {
+      if (instrument.connectionParams.interfaceAutoConnect === 'yes') {
+        setTimeout(() => {
+          this.reconnect(instrument);
+        }, 1000);
+      }
 
-      that._ngZone.run(() => {
-        this.cdRef.detectChanges();
-        that.commonSettings = electronStoreObject.commonConfig;
-        that.instrumentsSettings = electronStoreObject.instrumentsConfig;
-        that.appVersion = electronStoreObject.appVersion;
-
-        that.instrumentsSettings.forEach((instrumentSetting, index) => {
-          let instrument: any = {};
-          instrument.connectionParams = {
-            instrumentIndex: index,
-            connectionMode: instrumentSetting.interfaceConnectionMode,
-            connectionProtocol: instrumentSetting.interfaceCommunicationProtocol,
-            host: instrumentSetting.analyzerMachineHost ?? '127.0.0.1',
-            port: instrumentSetting.analyzerMachinePort,
-            instrumentId: instrumentSetting.analyzerMachineName,
-            machineType: instrumentSetting.analyzerMachineType,
-            labName: that.commonSettings.labName,
-            interfaceAutoConnect: that.commonSettings.interfaceAutoConnect
-          };
-
-          instrument.isConnected = false;
-          instrument.instrumentButtonText = 'Connect';
-
-          if (null === that.commonSettings || undefined === that.commonSettings || !instrument.connectionParams.port || (instrument.connectionParams.connectionProtocol === 'tcpclient' && !instrument.connectionParams.host)) {
-            that.router.navigate(['/settings']);
-          }
-
-
-          if (instrument.connectionParams.interfaceAutoConnect !== undefined && instrument.connectionParams.interfaceAutoConnect !== null && instrument.connectionParams.interfaceAutoConnect === 'yes') {
-            setTimeout(() => {
-              that.reconnect(instrument);
-            }, 1000);
-          }
-
-          that.utilitiesService.getInstrumentLogSubject(instrument.connectionParams.instrumentId)
-            .subscribe(logs => {
-              that._ngZone.run(() => {
-                //instrument.logs = logs;
-                that.updateLogsForInstrument(instrument.connectionParams.instrumentId, logs);
-                that.filterInstrumentLogs(instrument);
-                that.cdRef.detectChanges(); // Trigger change detection
-              });
-            });
-
-          that.availableInstruments.push(instrument);
+      this.utilitiesService.getInstrumentLogSubject(instrument.connectionParams.instrumentId)
+        .subscribe(logs => {
+          this._ngZone.run(() => {
+            this.updateLogsForInstrument(instrument.connectionParams.instrumentId, logs);
+            this.filterInstrumentLogs(instrument);
+            this.cdRef.detectChanges();
+          });
         });
 
-        setTimeout(() => {
-          // Let us fetch last few Orders and Logs on load
-          that.fetchLastOrders();
-          that.fetchRecentLogs();
-        }, 600);
-
-        // let us refresh last orders every 5 minutes
-        that.interval = setInterval(() => { that.fetchLastOrders(); }, 1000 * 60 * 5);
-      });
-      this.cdRef.detectChanges();
-
+      this.availableInstruments.push(instrument);
     });
   }
 
+  loadSettings() {
+    const initialSettings = this.store.getAll();
+
+    if (!initialSettings.commonConfig || !initialSettings.instrumentsConfig) {
+      const initialCommonSettings = this.store.get('commonConfig');
+      const initialInstrumentsSettings = this.store.get('instrumentsConfig');
+
+      if (!initialCommonSettings || !initialInstrumentsSettings) {
+        console.warn('Settings not found, redirecting to settings page');
+        this.router.navigate(['/settings']);
+        return;
+      }
+    }
+
+    this.electronStoreSubscription = this.store.electronStoreObservable().subscribe(electronStoreObject => {
+      this._ngZone.run(() => {
+        this.commonSettings = electronStoreObject.commonConfig;
+        this.instrumentsSettings = electronStoreObject.instrumentsConfig;
+        this.appVersion = electronStoreObject.appVersion;
+
+        this.setupInstruments();
+        this.cdRef.detectChanges();
+      });
+    });
+  }
 
 
   reSyncSelectedRecords() {

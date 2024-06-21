@@ -39,8 +39,6 @@ export class TcpConnectionService {
       instrumentConnectionData = that.connectionStack.get(connectionIdentifierKey);
     }
     else {
-
-
       const statusSubject = new BehaviorSubject(false);
       // Subscribe to the BehaviorSubject
       statusSubject.subscribe(value => {
@@ -62,11 +60,11 @@ export class TcpConnectionService {
         connectionAttemptStatusSubject: connectionAttemptStatusSubject,
         connectionSocket: null,
         connectionServer: null,
-        errorOccurred: false
+        errorOccurred: false,
+        reconnectAttempts: 0 // Initialize reconnect attempts
       };
 
       that.connectionStack.set(connectionIdentifierKey, instrumentConnectionData);
-
     }
 
     instrumentConnectionData.connectionAttemptStatusSubject.next(true);
@@ -83,6 +81,15 @@ export class TcpConnectionService {
 
         sockets.push(socket);
         that.socketClient = socket;
+
+        // Set timeout for the server socket
+        socket.setTimeout(60000); // 1 minute timeout
+        socket.on('timeout', () => {
+          that.utilitiesService.logger('info', 'Server socket timeout', instrumentConnectionData.instrumentId);
+          that._handleClientConnectionIssue(instrumentConnectionData, connectionParams, 'Client socket timeout', true);
+          socket.end();
+        });
+
         socket.on('data', function (data) {
           that.handleTCPCallback(connectionIdentifierKey, data);
         });
@@ -98,7 +105,7 @@ export class TcpConnectionService {
           }
           const index = sockets.findIndex(function (o) {
             return o.host === socket.host && o.port === socket.port;
-          })
+          });
           if (index !== -1) {
             sockets.splice(index, 1);
           }
@@ -113,7 +120,6 @@ export class TcpConnectionService {
       });
 
     } else if (connectionParams.connectionMode === 'tcpclient') {
-
       instrumentConnectionData.connectionSocket = that.socketClient = new that.net.Socket();
       that.clientConnectionOptions = {
         port: connectionParams.port,
@@ -128,9 +134,18 @@ export class TcpConnectionService {
       // Attempt to connect
       instrumentConnectionData.connectionSocket.connect(that.clientConnectionOptions);
 
+      // Set connection timeout for client
+      instrumentConnectionData.connectionSocket.setTimeout(30000); // 30 seconds timeout
+      instrumentConnectionData.connectionSocket.on('timeout', () => {
+        that.utilitiesService.logger('info', 'Client socket timeout', instrumentConnectionData.instrumentId);
+        that._handleClientConnectionIssue(instrumentConnectionData, connectionParams, 'Server socket timeout', true);
+        instrumentConnectionData.connectionSocket.end();
+      });
+
       // Successful connection
       instrumentConnectionData.connectionSocket.on('connect', function () {
         instrumentConnectionData.statusSubject.next(true);
+        instrumentConnectionData.reconnectAttempts = 0; // Reset retry attempts
         that.utilitiesService.logger('success', 'Connected as client successfully', instrumentConnectionData.instrumentId);
       });
 
@@ -156,24 +171,34 @@ export class TcpConnectionService {
 
       });
     } else {
-
+      // handle other connection modes if any
     }
 
   }
 
   private _handleClientConnectionIssue(instrumentConnectionData, connectionParams, message, isError) {
+    let that = this;
     instrumentConnectionData.statusSubject.next(false);
-    this.disconnect(connectionParams.host, connectionParams.port);
+    that.disconnect(connectionParams.host, connectionParams.port);
     if (isError) {
-      this.utilitiesService.logger('error', message, instrumentConnectionData.instrumentId);
+      that.utilitiesService.logger('error', message, instrumentConnectionData.instrumentId);
     }
     if (connectionParams.interfaceAutoConnect === 'yes') {
       instrumentConnectionData.connectionAttemptStatusSubject.next(true);
-      this.utilitiesService.logger('info', "Interface AutoConnect is enabled: Will re-attempt connection in 30 seconds", instrumentConnectionData.instrumentId);
+      const attempt = instrumentConnectionData.reconnectAttempts || 0;
+      const delay = that.getRetryDelay(attempt);
+      that.utilitiesService.logger('info', `Interface AutoConnect is enabled: Will re-attempt connection in ${delay / 1000} seconds`, instrumentConnectionData.instrumentId);
+      instrumentConnectionData.reconnectAttempts = attempt + 1;
       setTimeout(() => {
-        this.connect(connectionParams, this.handleTCPCallback);
-      }, 30000);
+        that.connect(connectionParams, that.handleTCPCallback);
+      }, delay);
     }
+  }
+
+  private getRetryDelay(attempt: number): number {
+    const maxDelay = 300000; // Maximum delay of 5 minutes
+    const baseDelay = 1000; // Start with 1 second
+    return Math.min(maxDelay, baseDelay * Math.pow(2, attempt));
   }
 
   reconnect(connectionParams: ConnectionParams, handleTCPCallback: (connectionIdentifierKey: string, data: any) => void) {
@@ -231,7 +256,6 @@ export class TcpConnectionService {
     }
   }
 
-
   sendData(host, port, data: string) {
     const that = this;
     const connectionIdentifierKey = that._generateConnectionIdentifierKey(host, port);
@@ -262,5 +286,4 @@ export class TcpConnectionService {
     const instrumentConnectionData = this.connectionStack.get(connectionIdentifierKey);
     return instrumentConnectionData.connectionAttemptStatusSubject.asObservable();
   }
-
 }

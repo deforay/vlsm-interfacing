@@ -225,9 +225,7 @@ export class SettingsComponent implements OnInit {
         body: 'Updated Interface Tool settings'
       });
       that.resetInstrumentVariables();
-      that.router.navigate(['/dashboard']).then(() => {
-        window.location.reload();
-      });
+      that.router.navigate(['/dashboard']);
     } else {
       console.error('Form is not valid');
     }
