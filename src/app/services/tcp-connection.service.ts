@@ -33,19 +33,21 @@ export class TcpConnectionService {
     that.handleTCPCallback = handleTCPCallback;
     let instrumentConnectionData: InstrumentConnectionStack = null;
 
-    const connectionIdentifierKey = that._generateConnectionIdentifierKey(connectionParams.host, connectionParams.port);
+    const connectionIdentifierKey = that._generateConnectionIdentifierKey(connectionParams);
 
     if (that.connectionStack.has(connectionIdentifierKey)) {
       instrumentConnectionData = that.connectionStack.get(connectionIdentifierKey);
     }
     else {
+
       const statusSubject = new BehaviorSubject(false);
       const transmissionStatusSubject = new BehaviorSubject(false);
+      const connectionAttemptStatusSubject = new BehaviorSubject(false);
+
       // Subscribe to the BehaviorSubject
       // statusSubject.subscribe(value => {
       //   //console.info(connectionParams.instrumentId + ' statusSubject ===> ' + value);
       // });
-      const connectionAttemptStatusSubject = new BehaviorSubject(false);
       // Subscribe to the BehaviorSubject
       // connectionAttemptStatusSubject.subscribe(value => {
       //   //console.info(connectionParams.instrumentId + ' connectionAttemptStatusSubject ===> ' + value);
@@ -180,7 +182,7 @@ export class TcpConnectionService {
   private _handleClientConnectionIssue(instrumentConnectionData, connectionParams, message, isError) {
     let that = this;
     instrumentConnectionData.statusSubject.next(false);
-    that.disconnect(connectionParams.host, connectionParams.port);
+    that.disconnect(connectionParams);
     if (isError) {
       that.utilitiesService.logger('error', message, instrumentConnectionData.instrumentId);
     }
@@ -204,13 +206,13 @@ export class TcpConnectionService {
 
   reconnect(connectionParams: ConnectionParams, handleTCPCallback: (connectionIdentifierKey: string, data: any) => void) {
     let that = this;
-    that.disconnect(connectionParams.host, connectionParams.port);
+    that.disconnect(connectionParams);
     that.connect(connectionParams, handleTCPCallback);
   }
 
-  disconnect(host: string, port: number) {
+  disconnect(connectionParams: ConnectionParams) {
     const that = this;
-    const connectionIdentifierKey = that._generateConnectionIdentifierKey(host, port);
+    const connectionIdentifierKey = that._generateConnectionIdentifierKey(connectionParams);
 
     const instrumentConnectionData = that.connectionStack.get(connectionIdentifierKey);
     if (instrumentConnectionData) {
@@ -257,9 +259,9 @@ export class TcpConnectionService {
     }
   }
 
-  sendData(host, port, data: string) {
+  sendData(connectionParams: ConnectionParams, data: string) {
     const that = this;
-    const connectionIdentifierKey = that._generateConnectionIdentifierKey(host, port);
+    const connectionIdentifierKey = that._generateConnectionIdentifierKey(connectionParams);
 
     const instrumentConnectionData = that.connectionStack.get(connectionIdentifierKey);
 
@@ -279,24 +281,24 @@ export class TcpConnectionService {
   }
 
 
-  private _generateConnectionIdentifierKey(host: string, port: number): string {
-    return `${host}:${port}`;
+  private _generateConnectionIdentifierKey(connectionParams: ConnectionParams): string {
+    return `${connectionParams.host}:${connectionParams.port}:${connectionParams.connectionMode}:${connectionParams.connectionProtocol}`;
   }
 
-  getStatusObservable(host: string, port: number): Observable<boolean> {
-    const connectionIdentifierKey = this._generateConnectionIdentifierKey(host, port);
+  getStatusObservable(connectionParams: ConnectionParams): Observable<boolean> {
+    const connectionIdentifierKey = this._generateConnectionIdentifierKey(connectionParams);
     const instrumentConnectionData = this.connectionStack.get(connectionIdentifierKey);
     return instrumentConnectionData.statusSubject.asObservable();
   }
 
-  getConnectionAttemptObservable(host: string, port: number): Observable<boolean> {
-    const connectionIdentifierKey = this._generateConnectionIdentifierKey(host, port);
+  getConnectionAttemptObservable(connectionParams: ConnectionParams): Observable<boolean> {
+    const connectionIdentifierKey = this._generateConnectionIdentifierKey(connectionParams);
     const instrumentConnectionData = this.connectionStack.get(connectionIdentifierKey);
     return instrumentConnectionData.connectionAttemptStatusSubject.asObservable();
   }
 
-  getTransmissionStatusObservable(host: string, port: number): Observable<boolean> {
-    const connectionIdentifierKey = this._generateConnectionIdentifierKey(host, port);
+  getTransmissionStatusObservable(connectionParams: ConnectionParams): Observable<boolean> {
+    const connectionIdentifierKey = this._generateConnectionIdentifierKey(connectionParams);
     const instrumentConnectionData = this.connectionStack.get(connectionIdentifierKey);
     return instrumentConnectionData.transmissionStatusSubject.asObservable();
   }

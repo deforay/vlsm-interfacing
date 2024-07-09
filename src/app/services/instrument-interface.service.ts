@@ -1,6 +1,5 @@
 import { Injectable } from '@angular/core';
 import { DatabaseService } from './database.service';
-import { ConnectionParams } from '../interfaces/connection-params.interface';
 import { InstrumentConnectionStack } from '../interfaces/intrument-connections.interface';
 import { RawMachineData } from '../interfaces/raw-machine-data.interface';
 import { UtilitiesService } from './utilities.service';
@@ -60,7 +59,7 @@ export class InstrumentInterfaceService {
   disconnect(instrument: any) {
     const that = this;
     if (instrument && instrument.connectionParams && instrument.connectionParams.host && instrument.connectionParams.port) {
-      that.tcpService.disconnect(instrument.connectionParams.host, instrument.connectionParams.port);
+      that.tcpService.disconnect(instrument.connectionParams);
     }
   }
 
@@ -828,7 +827,7 @@ export class InstrumentInterfaceService {
 
           // Send the framed message over TCP
           // Assuming tcpService has a method like sendData that takes host, port, and the message
-          that.tcpService.sendData(instrument.connectionParams.host, instrument.connectionParams.port, framedMessage);
+          that.tcpService.sendData(instrument.connectionParams, framedMessage);
         });
       },
       (err: any) => {

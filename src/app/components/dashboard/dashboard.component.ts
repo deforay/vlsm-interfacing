@@ -299,7 +299,7 @@ export class DashboardComponent implements OnInit, OnDestroy {
 
   updateInstrumentStatusSubscription(instrument: any) {
     const that = this;
-    that.tcpService.getStatusObservable(instrument.connectionParams.host, instrument.connectionParams.port).subscribe(status => {
+    that.tcpService.getStatusObservable(instrument.connectionParams).subscribe(status => {
       that._ngZone.run(() => {
         // Update the availableInstruments array
         that.availableInstruments = that.availableInstruments.map(inst => {
@@ -312,7 +312,7 @@ export class DashboardComponent implements OnInit, OnDestroy {
       });
     });
 
-    that.tcpService.getConnectionAttemptObservable(instrument.connectionParams.host, instrument.connectionParams.port)
+    that.tcpService.getConnectionAttemptObservable(instrument.connectionParams)
       .subscribe(status => {
         that._ngZone.run(() => {
           // Update the availableInstruments array
@@ -330,7 +330,7 @@ export class DashboardComponent implements OnInit, OnDestroy {
         });
       });
 
-    that.tcpService.getTransmissionStatusObservable(instrument.connectionParams.host, instrument.connectionParams.port)
+    that.tcpService.getTransmissionStatusObservable(instrument.connectionParams)
       .pipe(distinctUntilChanged())
       .subscribe(status => {
         that._ngZone.run(() => {
