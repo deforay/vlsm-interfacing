@@ -110,18 +110,20 @@ export class DatabaseService {
 
   recordTestResults(data, success, errorf) {
     const t = 'INSERT INTO orders (' + Object.keys(data).join(',') + ') VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)';
-
+    console.log('SQL Query:', t);
     const handleSQLiteInsert = (mysqlInserted) => {
       data.mysql_inserted = mysqlInserted ? 1 : 0;
       const placeholders = Object.values(data).map(() => '?').join(',');
-      const sqliteQuery = `INSERT INTO orders (${Object.keys(data).join(',')}, mysql_inserted) VALUES (${placeholders}, ?)`;
+      const sqliteQuery = `INSERT INTO orders (${Object.keys(data).join(',')}, mysql_inserted) VALUES (${placeholders}, ?, ?)`;
       this.electronService.execSqliteQuery(sqliteQuery, [...Object.values(data), data.mysql_inserted])
         .then(success)
         .catch(errorf);
+        console.log('SQLite Query:', sqliteQuery);
     };
+    
 
     if (this.mysqlPool != null) {
-      this.execQuery(t, Object.values(data),
+      this.execQuery(t, [Object.values(data),data.instrument_id],
         () => handleSQLiteInsert(true),
         () => handleSQLiteInsert(false)
       );
@@ -186,6 +188,9 @@ export class DatabaseService {
       (this.electronService.execSqliteQuery(t, null)).then((results) => { success(results) });
     }
   }
+
+
+  
 
   reSyncRecord(orderId: string): void {
     const updateQuery = `UPDATE orders SET lims_sync_status = '0' WHERE order_id = ?`;

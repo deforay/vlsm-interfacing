@@ -118,7 +118,19 @@
               <div *ngFor="let instrument of instrumentsSettings.controls; let i = index">
                 <div [formGroupName]="i">
                   <div class="row">
+<!-- 
+                    <div class="form-group col col-sm-6">
+                      <label for="id" class="col-form-label-sm">Instrument ID</label>
+                      <p class="form-control-static small">{{ instrument.get('id')?.value }}</p>
 
+                    </div> -->
+<!-- 
+                    <div class="form-group col col-sm-6">
+                      <label for="instrumentId" class="col-form-label-sm">Instrument ID</label>
+                      <input type="text" formControlName="id" class="form-control form-control-sm" readonly/>
+                    </div> -->
+                    
+                    
                     <div class="form-group col col-sm-6">
                       <label for="interfaceConnectionMode" class="col-form-label-sm">Make Interface Tool as a</label>
                       <select formControlName="interfaceConnectionMode" class="form-control form-control-sm" required
@@ -225,7 +237,7 @@
 
         <button class="btn btn-primary" type="submit" [disabled]="settingsForm.invalid">Save Settings</button>
         &nbsp;
-        <button routerLink="/dashboard" class="btn btn-danger" type="button">
+        <button routerLink="/console" class="btn btn-danger" type="button">
           <span>Back without saving</span>
         </button>
       </form>

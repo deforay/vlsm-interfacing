@@ -1,0 +1,104 @@
+@import "~@fortawesome/fontawesome-free/css/all.min.css";
+
+
+.padding-class {
+  padding: 15px;
+  /* Adjust the padding as needed */
+}
+
+.connected {
+  color: green;
+}
+
+.disconnected {
+  color: red;
+}
+
+.nav-tabs .nav-link.active,
+.tab-content {
+  background-color: #fbfbfb !important;
+}
+
+.tab-content {
+  min-height: 10em;
+}
+
+.tab-content h5 {
+  font-size: 1.2em !important;
+}
+
+.nav-tabs .nav-link {
+  border-bottom: none !important;
+}
+
+.btn i {
+  margin-right: 5px;
+}
+
+
+.instrument-logs {
+  margin-top: 20px;
+}
+
+.log-entries {
+  background-color: #f8f9fa;
+  border: 1px solid #ddd;
+  height: 200px !important;
+  max-height: 200px !important;
+  overflow-y: scroll;
+  padding: 10px;
+  font-size: 0.9em;
+  display: flex;
+  flex-direction: column-reverse;
+}
+
+.log-entry {
+  margin-bottom: 2px;
+  font-size: 14px;
+}
+
+
+.instrument-logs input[type="text"] {
+  width: 100%;
+  box-sizing: border-box;
+  border: 1px #777 dotted;
+  font-size: 0.9em;
+}
+
+.search-input,
+.search-input::placeholder {
+
+  font-size: 14px;
+}
+
+
+.example-container {
+  display: flex;
+  flex-direction: column;
+  min-width: 300px;
+}
+
+.example-header {
+  min-height: 64px;
+  padding: 8px 24px 0;
+}
+
+.mat-form-field {
+  font-size: 14px;
+  width: 100%;
+}
+
+.mat-table {
+  overflow: auto;
+  max-height: 500px;
+}
+
+.header-cell {
+  background-color: #808080;
+  /* Gray color, adjust as needed */
+}
+
+.row-with-spacing {
+  margin-bottom: 25px;
+  /* Adjust the value as per your preference */
+}

@@ -34,7 +34,7 @@ export class RawDataComponentComponent  {
   }
 
   click(){
-    this.router.navigate(['/dashboard']);
+    this.router.navigate(['/console']);
   }
 
   filterData($event:any){

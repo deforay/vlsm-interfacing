@@ -8,6 +8,7 @@ import { ipcRenderer } from 'electron';
 import { UtilitiesService } from '../../services/utilities.service';
 import { DatabaseService } from '../../services/database.service';
 import { CryptoService } from '../../services/crypto.service';
+import { v4 as uuidv4 } from 'uuid';
 
 @Component({
   selector: 'app-settings',
@@ -29,6 +30,7 @@ export class SettingsComponent implements OnInit {
     private database: DatabaseService,
     private cryptoService: CryptoService
   ) {
+   
     const commonSettingsStore = this.electronStoreService.get('commonConfig');
     const instrumentSettingsStore = this.electronStoreService.get('instrumentsConfig');
     this.appPath = this.electronStoreService.get('appPath');
@@ -133,7 +135,9 @@ export class SettingsComponent implements OnInit {
   }
 
   createInstrumentFormGroup(): FormGroup {
+    const instrumentId = uuidv4();
     return this.formBuilder.group({
+      id: instrumentId,
       analyzerMachineType: ['', Validators.required],
       interfaceCommunicationProtocol: ['', Validators.required],
       analyzerMachineName: ['', Validators.required],
@@ -220,12 +224,13 @@ export class SettingsComponent implements OnInit {
 
       that.electronStoreService.set('commonConfig', updatedSettings.commonSettings);
       that.electronStoreService.set('instrumentsConfig', updatedSettings.instrumentsSettings);
+      console.log('Updated Instruments Settings:', updatedSettings.instrumentsSettings);
 
       new Notification('Success', {
         body: 'Updated Interface Tool settings'
       });
       that.resetInstrumentVariables();
-      that.router.navigate(['/dashboard']);
+      that.router.navigate(['/console']);
     } else {
       console.error('Form is not valid');
     }

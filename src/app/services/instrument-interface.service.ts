@@ -690,21 +690,41 @@ export class InstrumentInterfaceService {
 
   }
 
+  // private saveOrder(order: any, instrumentConnectionData: InstrumentConnectionStack) {
+  //   const that = this;
+  //   if (order.results) {
+  //     that.dbService.recordTestResults(order, (res) => {
+  //       that.utilitiesService.logger('success', 'Successfully saved result : ' + order.test_id + '|' + order.order_id, instrumentConnectionData.instrumentId);
+  //       return true;
+  //     }, (err) => {
+  //       that.utilitiesService.logger('error', 'Failed to save result : ' + order.test_id + '|' + order.order_id + ' | ' + JSON.stringify(err), instrumentConnectionData.instrumentId);
+  //       return false;
+  //     });
+  //   } else {
+  //     that.utilitiesService.logger('error', 'Failed to store data into the database', instrumentConnectionData.instrumentId);
+  //     return false;
+  //   }
+  // }
+
   private saveOrder(order: any, instrumentConnectionData: InstrumentConnectionStack) {
     const that = this;
     if (order.results) {
-      that.dbService.recordTestResults(order, (res) => {
-        that.utilitiesService.logger('success', 'Successfully saved result : ' + order.test_id + '|' + order.order_id, instrumentConnectionData.instrumentId);
-        return true;
-      }, (err) => {
-        that.utilitiesService.logger('error', 'Failed to save result : ' + order.test_id + '|' + order.order_id + ' | ' + JSON.stringify(err), instrumentConnectionData.instrumentId);
-        return false;
-      });
+      const data = { ...order, instrument_id: instrumentConnectionData.instrumentId }; // Add instrument_id here
+      that.dbService.recordTestResults(data, 
+        (res) => {
+          that.utilitiesService.logger('success', 'Successfully saved result : ' + order.test_id + '|' + order.order_id, instrumentConnectionData.instrumentId);
+          return true;
+        }, 
+        (err) => {
+          that.utilitiesService.logger('error', 'Failed to save result : ' + order.test_id + '|' + order.order_id + ' | ' + JSON.stringify(err), instrumentConnectionData.instrumentId);
+          return false;
+        });
     } else {
       that.utilitiesService.logger('error', 'Failed to store data into the database', instrumentConnectionData.instrumentId);
       return false;
     }
   }
+  
 
   private getASTMDataBlock(astmArray: any[]) {
     let dataArray = {};

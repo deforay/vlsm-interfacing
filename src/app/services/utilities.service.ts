@@ -18,6 +18,7 @@ export class UtilitiesService {
 
   protected lastOrdersSubject = new BehaviorSubject([]);
   lastOrders = this.lastOrdersSubject.asObservable();
+ 
 
   protected lastrawDataSubject = new BehaviorSubject([]);
   lastrawData = this.lastrawDataSubject.asObservable();

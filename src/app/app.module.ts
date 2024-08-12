@@ -1,6 +1,6 @@
 import { BrowserModule } from '@angular/platform-browser';
 import { NgModule } from '@angular/core';
-import { FormsModule } from '@angular/forms';
+import { FormsModule, ReactiveFormsModule } from '@angular/forms';
 import { HttpClientModule, HttpClient } from '@angular/common/http';
 import { CoreModule } from './core/core.module';
 import { SharedModule } from './shared/shared.module';
@@ -10,14 +10,14 @@ import { AppRoutingModule } from './app-routing.module';
 // NG Translate
 import { TranslateModule, TranslateLoader } from '@ngx-translate/core';
 import { TranslateHttpLoader } from '@ngx-translate/http-loader';
-import { ReactiveFormsModule } from '@angular/forms';
-
 import { HomeModule } from './home/home.module';
 
 import { AppComponent } from './app.component';
 import { SettingsComponent } from './components/settings/settings.component';
-import { DashboardComponent } from './components/dashboard/dashboard.component';
+import { ConsoleComponent } from './components/console/console.component';
 import { RawDataComponentComponent } from './components/raw-data-component/raw-data-component.component';
+import { DashboardComponent } from './components/dashboard/dashboard.component'; // <-- Import DashboardComponent here
+
 import { DatabaseService } from './services/database.service';
 import { TcpConnectionService } from './services/tcp-connection.service';
 import { ElectronService } from './core/services';
@@ -28,16 +28,23 @@ import { MatPaginatorModule } from '@angular/material/paginator';
 import { MatSortModule } from '@angular/material/sort';
 import { MatTableModule } from '@angular/material/table';
 import { BrowserAnimationsModule } from '@angular/platform-browser/animations';
-// import {DemoMaterialModule} from './app/material-module';
-import {MAT_FORM_FIELD_DEFAULT_OPTIONS} from '@angular/material/form-field';
-import {MatSelectModule} from '@angular/material/select';
-import {MatCheckboxModule} from '@angular/material/checkbox';
+import { MAT_FORM_FIELD_DEFAULT_OPTIONS } from '@angular/material/form-field';
+import { MatSelectModule } from '@angular/material/select';
+import { MatCheckboxModule } from '@angular/material/checkbox';
 
 // AoT requires an exported function for factories
-const httpLoaderFactory = (http: HttpClient): TranslateHttpLoader => new TranslateHttpLoader(http, './assets/i18n/', '.json');
+export function httpLoaderFactory(http: HttpClient) {
+  return new TranslateHttpLoader(http, './assets/i18n/', '.json');
+}
 
 @NgModule({
-  declarations: [AppComponent, SettingsComponent, DashboardComponent,RawDataComponentComponent],
+  declarations: [
+    AppComponent,
+    SettingsComponent,
+    ConsoleComponent,
+    RawDataComponentComponent,
+    DashboardComponent // <-- Declare DashboardComponent here
+  ],
   imports: [
     BrowserModule,
     MatCheckboxModule,
@@ -62,7 +69,8 @@ const httpLoaderFactory = (http: HttpClient): TranslateHttpLoader => new Transla
       }
     })
   ],
-  providers: [ElectronService,
+  providers: [
+    ElectronService,
     DatabaseService,
     TcpConnectionService,
     InstrumentInterfaceService,

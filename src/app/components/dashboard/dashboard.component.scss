@@ -95,10 +95,240 @@
 
 .header-cell {
   background-color: #808080;
-  /* Gray color, adjust as needed */
+  
 }
 
 .row-with-spacing {
   margin-bottom: 25px;
-  /* Adjust the value as per your preference */
+  
+}
+
+
+.card {
+  border: 1px solid #ccc;
+  border-radius: 8px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  margin: 20px;
+  padding: 16px;
+  background-color: #fff;
+ 
+}
+
+.card-container {
+  display: flex; 
+  
+  flex-wrap: wrap; 
+  gap: 13px; 
+  padding: 16px; 
+}
+
+.card-containers {
+  display: flex; 
+  margin-left:2%;
+  gap: 13px; 
+  padding: 16px; 
+  
+}
+
+.card-containers-tool {
+  display: flex; 
+  flex-wrap: wrap; 
+  gap: 10px; 
+  padding: 16px; 
+}
+
+.cards-tool {
+  flex: 1 1 calc(0% - 10px); 
+  border: 1px solid #ddd; 
+  border-radius: 8px; 
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1); 
+  overflow: hidden; 
+  background-color: #fff; 
+  transition: transform 0.2s ease-in-out; 
+  min-width: 120px; 
+}
+
+
+
+
+
+.cards-body-tool {
+  padding: 5px;
+  background-color: #f9f9f9;
+  border-radius: 8px;
+}
+
+.cards-body-tool h2 {
+  margin-top: 5%;
+  font-size: 18px;
+  text-align: center;
+  font-weight: 0;
+}
+
+
+
+.cards:hover {
+  transform: translateY(-5px); 
+}
+
+
+.cards {
+  flex: 1 1 calc(0% - 10px); 
+  border: 1px solid #ddd; 
+  border-radius: 8px; 
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1); 
+  overflow: hidden; 
+  background-color: #fff; 
+  transition: transform 0.2s ease-in-out; 
+  min-width: 120px; 
+}
+
+.card-header {
+  margin-bottom: 16px;
+}
+
+
+
+.card-header h2 {
+  font-size: 24px;
+  margin: 0;
+  color: #333;
+}
+
+
+
+.card-headers{
+  padding: 16px; /* Adds padding inside the card */
+  background-color: lightblue; /* Sets a background color for the header */
+  border-bottom: 1px solid #ddd; /* Adds a border below the header */
+}
+
+
+
+.card-headers h2 {
+  margin: 2; /* Removes default margin for the header */
+  font-size: 15px; /* Sets the font size */
+  font-weight: 600; /* Makes the font bold */
+  color: #333; /* Sets the font color */
+  text-align: center;
+}
+
+
+.card-headers-sync{
+  padding: 16px; /* Adds padding inside the card */
+  background-color: lightgreen; /* Sets a background color for the header */
+  border-bottom: 1px solid #ddd; /* Adds a border below the header */
+}
+
+
+
+.card-headers-sync h2 {
+  margin: 2; /* Removes default margin for the header */
+  font-size: 15px; /* Sets the font size */
+  font-weight: 600; /* Makes the font bold */
+  color: #333; /* Sets the font color */
+  text-align: center;
+}
+
+.card-header-notsync{
+  padding: 16px; /* Adds padding inside the card */
+  background-color: lightsalmon; /* Sets a background color for the header */
+  border-bottom: 1px solid #ddd; /* Adds a border below the header */
+}
+
+
+
+.card-header-notsync h2 {
+  margin: 2; /* Removes default margin for the header */
+  font-size: 15px; /* Sets the font size */
+  font-weight: 600; /* Makes the font bold */
+  color: #333; /* Sets the font color */
+  text-align: center;
+}
+
+
+.card-header-failed{
+  padding: 16px; /* Adds padding inside the card */
+  background-color: lightcoral; /* Sets a background color for the header */
+  border-bottom: 1px solid #ddd; /* Adds a border below the header */
+}
+
+
+
+.card-header-failed h2 {
+  margin: 2; /* Removes default margin for the header */
+  font-size: 15px; /* Sets the font size */
+  font-weight: 600; /* Makes the font bold */
+  color: #333; /* Sets the font color */
+  text-align: center;
+}
+
+
+.card-body {
+  padding: 16px;
+  background-color: #f9f9f9;
+  border-radius: 8px;
+}
+
+.card-body p {
+  font-size: 16px;
+  color: #333;
+}
+
+.cards-body {
+  padding: 5px;
+  background-color: #f9f9f9;
+  border-radius: 8px;
+}
+
+.cards-body h2 {
+  margin-top: 5%;
+  font-size: 18px;
+  text-align: center;
+  font-weight: 0;
+}
+
+
+
+.card-containerss {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  margin: 0 -10px; 
+}
+
+.cardssss {
+  flex: 0 1 calc(50% - 20px); 
+  border: 1px solid #ccc;
+  border-radius: 8px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  margin: 10px; 
+  background-color: #fff;
+  overflow: hidden; 
+  transition: box-shadow 0.3s; 
+}
+
+.cardssss:hover {
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2); 
+}
+
+.card-header-info {
+  padding: 16px;
+  background-color: #007bff; 
+  color: #fff; 
+  border-radius: 8px 8px 0 0; 
+  text-align: center; 
+  font-weight: bold;
+}
+
+.card-body-info {
+  padding: 16px;
+  background-color: #f9f9f9; 
+  border-radius: 0 0 8px 8px; 
+}
+
+.card-body-info p {
+  margin: 8px 0; 
+  font-size: 16px; 
+  color: #333; 
 }

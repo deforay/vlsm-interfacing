@@ -21,7 +21,7 @@ export class HomeComponent implements OnInit {
 
     if (undefined !== this.settings && null !== this.settings && undefined !== this.settings.interfaceAutoConnect && null !== this.settings.interfaceAutoConnect && 'yes' === this.settings.interfaceAutoConnect) {
       this.store.set('loggedin', true);
-      this.router.navigate(['/dashboard']);
+      this.router.navigate(['/console']);
     }
   }
 
@@ -36,7 +36,7 @@ export class HomeComponent implements OnInit {
       if (undefined === this.settings) {
         this.router.navigate(['/settings']);
       } else {
-        this.router.navigate(['/dashboard']);
+        this.router.navigate(['/console']);
       }
 
     } else {
