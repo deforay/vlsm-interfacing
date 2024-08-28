@@ -31,7 +31,7 @@ export class ConsoleComponent implements OnInit, OnDestroy {
   public lastLimsSync = '';
   public lastResultReceived = '';
   public interval: any;
-  public data: any;
+  public data:any;
   public lastOrders: any;
   public availableInstruments = [];
   public instrumentLogs = [];
@@ -219,6 +219,7 @@ export class ConsoleComponent implements OnInit, OnDestroy {
       next: lastFewOrders => {
         this._ngZone.run(() => {
           this.lastOrders = lastFewOrders[0];
+          this.data = lastFewOrders[0];
           this.dataSource.data = this.lastOrders;
           console.log(this.dataSource.data);
           this.dataSource.paginator = this.paginator;
@@ -233,17 +234,17 @@ export class ConsoleComponent implements OnInit, OnDestroy {
 
 
 
-  
-  goToDashboard() {
-    const dataArray = this.data.map(item => ({
-      added_on: item.added_on,
-      machine_used: item.machine_used,
-      order_id: item.order_id,
-      lims_sync_status: item.lims_sync_status,
-      lims_sync_date_time: item.lims_sync_date_time
-    }));
-    this.router.navigate(['/dashboard'], { queryParams: { data: JSON.stringify(dataArray) } });
-  }
+    
+    goToDashboard() {
+      const dataArray = this.data.map(item => ({
+        added_on: item.added_on,
+        machine_used: item.machine_used,
+        order_id: item.order_id,
+        lims_sync_status: item.lims_sync_status,
+        lims_sync_date_time: item.lims_sync_date_time
+      }));
+      this.router.navigate(['/dashboard'], { queryParams: { data: JSON.stringify(dataArray) } });
+    }
 
   // goToDashboard() {
   //   // Extract relevant data

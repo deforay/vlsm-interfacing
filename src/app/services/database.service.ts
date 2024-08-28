@@ -215,7 +215,7 @@ export class DatabaseService {
             'order_id', 'test_id', 'test_type', 'created_date', 'test_unit', 
             'results', 'tested_by', 'analysed_date_time', 'specimen_date_time', 
             'authorised_date_time', 'result_accepted_date_time', 'machine_used', 
-            'test_location', 'test_description', 'raw_text'
+            'test_location', 'test_description', 'raw_text', 'added_on', 'lims_sync_status', 'lims_sync_date_time'
         ];
         const searchConditions = columns.map(col => `${col} LIKE '%${searchParam}%'`).join(' OR ');
         t += ` WHERE ${searchConditions}`;
