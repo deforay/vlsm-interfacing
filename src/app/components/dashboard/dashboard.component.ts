@@ -53,9 +53,11 @@ export class DashboardComponent implements OnInit {
       if (params['data']) {
         this.data = JSON.parse(params['data']);
         this.filteredData = this.data;
+        console.log(this.data)
 
         
         this.instruments = [...new Set(this.data.map(item => item.machine_used))];
+        console.log(this.instruments)
 
     
         this.updateCounts(this.data);
@@ -160,6 +162,7 @@ export class DashboardComponent implements OnInit {
     this.filteredSessionDatasArray = this.selectedInstrument 
       ? this.sessionDatasArray.filter(session => session.mode === this.selectedInstrument)
       : this.sessionDatasArray;
+      console.log(this.filteredSessionDatasArray)
   }
 }
 

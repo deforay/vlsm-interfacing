@@ -95,24 +95,26 @@ export class ConsoleComponent implements OnInit, OnDestroy {
 
   ngOnInit() {
     this.loadSettings();
+    this.fetchLastOrders('');
+    this.fetchRecentLogs();
+    this.resyncTestResultsToMySQL();
 
     // Scroll to the top of the page when the component initializes
-    window.scrollTo(0, 0);
+    // window.scrollTo(0, 0);
 
     // Fetch last few orders and logs on load
-    setTimeout(() => {
-      this.fetchLastOrders('');
-      this.fetchRecentLogs();
-    }, 600);
+    // setTimeout(() => {
+     
+    // }, 600);
 
     // Refresh last orders every 5 minutes
-    this.interval = setInterval(() => { this.fetchLastOrders(''); }, 1000 * 60 * 5);
+    // this.interval = setInterval(() => { this.fetchLastOrders(''); }, 1000 * 60 * 5);
 
-    // Refresh last orders every 5 minutes
-    this.interval = setInterval(() => {
-      this.fetchLastOrders('');
-      this.resyncTestResultsToMySQL();
-    }, 1000 * 60 * 5);
+    // // Refresh last orders every 5 minutes
+    // this.interval = setInterval(() => {
+    //   this.fetchLastOrders('');
+      
+    // }, 1000 * 60 * 5);
   }
 
 
