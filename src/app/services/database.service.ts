@@ -170,24 +170,66 @@ export class DatabaseService {
       });
   }
 
-  fetchrawData(success, errorf) {
-    const that = 'SELECT * FROM raw_data ORDER BY added_on DESC';
+  // fetchrawData(success, errorf) {
+  //   const that = 'SELECT * FROM raw_data ORDER BY added_on DESC';
+  //   if (this.mysqlPool != null) {
+  //     this.execQuery(that, null, success, errorf);
+  //   } else {
+  //     (this.electronService.execSqliteQuery(that, null)).then((results) => { success(results) });
+  //   }
+  // }
+
+  // fetchLastOrders(success, errorf) {
+  //   const t = 'SELECT * FROM orders ORDER BY added_on DESC LIMIT 1000';
+  //   if (this.mysqlPool != null) {
+  //     this.execQuery(t, null, success, errorf);
+  //   } else {
+  //     // Fetching from SQLITE
+  //     (this.electronService.execSqliteQuery(t, null)).then((results) => { success(results) });
+  //   }
+  // }
+  fetchrawData(success, errorf, searchParam = ''){
+    let that = 'SELECT * FROM raw_data';
+
+    if(searchParam) {
+      const columns = [
+        'machine', 'added_on', 'date'
+      ];
+      const searchConditions = columns.map(col => `${col} LIKE '%${searchParam}%'`).join(' OR ');
+      that += `WHERE ${searchConditions}`;
+    }
+    that += ' ORDER BY added_on DESC LIMIT 1000';
     if (this.mysqlPool != null) {
       this.execQuery(that, null, success, errorf);
-    } else {
-      (this.electronService.execSqliteQuery(that, null)).then((results) => { success(results) });
-    }
+  } else {
+      
+      this.electronService.execSqliteQuery(that, null).then((results) => { success(results) });
+  }
   }
 
-  fetchLastOrders(success, errorf) {
-    const t = 'SELECT * FROM orders ORDER BY added_on DESC LIMIT 1000';
-    if (this.mysqlPool != null) {
-      this.execQuery(t, null, success, errorf);
-    } else {
-      // Fetching from SQLITE
-      (this.electronService.execSqliteQuery(t, null)).then((results) => { success(results) });
+  fetchLastOrders(success, errorf, searchParam = '') {
+    let t = 'SELECT * FROM orders';
+    
+    if (searchParam) {
+        const columns = [
+            'order_id', 'test_id', 'test_type', 'created_date', 'test_unit', 
+            'results', 'tested_by', 'analysed_date_time', 'specimen_date_time', 
+            'authorised_date_time', 'result_accepted_date_time', 'machine_used', 
+            'test_location', 'test_description', 'raw_text'
+        ];
+        const searchConditions = columns.map(col => `${col} LIKE '%${searchParam}%'`).join(' OR ');
+        t += ` WHERE ${searchConditions}`;
     }
-  }
+
+    t += ' ORDER BY added_on DESC LIMIT 1000';
+
+    if (this.mysqlPool != null) {
+        this.execQuery(t, null, success, errorf);
+    } else {
+        // Fetching from SQLITE
+        this.electronService.execSqliteQuery(t, null).then((results) => { success(results) });
+    }
+}
 
 
   

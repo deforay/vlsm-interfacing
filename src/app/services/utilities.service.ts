@@ -104,25 +104,47 @@ export class UtilitiesService {
     return astmData.replace(/<ETB>\w{2}<CR><LF>/g, '');
   }
 
-  fetchLastOrders() {
+  // fetchLastOrders() {
+  //   const that = this;
+  //   that.dbService.fetchLastOrders((res) => {
+  //     res = [res]; // converting it into an array
+  //     that.lastOrdersSubject.next(res);
+  //   }, (err) => {
+  //     that.logger('error', 'Failed to fetch data ' + JSON.stringify(err));
+  //   });
+  // }
+
+  fetchLastOrders(searchParam: string = '') {
     const that = this;
     that.dbService.fetchLastOrders((res) => {
-      res = [res]; // converting it into an array
-      that.lastOrdersSubject.next(res);
+        res = [res]; 
+        that.lastOrdersSubject.next(res);
     }, (err) => {
-      that.logger('error', 'Failed to fetch data ' + JSON.stringify(err));
-    });
-  }
+        that.logger('error', 'Failed to fetch data ' + JSON.stringify(err));
+    }, searchParam); 
+}
 
-  fetchrawData() {
-    const that = this;
-    that.dbService.fetchrawData((res) => {
-      res = [res]; // converting it into an array
-      that.lastrawDataSubject.next(res);
-    }, (err) => {
-      that.logger('error', 'Failed to fetch data ' + JSON.stringify(err));
-    });
-  }
+
+fetchrawData(searchParam: string = ''){
+  const that = this;
+  this.dbService.fetchrawData((res) => {
+    res = [res];
+    that.lastrawDataSubject.next(res);
+  }, (err) => {
+    that.logger('error', 'Failed to fetch data ' + JSON.stringify(err));
+  }, searchParam)
+}
+  
+
+  // fetchrawData() {
+  //   const that = this;
+  //   that.dbService.fetchrawData((res) => {
+  //     res = [res]; // converting it into an array
+  //     that.lastrawDataSubject.next(res);
+  //   }, (err) => {
+  //     that.logger('error', 'Failed to fetch data ' + JSON.stringify(err));
+  //   });
+  // }
 
 
   fetchRecentLogs(instrumentId = null) {

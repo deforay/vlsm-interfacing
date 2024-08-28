@@ -29,7 +29,7 @@ export class RawDataComponentComponent  {
     private router: Router){}
 
   ngOnInit(){
-    this.fetchrawData()
+    this.fetchrawData('')
     
   }
 
@@ -37,30 +37,60 @@ export class RawDataComponentComponent  {
     this.router.navigate(['/console']);
   }
 
-  filterData($event:any){
-    this.dataSource.filter = $event.target.value;
+  // filterData($event:any){
+  //   this.dataSource.filter = $event.target.value;
+  // }
+
+    
+  filterData($event: any) {
+    const searchTerm = $event.target.value;
+    if (searchTerm.length >= 2) {
+      this.fetchrawData(searchTerm); 
+    } else {
+      
+      this.fetchrawData(''); 
+    }
   }
 
   toggleRow(row: any) {
     row.expanded = !row.expanded;
 }
 
-  fetchrawData() {
-    const that = this;
-    that.utilitiesService.fetchrawData();
-    that.utilitiesService.lastrawData.subscribe({
-      next: lastFewrawData => {
-          that.lastrawData = lastFewrawData[0];
+fetchrawData(searchTerm: string) {
+  const that = this;
+  that.utilitiesService.fetchrawData(searchTerm);
+
+  that.utilitiesService.lastrawData.subscribe({
+    next: lastFewrawData => {
+      that.lastrawData = lastFewrawData[0];
           console.log(that.lastrawData)
           that.data = lastFewrawData[0];
           this.dataSource.data = that.lastrawData;
           this.dataSource.paginator = this.paginator;
           this.dataSource.sort = this.sort;
       },
-      error: error => {
-        console.error('Error fetching last orders:', error);
-      }
-    });
+    error: error => {
+      console.error('Error fetching last orders:', error);
+    }
+  });
+}
 
-  }
+  // fetchrawData() {
+  //   const that = this;
+  //   that.utilitiesService.fetchrawData();
+  //   that.utilitiesService.lastrawData.subscribe({
+  //     next: lastFewrawData => {
+  //         that.lastrawData = lastFewrawData[0];
+  //         console.log(that.lastrawData)
+  //         that.data = lastFewrawData[0];
+  //         this.dataSource.data = that.lastrawData;
+  //         this.dataSource.paginator = this.paginator;
+  //         this.dataSource.sort = this.sort;
+  //     },
+  //     error: error => {
+  //       console.error('Error fetching last orders:', error);
+  //     }
+  //   });
+
+  // }
 }

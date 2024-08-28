@@ -101,16 +101,16 @@ export class ConsoleComponent implements OnInit, OnDestroy {
 
     // Fetch last few orders and logs on load
     setTimeout(() => {
-      this.fetchLastOrders();
+      this.fetchLastOrders('');
       this.fetchRecentLogs();
     }, 600);
 
     // Refresh last orders every 5 minutes
-    this.interval = setInterval(() => { this.fetchLastOrders(); }, 1000 * 60 * 5);
+    this.interval = setInterval(() => { this.fetchLastOrders(''); }, 1000 * 60 * 5);
 
     // Refresh last orders every 5 minutes
     this.interval = setInterval(() => {
-      this.fetchLastOrders();
+      this.fetchLastOrders('');
       this.resyncTestResultsToMySQL();
     }, 1000 * 60 * 5);
   }
@@ -207,38 +207,33 @@ export class ConsoleComponent implements OnInit, OnDestroy {
     });
   }
 
+  fetchLastOrders(searchTerm: string) {
+    this.utilitiesService.fetchLastOrders(searchTerm);
 
-
-  fetchLastOrders() {
-    const that = this;
-    that.utilitiesService.fetchLastOrders();
-
-    that.utilitiesService.fetchLastSyncTimes(function (data) {
-      that.lastLimsSync = data.lastLimsSync;
-      that.lastResultReceived = data.lastResultReceived;
-  
+    this.utilitiesService.fetchLastSyncTimes(data => {
+      this.lastLimsSync = data.lastLimsSync;
+      this.lastResultReceived = data.lastResultReceived;
     });
 
-    that.utilitiesService.lastOrders.subscribe({
+    this.utilitiesService.lastOrders.subscribe({
       next: lastFewOrders => {
-        that._ngZone.run(() => {
-          that.lastOrders = lastFewOrders[0];
-          that.data = lastFewOrders[0];
-          this.dataSource.data = that.lastOrders;
-          console.log(this.data)
+        this._ngZone.run(() => {
+          this.lastOrders = lastFewOrders[0];
+          this.dataSource.data = this.lastOrders;
+          console.log(this.dataSource.data);
           this.dataSource.paginator = this.paginator;
           this.dataSource.sort = this.sort;
-
-
         });
       },
       error: error => {
         console.error('Error fetching last orders:', error);
       }
     });
-
   }
 
+
+
+  
   goToDashboard() {
     const dataArray = this.data.map(item => ({
       added_on: item.added_on,
@@ -288,11 +283,18 @@ export class ConsoleComponent implements OnInit, OnDestroy {
 
   
   
+  filterData($event: any) {
+    const searchTerm = $event.target.value;
+    if (searchTerm.length >= 2) {
+      this.fetchLastOrders(searchTerm); 
+    } else {
+      
+      this.fetchLastOrders(''); 
+    }
+  }
   
 
-  filterData($event: any) {
-    this.dataSource.filter = $event.target.value;
-  }
+ 
 
   updateLogsForInstrument(instrumentId: string, newLogs: any) {
     if (!this.instrumentLogs[instrumentId]) {
