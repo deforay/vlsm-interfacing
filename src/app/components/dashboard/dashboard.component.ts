@@ -30,7 +30,7 @@ export class DashboardComponent implements OnInit {
   selectedInstrument: string = '';
   instruments: string[] = [];
 
- 
+
   totalResults: number = 0;
   syncedResults: number = 0;
   notYetSyncedResults: number = 0;
@@ -45,12 +45,12 @@ export class DashboardComponent implements OnInit {
     private router: Router,
     private route: ActivatedRoute,
     @Inject(MAT_DIALOG_DATA) public dialogData: { dashboardData: ResultData[] }
-  ) {}
+  ) { }
 
   ngOnInit() {
     this.data = this.dialogData.dashboardData;
     console.log('Dialog Data:', this.data);
-    
+
     this.filteredData = this.data;
     this.instruments = [...new Set(this.data.map(item => item.machine_used))];
 
@@ -76,16 +76,16 @@ export class DashboardComponent implements OnInit {
     if (!data || data.length === 0) {
       return undefined;
     }
-    return data.reduce((latest, current) => 
+    return data.reduce((latest, current) =>
       new Date(latest.added_on) > new Date(current.added_on) ? latest : current
     );
   }
 
   filterByInstrument() {
     console.log('Selected Instrument:', this.selectedInstrument);
-    
-    this.filteredData = this.selectedInstrument 
-      ? this.data.filter(item => item.machine_used === this.selectedInstrument) 
+
+    this.filteredData = this.selectedInstrument
+      ? this.data.filter(item => item.machine_used === this.selectedInstrument)
       : this.data;
 
     this.updateCounts(this.filteredData);
@@ -99,8 +99,8 @@ export class DashboardComponent implements OnInit {
   filterData(event: Event) {
     const query = (event.target as HTMLInputElement).value.toLowerCase();
     console.log('Filter query:', query);
-    
-    this.filteredData = this.data.filter(item => 
+
+    this.filteredData = this.data.filter(item =>
       item.machine_used.toLowerCase().includes(query) ||
       item.added_on.toLowerCase().includes(query) ||
       item.lims_sync_date_time.toLowerCase().includes(query)
@@ -112,25 +112,25 @@ export class DashboardComponent implements OnInit {
   click() {
     this.dialogRef.close();
   }
-  
+
   private retrieveSessionData() {
     const storedSessionData = JSON.parse(localStorage.getItem('sessionDatas') || '{}');
-  
-    
+
+
     if (typeof storedSessionData === 'object' && storedSessionData !== null) {
       this.sessionDatasArray = Object.entries(storedSessionData).map(([mode, session]) => ({
         mode,
-        sessionId: (session as SessionData).sessionId,  
-        startTime: (session as SessionData).startTime,  
-        endTime: (session as SessionData).endTime || 'N/A'  
+        sessionId: (session as SessionData).sessionId,
+        startTime: (session as SessionData).startTime,
+        endTime: (session as SessionData).endTime || 'N/A'
       }));
-  
+
       console.log('Session Data retrieved:', this.sessionDatasArray);
     } else {
       console.error('No valid session data found in local storage.');
     }
   }
-  
+
 
   private loadSessionData() {
     const sessionId = localStorage.getItem('sessionId');
@@ -149,8 +149,8 @@ export class DashboardComponent implements OnInit {
   }
 
   private filterSessionData() {
-    this.filteredSessionDatasArray = this.selectedInstrument 
-      ? this.sessionDatasArray.filter(session => session.mode === this.selectedInstrument) 
+    this.filteredSessionDatasArray = this.selectedInstrument
+      ? this.sessionDatasArray.filter(session => session.mode === this.selectedInstrument)
       : this.sessionDatasArray;
   }
 }

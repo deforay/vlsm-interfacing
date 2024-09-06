@@ -35,7 +35,7 @@ export class ConsoleComponent implements OnInit, OnDestroy {
   public lastLimsSync = '';
   public lastResultReceived = '';
   public interval: any;
-  public data:any;
+  public data: any;
   public lastOrders: any;
   private ipc: IpcRenderer;
   public availableInstruments = [];
@@ -78,15 +78,15 @@ export class ConsoleComponent implements OnInit, OnDestroy {
     private tcpService: TcpConnectionService,
     private utilitiesService: UtilitiesService,
     private router: Router) {
-      if ((<any>window).require) {
-        try {
-          this.ipc = (<any>window).require('electron').ipcRenderer;
-        } catch (e) {
-          throw e;
-        }
-      } else {
-        console.warn('App not running inside Electron!');
+    if ((<any>window).require) {
+      try {
+        this.ipc = (<any>window).require('electron').ipcRenderer;
+      } catch (e) {
+        throw e;
       }
+    } else {
+      console.warn('App not running inside Electron!');
+    }
   }
   selectHandler(row: any, event: MatCheckboxChange) {
     if (row === null) {
@@ -221,7 +221,7 @@ export class ConsoleComponent implements OnInit, OnDestroy {
     });
   }
 
-  fetchLastOrders(searchTerm: string) {
+  fetchLastOrders(searchTerm?: string) {
     this.utilitiesService.fetchLastOrders(searchTerm);
 
     this.utilitiesService.fetchLastSyncTimes(data => {
@@ -247,7 +247,7 @@ export class ConsoleComponent implements OnInit, OnDestroy {
   }
 
 
-  openModal(){
+  openModal() {
     console.log("Open a modal");
     this.ipc.send("openModal");
   }
@@ -261,42 +261,42 @@ export class ConsoleComponent implements OnInit, OnDestroy {
       lims_sync_status: item.lims_sync_status,
       lims_sync_date_time: item.lims_sync_date_time
     }));
-    
+
     const dialogRef = this.dialog.open(DashboardComponent, {
-      maxWidth: '90vw', 
-      maxHeight: '90vh', 
+      maxWidth: '90vw',
+      maxHeight: '90vh',
       data: { dashboardData: dataArray }
     });
-    
-    
+
+
 
     dialogRef.afterClosed().subscribe(result => {
-      
+
     });
   }
 
 
-  
+
   filterData($event: any) {
     const searchTerm = $event.target.value;
     if (searchTerm.length >= 2) {
-      this.fetchLastOrders(searchTerm); 
+      this.fetchLastOrders(searchTerm);
     } else {
-      
-      this.fetchLastOrders(''); 
+
+      this.fetchLastOrders('');
     }
   }
-  
+
 
   updateLogsForInstrument(instrumentId: string, newLogs: any) {
     if (!this.instrumentLogs[instrumentId]) {
-      
+
       this.instrumentLogs[instrumentId] = {
         logs: [],
         filteredLogs: []
       };
     }
-    
+
     this.instrumentLogs[instrumentId].logs = newLogs;
     this.instrumentLogs[instrumentId].filteredLogs = newLogs;
   }
@@ -326,34 +326,34 @@ export class ConsoleComponent implements OnInit, OnDestroy {
 
   connect(instrument: any) {
     const that = this;
-    
+
     if (instrument && instrument.connectionParams && instrument.connectionParams.host && instrument.connectionParams.port) {
       // Generate a unique session ID
       const sessionId = uuidv4();
       const connectionMode = instrument.connectionParams.instrumentId;
       const startTime = this.getFormattedDateTime();
-  
+
       // Get existing data from localStorage or initialize new data
       let storedData = JSON.parse(localStorage.getItem('sessionDatas') || '{}');
-  
+
       // Initialize the connectionMode key if not already present
       if (!storedData[connectionMode]) {
         storedData[connectionMode] = [];
       }
-  
+
       // Add new session data to the array
       storedData[connectionMode].push({
         sessionId,
         startTime
       });
-  
+
       // Store updated data back to localStorage
       localStorage.setItem('sessionDatas', JSON.stringify(storedData));
-  
+
       // Log or use the session ID and startTime as needed
       console.log(`Session ID for ${connectionMode}: ${sessionId}`);
       console.log(`Start Time for ${connectionMode}: ${startTime}`);
-  
+
       // Connect to the instrument
       that.instrumentInterfaceService.connect(instrument);
       that.updateInstrumentStatusSubscription(instrument);
@@ -371,13 +371,13 @@ export class ConsoleComponent implements OnInit, OnDestroy {
 
   reconnect(instrument: any) {
     const that = this;
-    
+
     if (instrument && instrument.connectionParams && instrument.connectionParams.host && instrument.connectionParams.port) {
       const connectionMode = instrument.connectionParams.instrumentId;
-  
+
       // Retrieve existing session data from localStorage or initialize if not present
       let sessionData = JSON.parse(localStorage.getItem('sessionDatas') || '{}');
-      
+
       if (!sessionData[connectionMode]) {
         // Generate a new session ID and start time if no data exists for this connectionMode
         sessionData[connectionMode] = {
@@ -388,14 +388,14 @@ export class ConsoleComponent implements OnInit, OnDestroy {
         // Update the start time if session ID already exists
         sessionData[connectionMode].startTime = this.getFormattedDateTime();
       }
-      
+
       // Save the updated session data back to localStorage
       localStorage.setItem('sessionDatas', JSON.stringify(sessionData));
-  
+
       // Log session details
       console.log(`Session ID for ${connectionMode}: ${sessionData[connectionMode].sessionId}`);
       console.log(`Connection started at: ${sessionData[connectionMode].startTime}`);
-      
+
       // Proceed with reconnection
       that.instrumentInterfaceService.reconnect(instrument);
       that.updateInstrumentStatusSubscription(instrument);
@@ -414,36 +414,36 @@ export class ConsoleComponent implements OnInit, OnDestroy {
 
   disconnect(instrument: any) {
     const that = this;
-    
+
     if (instrument && instrument.connectionParams && instrument.connectionParams.host && instrument.connectionParams.port) {
       const connectionMode = instrument.connectionParams.instrumentId;
-      
+
       // Retrieve the session data from localStorage
       const sessionData = JSON.parse(localStorage.getItem('sessionDatas') || '{}');
-      
+
       if (sessionData[connectionMode]) {
         const sessionId = sessionData[connectionMode].sessionId;
-        
+
         if (sessionId) {
           // Store the disconnection time in the session data
           const endTime = this.getFormattedDateTime();
           sessionData[connectionMode].endTime = endTime;
-          
+
           // Save updated session data back to localStorage
           localStorage.setItem('sessionDatas', JSON.stringify(sessionData));
-    
+
           // Log session details
           console.log(`Session ID for ${connectionMode}: ${sessionId}`);
           console.log(`Disconnection ended at: ${endTime}`);
         }
       }
-      
+
       // Proceed with disconnection
       that.instrumentInterfaceService.disconnect(instrument);
       that.updateInstrumentStatusSubscription(instrument);
     }
   }
-  
+
 
   getFormattedDateTime(): string {
     const now = new Date();
@@ -455,8 +455,8 @@ export class ConsoleComponent implements OnInit, OnDestroy {
     const seconds = String(now.getSeconds()).padStart(2, '0'); // Add seconds
     return `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`; // Include seconds in the return value
   }
-  
-  
+
+
 
   sendASTMOrders(instrument: any) {
     const that = this;
