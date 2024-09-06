@@ -155,11 +155,3 @@ export class DashboardComponent implements OnInit {
   }
 }
 
-@NgModule({
-  declarations: [DashboardComponent],
-  imports: [
-    CommonModule,
-    FormsModule
-  ]
-})
-export class DashboardModule {}
