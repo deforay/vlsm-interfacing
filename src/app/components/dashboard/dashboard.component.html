@@ -20,7 +20,7 @@
       <div class="cards">
         <div class="card-headers">
           <h2>RESULTS RECEIVED</h2>
-          <h6 *ngIf="selectedInstrument; else noInstrument" style="font-size: 12px; text-align: center;">({{ selectedInstrument }})</h6>
+          <h6 *ngIf="selectedInstrument;" style="font-size: 12px; text-align: center;">({{ selectedInstrument }})</h6>
         </div>
         <div class="cards-body">
           <h2>{{ totalResults }}</h2>
@@ -30,7 +30,7 @@
       <div class="cards">
         <div class="card-headers-sync">
           <h2>RESULTS SYNCED TO LIS</h2>
-          <h6 *ngIf="selectedInstrument; else noInstrument" style="font-size: 12px; text-align: center;">({{ selectedInstrument }})</h6>
+          <h6 *ngIf="selectedInstrument;" style="font-size: 12px; text-align: center;">({{ selectedInstrument }})</h6>
         </div>
         <div class="cards-body">
           <h2>{{ syncedResults }}</h2>
@@ -40,7 +40,7 @@
       <div class="cards">
         <div class="card-header-notsync">
           <h2>RESULTS NOT YET SYNCED TO LIS</h2>
-          <h6 *ngIf="selectedInstrument; else noInstrument" style="font-size: 12px; text-align: center;">({{ selectedInstrument }})</h6>
+          <h6 *ngIf="selectedInstrument;" style="font-size: 12px; text-align: center;">({{ selectedInstrument }})</h6>
         </div>
         <div class="cards-body">
           <h2>{{ notYetSyncedResults }}</h2>
@@ -50,7 +50,7 @@
       <div class="cards">
         <div class="card-header-failed">
           <h2>RESULTS FAILED TO SYNC TO LIS</h2>
-          <h6 *ngIf="selectedInstrument; else noInstrument" style="font-size: 12px; text-align: center;">({{ selectedInstrument }})</h6>
+          <h6 *ngIf="selectedInstrument;" style="font-size: 12px; text-align: center;">({{ selectedInstrument }})</h6>
         </div>
         <div class="cards-body">
           <h2>{{ failedtosync }}</h2>
@@ -62,7 +62,7 @@
       <div class="cards">
         <div class="card-headers">
           <h2>Last LIS Sync On</h2>
-          <h6 *ngIf="selectedInstrument; else noInstrument" style="font-size: 12px; text-align: center;">({{ selectedInstrument }})</h6>
+          <h6 *ngIf="selectedInstrument;" style="font-size: 12px; text-align: center;">({{ selectedInstrument }})</h6>
         </div>
         <div class="cards-body">
           <h2>{{ latestResult?.lims_sync_date_time }}</h2>
@@ -72,7 +72,7 @@
       <div class="cards">
         <div class="card-headers">
           <h2>Last Instrument Result Received On</h2>
-          <h6 *ngIf="selectedInstrument; else noInstrument" style="font-size: 12px; text-align: center;">({{ selectedInstrument }})</h6>
+          <h6 *ngIf="selectedInstrument;" style="font-size: 12px; text-align: center;">({{ selectedInstrument }})</h6>
         </div>
         <div class="cards-body">
           <h2>{{ latestResult?.added_on }}</h2>

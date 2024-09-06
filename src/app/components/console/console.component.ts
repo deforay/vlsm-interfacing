@@ -28,6 +28,7 @@ export enum SelectType {
   styleUrls: ['./console.component.scss']
 })
 export class ConsoleComponent implements OnInit, OnDestroy {
+  searchTerm: string = '';
   public commonSettings = null;
   public instrumentsSettings = null;
   public appVersion: string = null;
