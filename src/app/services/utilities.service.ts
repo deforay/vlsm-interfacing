@@ -18,7 +18,7 @@ export class UtilitiesService {
 
   protected lastOrdersSubject = new BehaviorSubject([]);
   lastOrders = this.lastOrdersSubject.asObservable();
- 
+
 
   protected lastrawDataSubject = new BehaviorSubject([]);
   lastrawData = this.lastrawDataSubject.asObservable();
@@ -114,27 +114,27 @@ export class UtilitiesService {
   //   });
   // }
 
-  fetchLastOrders(searchParam: string = '') {
+  fetchLastOrders(searchParam?: string) {
     const that = this;
     that.dbService.fetchLastOrders((res) => {
-        res = [res]; 
-        that.lastOrdersSubject.next(res);
+      res = [res];
+      that.lastOrdersSubject.next(res);
     }, (err) => {
-        that.logger('error', 'Failed to fetch data ' + JSON.stringify(err));
-    }, searchParam); 
-}
+      that.logger('error', 'Failed to fetch data ' + JSON.stringify(err));
+    }, searchParam);
+  }
 
 
-fetchrawData(searchParam: string = ''){
-  const that = this;
-  this.dbService.fetchrawData((res) => {
-    res = [res];
-    that.lastrawDataSubject.next(res);
-  }, (err) => {
-    that.logger('error', 'Failed to fetch data ' + JSON.stringify(err));
-  }, searchParam)
-}
-  
+  fetchrawData(searchParam: string = '') {
+    const that = this;
+    this.dbService.fetchrawData((res) => {
+      res = [res];
+      that.lastrawDataSubject.next(res);
+    }, (err) => {
+      that.logger('error', 'Failed to fetch data ' + JSON.stringify(err));
+    }, searchParam)
+  }
+
 
   // fetchrawData() {
   //   const that = this;
@@ -189,7 +189,7 @@ fetchrawData(searchParam: string = ''){
     });
   }
 
-  
+
 
   getInstrumentLogSubject(instrumentId: string): BehaviorSubject<string[]> {
     if (!this.logTextMap.has(instrumentId)) {
