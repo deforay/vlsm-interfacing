@@ -189,6 +189,8 @@ fetchrawData(searchParam: string = ''){
     });
   }
 
+  
+
   getInstrumentLogSubject(instrumentId: string): BehaviorSubject<string[]> {
     if (!this.logTextMap.has(instrumentId)) {
       this.logTextMap.set(instrumentId, new BehaviorSubject<string[]>([]));

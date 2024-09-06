@@ -14,6 +14,9 @@ import { SelectionModel } from "@angular/cdk/collections";
 import { MatCheckboxChange } from '@angular/material/checkbox';
 import { distinctUntilChanged } from 'rxjs/operators';
 import { v4 as uuidv4 } from 'uuid';
+import { IpcRenderer } from 'electron';
+import { MatDialog } from '@angular/material/dialog';
+import { DashboardComponent } from '../dashboard/dashboard.component';
 
 export enum SelectType {
   single,
@@ -33,6 +36,7 @@ export class ConsoleComponent implements OnInit, OnDestroy {
   public interval: any;
   public data:any;
   public lastOrders: any;
+  private ipc: IpcRenderer;
   public availableInstruments = [];
   public instrumentLogs = [];
   public connectionParams: ConnectionParams = null;
@@ -64,6 +68,7 @@ export class ConsoleComponent implements OnInit, OnDestroy {
 
 
   constructor(
+    private dialog: MatDialog,
     private cdRef: ChangeDetectorRef,
     private sanitizer: DomSanitizer,
     private store: ElectronStoreService,
@@ -72,7 +77,15 @@ export class ConsoleComponent implements OnInit, OnDestroy {
     private tcpService: TcpConnectionService,
     private utilitiesService: UtilitiesService,
     private router: Router) {
-
+      if ((<any>window).require) {
+        try {
+          this.ipc = (<any>window).require('electron').ipcRenderer;
+        } catch (e) {
+          throw e;
+        }
+      } else {
+        console.warn('App not running inside Electron!');
+      }
   }
   selectHandler(row: any, event: MatCheckboxChange) {
     if (row === null) {
@@ -95,26 +108,24 @@ export class ConsoleComponent implements OnInit, OnDestroy {
 
   ngOnInit() {
     this.loadSettings();
-    this.fetchLastOrders('');
-    this.fetchRecentLogs();
-    this.resyncTestResultsToMySQL();
 
     // Scroll to the top of the page when the component initializes
-    // window.scrollTo(0, 0);
+    window.scrollTo(0, 0);
 
     // Fetch last few orders and logs on load
-    // setTimeout(() => {
-     
-    // }, 600);
+    setTimeout(() => {
+      this.fetchLastOrders('');
+      this.fetchRecentLogs();
+    }, 600);
 
     // Refresh last orders every 5 minutes
-    // this.interval = setInterval(() => { this.fetchLastOrders(''); }, 1000 * 60 * 5);
+    this.interval = setInterval(() => { this.fetchLastOrders(''); }, 1000 * 60 * 5);
 
-    // // Refresh last orders every 5 minutes
-    // this.interval = setInterval(() => {
-    //   this.fetchLastOrders('');
-      
-    // }, 1000 * 60 * 5);
+    // Refresh last orders every 5 minutes
+    this.interval = setInterval(() => {
+      this.fetchLastOrders('');
+      this.resyncTestResultsToMySQL();
+    }, 1000 * 60 * 5);
   }
 
 
@@ -235,56 +246,35 @@ export class ConsoleComponent implements OnInit, OnDestroy {
   }
 
 
+  openModal(){
+    console.log("Open a modal");
+    this.ipc.send("openModal");
+  }
 
+
+  goToDashboard() {
+    const dataArray = this.data.map(item => ({
+      added_on: item.added_on,
+      machine_used: item.machine_used,
+      order_id: item.order_id,
+      lims_sync_status: item.lims_sync_status,
+      lims_sync_date_time: item.lims_sync_date_time
+    }));
     
-    goToDashboard() {
-      const dataArray = this.data.map(item => ({
-        added_on: item.added_on,
-        machine_used: item.machine_used,
-        order_id: item.order_id,
-        lims_sync_status: item.lims_sync_status,
-        lims_sync_date_time: item.lims_sync_date_time
-      }));
-      this.router.navigate(['/dashboard'], { queryParams: { data: JSON.stringify(dataArray) } });
-    }
-
-  // goToDashboard() {
-  //   // Extract relevant data
-  //   const dataArray = this.data.map(item => ({
-  //     added_on: item.added_on,
-  //     machine_used: item.machine_used,
-  //     order_id: item.order_id,
-  //     lims_sync_status: item.lims_sync_status,
-  //     lims_sync_date_time: item.lims_sync_date_time
-  //   }));
-  
-  //   // Extract all connection modes
-  //   const connectionModes = this.instrumentsSettings.map(setting => setting.interfaceConnectionMode);
+    const dialogRef = this.dialog.open(DashboardComponent, {
+      maxWidth: '90vw', 
+      maxHeight: '90vh', 
+      data: { dashboardData: dataArray }
+    });
     
-  //   // Join connection modes into a comma-separated string
-  //   const connectionModesString = connectionModes.join(',');
-  
-  //   if (connectionModesString) {
-  //     // Log the data and connectionModes before navigation
-  //     console.log('Navigating to dashboard with the following parameters:');
-  //     console.log('Data:', JSON.stringify(dataArray));
-  //     console.log('Connection Modes:', connectionModesString);
-  
-  //     this.router.navigate(['/dashboard'], {
-  //       queryParams: {
-  //         data: JSON.stringify(dataArray),
-  //         connectionModes: connectionModesString // Include all connection modes in queryParams
-  //       }
-  //     });
-  //   } else {
-  //     console.warn('No instruments settings available to determine connectionModes');
-  //   }
-  // }
-  
-  
-  
+    
 
-  
+    dialogRef.afterClosed().subscribe(result => {
+      
+    });
+  }
+
+
   
   filterData($event: any) {
     const searchTerm = $event.target.value;
@@ -297,17 +287,15 @@ export class ConsoleComponent implements OnInit, OnDestroy {
   }
   
 
- 
-
   updateLogsForInstrument(instrumentId: string, newLogs: any) {
     if (!this.instrumentLogs[instrumentId]) {
-      // Initialize the logs structure if it does not exist
+      
       this.instrumentLogs[instrumentId] = {
         logs: [],
         filteredLogs: []
       };
     }
-    // Update both logs and filteredLogs, as the new logs are not yet filtered
+    
     this.instrumentLogs[instrumentId].logs = newLogs;
     this.instrumentLogs[instrumentId].filteredLogs = newLogs;
   }

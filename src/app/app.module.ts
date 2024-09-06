@@ -31,6 +31,7 @@ import { BrowserAnimationsModule } from '@angular/platform-browser/animations';
 import { MAT_FORM_FIELD_DEFAULT_OPTIONS } from '@angular/material/form-field';
 import { MatSelectModule } from '@angular/material/select';
 import { MatCheckboxModule } from '@angular/material/checkbox';
+import { MatDialogModule } from '@angular/material/dialog';
 
 // AoT requires an exported function for factories
 export function httpLoaderFactory(http: HttpClient) {
@@ -47,6 +48,7 @@ export function httpLoaderFactory(http: HttpClient) {
   ],
   imports: [
     BrowserModule,
+    MatDialogModule,
     MatCheckboxModule,
     MatTableModule,
     MatSelectModule,

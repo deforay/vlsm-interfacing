@@ -66,6 +66,16 @@ function createWindow() {
     });
     return win;
 }
+function openModal() {
+    const modal = new electron_1.BrowserWindow({ parent: win, modal: true, show: false });
+    modal.loadURL('https://www.sitepoint.com');
+    modal.once('ready-to-show', () => {
+        modal.show();
+    });
+}
+electron_1.ipcMain.on('openModal', (event, arg) => {
+    openModal();
+});
 try {
     const gotTheLock = electron_1.app.requestSingleInstanceLock();
     if (!gotTheLock) {

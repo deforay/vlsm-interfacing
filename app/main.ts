@@ -69,6 +69,20 @@ function createWindow(): BrowserWindow {
   return win;
 }
 
+function openModal() {
+  const modal = new BrowserWindow({ parent: win, modal: true, show: false });
+  modal.loadURL('https://www.sitepoint.com');
+  modal.once('ready-to-show', () => {
+    modal.show();
+  });
+}
+
+ipcMain.on('openModal', (event, arg) => {
+  openModal();
+});
+
+
+
 try {
   const gotTheLock = app.requestSingleInstanceLock();
 
@@ -82,6 +96,8 @@ try {
       }
     });
   }
+
+  
 
   app.on('ready', () => {
     setupSqlite(store, (db, err) => {
