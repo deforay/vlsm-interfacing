@@ -118,19 +118,7 @@
               <div *ngFor="let instrument of instrumentsSettings.controls; let i = index">
                 <div [formGroupName]="i">
                   <div class="row">
-<!-- 
-                    <div class="form-group col col-sm-6">
-                      <label for="id" class="col-form-label-sm">Instrument ID</label>
-                      <p class="form-control-static small">{{ instrument.get('id')?.value }}</p>
 
-                    </div> -->
-<!-- 
-                    <div class="form-group col col-sm-6">
-                      <label for="instrumentId" class="col-form-label-sm">Instrument ID</label>
-                      <input type="text" formControlName="id" class="form-control form-control-sm" readonly/>
-                    </div> -->
-                    
-                    
                     <div class="form-group col col-sm-6">
                       <label for="interfaceConnectionMode" class="col-form-label-sm">Make Interface Tool as a</label>
                       <select formControlName="interfaceConnectionMode" class="form-control form-control-sm" required
@@ -157,8 +145,8 @@
                           <option value="cepheid-genexpert">Cepheid GeneXpert</option>
                         </optgroup>
                         <optgroup label="Other">
-                          <option value="other-astm">Other ASTM</option>
-                          <option value="other-astm-concatenated">Other ASTM Concatenated</option>
+                          <option value="other-astm-nonchecksum">Other ASTM (without checksum)</option>
+                          <option value="other-astm-checksum">Other ASTM (with checksum)</option>
                           <option value="other-hl7">Other HL7</option>
                         </optgroup>
                       </select>
@@ -169,15 +157,15 @@
                         Protocol</label>
                       <select formControlName="interfaceCommunicationProtocol" class="form-control form-control-sm"
                         required>
-                        <option value="astm-elecsys">ASTM/Elecsys</option>
-                        <option value="astm-concatenated">ASTM (Concatenated)</option>
+                        <option value="astm-nonchecksum">ASTM (without checksum)</option>
+                        <option value="astm-checksum">ASTM (with checksum)</option>
                         <option value="hl7">HL7</option>
                       </select>
                     </div>
 
                     <div class="form-group col col-sm-6">
                       <label for="analyzerMachineName" class="col-form-label-sm">Instrument Name/Code assigned by
-                        Testing Lab</label>
+                        Testing Lab (Should match in LIS)</label>
                       <input type="text" formControlName="analyzerMachineName" class="form-control form-control-sm"
                         placeholder="eg. Roche Cobas48" required />
                       <div *ngIf="instrument.get('analyzerMachineName').hasError('duplicateInstrumentName')"
@@ -214,10 +202,15 @@
                 </div>
                 <br>
                 <div style="display: flex; justify-content: flex-end;">
-                  <button (click)="confirmRemoval(i, instrument.get('analyzerMachineName').value, $event)"
+                  <!-- <button (click)="confirmRemoval(i, instrument.get('analyzerMachineName').value, $event)"
                     class="btn btn-danger" [attr.disabled]="i === 0 ? true : null">
                     Remove Instrument
+                  </button> -->
+                  <button (click)="confirmRemoval(i, instrument.get('analyzerMachineName').value, $event)"
+                    class="btn btn-danger">
+                    Remove Instrument
                   </button>
+
                   <!-- Remove button -->
                 </div>
                 <!-- Remove button -->

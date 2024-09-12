@@ -13,6 +13,57 @@ const args = process.argv.slice(1),
   serve = args.some(val => val === '--serve');
 let tray: Tray = null;
 
+
+function copyMigrationFiles() {
+  const migrationSourceDir = path.join(__dirname, 'mysql-migrations');
+  const migrationTargetDir = path.join(app.getPath('userData'), 'mysql-migrations');
+
+  // Log the source directory for debugging
+  console.log(`Source Directory: ${migrationSourceDir}`);
+
+  if (!fs.existsSync(migrationSourceDir)) {
+    console.error(`Migration source directory not found: ${migrationSourceDir}`);
+    return;
+  }
+
+  const sourceFiles = fs.readdirSync(migrationSourceDir);
+  console.log('Files in source directory:', sourceFiles);
+
+  // Create the target directory if it doesn't exist
+  if (!fs.existsSync(migrationTargetDir)) {
+    fs.mkdirSync(migrationTargetDir, { recursive: true });
+    console.log(`Created target directory: ${migrationTargetDir}`);
+  }
+
+  // Check each file in the source directory
+  sourceFiles.forEach(file => {
+    const sourceFile = path.join(migrationSourceDir, file);
+    const targetFile = path.join(migrationTargetDir, file);
+
+    if (!fs.existsSync(targetFile)) {
+      // If the target file doesn't exist, copy it
+      console.log(`Copying new file ${file} to ${migrationTargetDir}`);
+      fs.copyFileSync(sourceFile, targetFile);
+    } else {
+      // Check if the source file is newer than the target file
+      const sourceStat = fs.statSync(sourceFile);
+      const targetStat = fs.statSync(targetFile);
+
+      if (sourceStat.mtime > targetStat.mtime) {
+        console.log(`Updating file ${file} in ${migrationTargetDir}`);
+        fs.copyFileSync(sourceFile, targetFile);
+      } else {
+        console.log(`File ${file} is already up to date.`);
+      }
+    }
+  });
+
+  console.log('Migration files synchronization completed.');
+}
+
+
+
+
 function createWindow(): BrowserWindow {
   const electronScreen = screen;
   const size = electronScreen.getPrimaryDisplay().workAreaSize;
@@ -71,7 +122,7 @@ function createWindow(): BrowserWindow {
 
 function openModal() {
   const modal = new BrowserWindow({ parent: win, modal: true, show: false });
-  modal.loadURL('https://www.sitepoint.com');
+  modal.loadURL('');
   modal.once('ready-to-show', () => {
     modal.show();
   });
@@ -97,7 +148,7 @@ try {
     });
   }
 
-  
+
 
   app.on('ready', () => {
     setupSqlite(store, (db, err) => {
@@ -107,6 +158,7 @@ try {
       }
 
       createWindow();
+      copyMigrationFiles();  // Ensure migration files are moved
 
       const trayIconPath = 'dist/assets/icons/favicon.png';
       try {
@@ -151,6 +203,11 @@ try {
           console.error('Failed to save settings:', err);
           return { status: 'error', message: 'Failed to export settings.' };
         }
+      });
+
+      // Register the 'getUserDataPath' handler after window creation
+      ipcMain.handle('getUserDataPath', () => {
+        return app.getPath('userData');
       });
 
       ipcMain.handle('import-settings', async (event) => {

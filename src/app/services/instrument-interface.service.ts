@@ -518,18 +518,50 @@ export class InstrumentInterfaceService {
       }, (err: any) => {
         that.utilitiesService.logger('error', 'Failed to save raw data : ' + JSON.stringify(err), instrumentConnectionData.instrumentId);
       });
-
+      let astmData = that.strData;
       switch (astmProtocolType) {
-        case 'astm-elecsys':
-          that.processASTMElecsysData(instrumentConnectionData, that.strData);
+        case 'astm-nonchecksum':
+          astmData = that.utilitiesService.replaceControlCharacters(astmData, false);
           break;
-        case 'astm-concatenated':
-          that.processASTMConcatenatedData(instrumentConnectionData, that.strData);
+        case 'astm-checksum':
+          astmData = that.utilitiesService.replaceControlCharacters(astmData, true);
           break;
         default:
-          // Unexpected protocol
+          astmData = that.utilitiesService.replaceControlCharacters(astmData, true);
           break;
       }
+
+      astmData = that.cleanAndReconstructASTMData(astmData);
+      const fullDataArray = astmData.split(that.START);
+
+      // that.utilitiesService.logger('info', "AFTER SPLITTING USING " + that.START, instrumentConnectionData.instrumentId);
+      // that.utilitiesService.logger('info', fullDataArray, instrumentConnectionData.instrumentId);
+
+      fullDataArray.forEach(function (partData) {
+
+        if (partData !== '' && partData !== undefined && partData !== null) {
+
+          const astmArray = partData.split(/<CR>/);
+          const dataArray = that.getASTMDataBlock(astmArray);
+
+          console.error(dataArray);
+          console.error(dataArray['R']);
+
+          //that.utilitiesService.logger('info', dataArray, instrumentConnectionData.instrumentId);
+          //that.utilitiesService.logger('info',dataArray['R'][0], instrumentConnectionData.instrumentId);
+
+          if (dataArray === null || dataArray === undefined) {
+            that.utilitiesService.logger('info', 'No ASTM data received.', instrumentConnectionData.instrumentId);
+            return;
+          }
+
+          that.saveASTMDataBlock(dataArray, partData, instrumentConnectionData);
+
+        } else {
+          that.utilitiesService.logger('error', "Failed to save :" + JSON.stringify(astmData), instrumentConnectionData.instrumentId);
+        }
+      });
+
       that.strData = '';
       instrumentConnectionData.transmissionStatusSubject.next(false);
     } else if (astmText === that.NAK) {
@@ -612,83 +644,29 @@ export class InstrumentInterfaceService {
     const instrumentConnectionData = that.tcpService.connectionStack.get(connectionIdentifierKey);
     if (instrumentConnectionData.connectionProtocol === 'hl7') {
       that.receiveHL7(instrumentConnectionData, data);
-    } else if (instrumentConnectionData.connectionProtocol === 'astm-elecsys') {
-      that.receiveASTM('astm-elecsys', instrumentConnectionData, data);
-    } else if (instrumentConnectionData.connectionProtocol === 'astm-concatenated') {
-      that.receiveASTM('astm-concatenated', instrumentConnectionData, data);
+    } else if (instrumentConnectionData.connectionProtocol === 'astm-nonchecksum') {
+      that.receiveASTM('astm-nonchecksum', instrumentConnectionData, data);
+    } else if (instrumentConnectionData.connectionProtocol === 'astm-checksum') {
+      that.receiveASTM('astm-checksum', instrumentConnectionData, data);
     }
   }
 
+  private cleanAndReconstructASTMData(data: string): string {
 
-  processASTMElecsysData(instrumentConnectionData: InstrumentConnectionStack, astmData: string) {
+    // Split the data at the valid record starts, marked by R|, O|, P|, Q|, L|, C|
+    const splitData = data.split(/<CR>(?=H\|)|<CR>(?=R\|)|<CR>(?=O\|)|<CR>(?=P\|)|<CR>(?=Q\|)|<CR>(?=L\|)|<CR>(?=C\|)/);
 
-    //that.utilitiesService.logger('info', astmData, instrumentConnectionData.instrumentId);
+    // Remove all <CR> markers from the data (if any are left within the split parts)
+    const cleanedSplitData = splitData.map(part => part.replace(/<CR>/g, ''));
 
-    const that = this;
-    const fullDataArray = astmData.split(that.START);
+    // Rejoin the split data with <CR> at the end of each segment
+    let reconstructedData = cleanedSplitData.join('<CR>') + '<CR>';  // Ensure <CR> at the end of the final part
 
-    // that.utilitiesService.logger('info', "AFTER SPLITTING USING " + that.START, instrumentConnectionData.instrumentId);
-    // that.utilitiesService.logger('info', fullDataArray, instrumentConnectionData.instrumentId);
-
-    fullDataArray.forEach(function (partData) {
-
-      if (partData !== '' && partData !== undefined && partData !== null) {
-
-        partData = partData.replace(/[\x05\x02\x03]/g, '');
-        const astmArray = partData.split(/\r?\n/);
-        const dataArray = that.getASTMDataBlock(astmArray);
-
-        //that.utilitiesService.logger('info', dataArray, instrumentConnectionData.instrumentId);
-        //that.utilitiesService.logger('info', dataArray['R'][0], instrumentConnectionData.instrumentId);
-
-        if (dataArray === null || dataArray === undefined) {
-          that.utilitiesService.logger('info', 'No ASTM Elecsys data received.', instrumentConnectionData.instrumentId);
-          return;
-        }
-
-        that.saveASTMDataBlock(dataArray, partData, instrumentConnectionData);
-
-      }
-      else {
-        that.utilitiesService.logger('error', "Failed to save :" + JSON.stringify(astmData), instrumentConnectionData.instrumentId);
-      }
-    });
-
+    return reconstructedData;
   }
 
-  processASTMConcatenatedData(instrumentConnectionData: InstrumentConnectionStack, astmData: string) {
-    const that = this;
 
-    //that.logger('info', astmData, instrumentConnectionData.instrumentId);
-    astmData = that.utilitiesService.replaceControlCharacters(astmData);
-    const fullDataArray = astmData.split(that.START);
 
-    // that.utilitiesService.logger('info', "AFTER SPLITTING USING " + that.START, instrumentConnectionData.instrumentId);
-    // that.utilitiesService.logger('info', fullDataArray, instrumentConnectionData.instrumentId);
-
-    fullDataArray.forEach(function (partData) {
-
-      if (partData !== '' && partData !== undefined && partData !== null) {
-
-        const astmArray = partData.split(/<CR>/);
-        const dataArray = that.getASTMDataBlock(astmArray);
-
-        //that.utilitiesService.logger('info', dataArray, instrumentConnectionData.instrumentId);
-        //that.utilitiesService.logger('info',dataArray['R'][0], instrumentConnectionData.instrumentId);
-
-        if (dataArray === null || dataArray === undefined) {
-          that.utilitiesService.logger('info', 'No ASTM Concatenated data received.', instrumentConnectionData.instrumentId);
-          return;
-        }
-
-        that.saveASTMDataBlock(dataArray, partData, instrumentConnectionData);
-
-      } else {
-        that.utilitiesService.logger('error', "Failed to save :" + JSON.stringify(astmData), instrumentConnectionData.instrumentId);
-      }
-    });
-
-  }
 
   // private saveOrder(order: any, instrumentConnectionData: InstrumentConnectionStack) {
   //   const that = this;
@@ -710,11 +688,11 @@ export class InstrumentInterfaceService {
     const that = this;
     if (order.results) {
       const data = { ...order, instrument_id: instrumentConnectionData.instrumentId }; // Add instrument_id here
-      that.dbService.recordTestResults(data, 
+      that.dbService.recordTestResults(data,
         (res) => {
           that.utilitiesService.logger('success', 'Successfully saved result : ' + order.test_id + '|' + order.order_id, instrumentConnectionData.instrumentId);
           return true;
-        }, 
+        },
         (err) => {
           that.utilitiesService.logger('error', 'Failed to save result : ' + order.test_id + '|' + order.order_id + ' | ' + JSON.stringify(err), instrumentConnectionData.instrumentId);
           return false;
@@ -724,7 +702,7 @@ export class InstrumentInterfaceService {
       return false;
     }
   }
-  
+
 
   private getASTMDataBlock(astmArray: any[]) {
     let dataArray = {};

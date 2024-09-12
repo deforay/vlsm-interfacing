@@ -86,23 +86,32 @@ export class UtilitiesService {
     return d;
   }
 
-  replaceControlCharacters(astmData) {
+  replaceControlCharacters(astmData, removeChecksum = true, replaceNewLine = true) {
     const controlCharMap = {
       '\x05': '',
       '\x02': '',
       '\x03': '',
       '\x04': '',
-      '\x17': '<ETB>',
-      '\n': '<LF>',
-      '\r': '<CR>'
+      '\x17': '<ETB>'
     };
 
     // Replace control characters based on the mapping
-    astmData = astmData.replace(/[\x05\x02\x03\x04\x17\n\r]/g, match => controlCharMap[match]);
+    astmData = astmData.replace(/[\x05\x02\x03\x04\x17]/g, match => controlCharMap[match]);
 
-    // Remove the transmission blocks
-    return astmData.replace(/<ETB>\w{2}<CR><LF>/g, '');
+    if (replaceNewLine) {
+      // Replace any combination of \r\n, \n\r, \n, or \r with <CR>
+      astmData = astmData.replace(/\r\n|\n\r|\n|\r/g, '<CR>');
+    }
+
+    // Conditionally remove the transmission blocks (which include the checksum)
+    if (removeChecksum) {
+      astmData = astmData.replace(/<ETB>\w{2}/g, '');  // Removes <ETB> and the checksum
+    }
+
+    return astmData;
   }
+
+
 
   // fetchLastOrders() {
   //   const that = this;

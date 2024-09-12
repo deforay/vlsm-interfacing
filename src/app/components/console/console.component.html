@@ -6,7 +6,7 @@
   <div class="card">
     <div class="card-body">
 
-    
+
       <div style="display: flex; justify-content: flex-end;">
         <button class="btn btn-success" (click)="goToDashboard()"><i class="fa fa-dashboard"></i>&nbsp;
           <span>Dashboard</span></button>&nbsp;&nbsp;
@@ -18,8 +18,6 @@
         <i class="fa fa-cog"></i>
         <span>Settings</span>
       </button> -->
-      <br>
-      <br>  
       <ul class="nav nav-tabs" role="tablist">
         <li class="nav-item" *ngFor="let instrument of availableInstruments; let i = index">
           <a class="nav-link" [class.active]="selectedTabIndex === i" [attr.id]="'tab-' + i" data-toggle="tab"
@@ -53,7 +51,7 @@
             </button>
             <!-- &nbsp;&nbsp;
             <button
-              *ngIf="['astm-elecsys', 'astm-concatenated'].includes(instrument.connectionParams.connectionProtocol)"
+              *ngIf="['astm-nonchecksum', 'astm-checksum'].includes(instrument.connectionParams.connectionProtocol)"
               (click)="sendASTMOrders(instrument)" class="btn btn-success">
               <span>Send Test Order(s)</span>
             </button> -->
@@ -139,7 +137,8 @@
       <h4>
 
         Recent Results
-        <button class="btn btn-sm btn-primary" style="float:right; margin-bottom: 5px;" (click)="fetchLastOrders(searchTerm);">
+        <button class="btn btn-sm btn-primary" style="float:right; margin-bottom: 5px;"
+          (click)="fetchLastOrders(searchTerm);">
           <span>Fetch Recent Records</span>
         </button>
 
@@ -152,7 +151,8 @@
 
 
         <div style="position: relative;">
-          <input type="text" (keyup)="filterData($event)" placeholder="Search Results..." [(ngModel)]="searchTerm" class="search-input" style="width: 100%; height: 30px;">
+          <input type="text" (keyup)="filterData($event)" placeholder="Search Results..." [(ngModel)]="searchTerm"
+            class="search-input" style="width: 100%; height: 30px;">
 
         </div>
 

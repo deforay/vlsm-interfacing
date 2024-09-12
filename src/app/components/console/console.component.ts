@@ -135,6 +135,11 @@ export class ConsoleComponent implements OnInit, OnDestroy {
 
     this.instrumentsSettings.forEach((instrumentSetting, index) => {
       let instrument: any = {};
+      if (instrumentSetting.interfaceCommunicationProtocol == 'astm-elecsys') {
+        instrumentSetting.interfaceCommunicationProtocol = 'astm-nonchecksum';
+      } else if (instrumentSetting.interfaceCommunicationProtocol == 'astm-concatenated') {
+        instrumentSetting.interfaceCommunicationProtocol = 'astm-checksum';
+      }
       instrument.connectionParams = {
         instrumentIndex: index,
         connectionMode: instrumentSetting.interfaceConnectionMode,
@@ -235,7 +240,7 @@ export class ConsoleComponent implements OnInit, OnDestroy {
           this.lastOrders = lastFewOrders[0];
           this.data = lastFewOrders[0];
           this.dataSource.data = this.lastOrders;
-          console.log(this.dataSource.data);
+          //console.log(this.dataSource.data);
           this.dataSource.paginator = this.paginator;
           this.dataSource.sort = this.sort;
         });

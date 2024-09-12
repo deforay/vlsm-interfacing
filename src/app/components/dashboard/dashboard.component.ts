@@ -49,7 +49,7 @@ export class DashboardComponent implements OnInit {
 
   ngOnInit() {
     this.data = this.dialogData.dashboardData;
-    console.log('Dialog Data:', this.data);
+    //console.log('Dialog Data:', this.data);
 
     this.filteredData = this.data;
     this.instruments = [...new Set(this.data.map(item => item.machine_used))];
@@ -59,7 +59,7 @@ export class DashboardComponent implements OnInit {
     this.retrieveSessionData();
     this.filterSessionData();
 
-    console.log('Data initialized:', this.data);
+    //console.log('Data initialized:', this.data);
   }
 
   private updateCounts(data: ResultData[]) {

@@ -56,6 +56,10 @@ export class ElectronService {
     return !!(window && window.process && window.process.type);
   }
 
+  getUserDataPath(): Promise<string> {
+    return this.ipcRenderer.invoke('getUserDataPath');
+  }
+
   openDialog(method: any, config: any): any {
     this.ipcRenderer.invoke('dialog', method, config);
   }

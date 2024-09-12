@@ -21,6 +21,34 @@ let sqlitePath = null;
 let sqliteDbName = 'interface.db';
 const args = process.argv.slice(1), serve = args.some(val => val === '--serve');
 let tray = null;
+function copyMigrationFiles() {
+    const migrationSourceDir = path.join(__dirname, 'mysql-migrations');
+    const migrationTargetDir = path.join(electron_1.app.getPath('userData'), 'mysql-migrations');
+    // Check if the source directory exists
+    if (!fs.existsSync(migrationSourceDir)) {
+        console.error(`Migration source directory not found: ${migrationSourceDir}`);
+        return;
+    }
+    // Check if migration directory exists in the userData folder
+    if (!fs.existsSync(migrationTargetDir)) {
+        // Create the target directory if it doesn't exist
+        fs.mkdirSync(migrationTargetDir, { recursive: true });
+    }
+    // Copy migration files from source to target
+    fs.readdirSync(migrationSourceDir).forEach(file => {
+        console.error(file);
+        console.error(file);
+        console.error(file);
+        console.error(file);
+        console.error(file);
+        console.error(file);
+        const sourceFile = path.join(migrationSourceDir, file);
+        const targetFile = path.join(migrationTargetDir, file);
+        // Copy each migration file
+        fs.copyFileSync(sourceFile, targetFile);
+    });
+    console.log('Migration files copied to userData folder.');
+}
 function createWindow() {
     const electronScreen = electron_1.screen;
     const size = electronScreen.getPrimaryDisplay().workAreaSize;
@@ -68,7 +96,7 @@ function createWindow() {
 }
 function openModal() {
     const modal = new electron_1.BrowserWindow({ parent: win, modal: true, show: false });
-    modal.loadURL('https://www.sitepoint.com');
+    modal.loadURL('');
     modal.once('ready-to-show', () => {
         modal.show();
     });
@@ -97,6 +125,7 @@ try {
                 return;
             }
             createWindow();
+            copyMigrationFiles(); // Ensure migration files are moved
             const trayIconPath = 'dist/assets/icons/favicon.png';
             try {
                 const icon = electron_1.nativeImage.createFromPath(trayIconPath);
@@ -139,6 +168,10 @@ try {
                     return { status: 'error', message: 'Failed to export settings.' };
                 }
             }));
+            // Register the 'getUserDataPath' handler after window creation
+            electron_1.ipcMain.handle('getUserDataPath', () => {
+                return electron_1.app.getPath('userData');
+            });
             electron_1.ipcMain.handle('import-settings', (event) => __awaiter(void 0, void 0, void 0, function* () {
                 try {
                     const { filePaths, canceled } = yield electron_1.dialog.showOpenDialog({
