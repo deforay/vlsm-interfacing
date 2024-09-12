@@ -1,6 +1,6 @@
 {
   "name": "vlsm-interfacing",
-  "version": "2.2.4",
+  "version": "2.2.5",
   "description": "Interfacing Tool By VLSM",
   "homepage": "https://github.com/deforay/vlsm-interfacing",
   "author": {
@@ -25,12 +25,12 @@
   "main": "main.js",
   "private": true,
   "dependencies": {
-    "@fortawesome/fontawesome-free": "^6.5.2",
-    "electron-log": "^5.0.3",
-    "electron-store": "^8.1.0",
+    "@fortawesome/fontawesome-free": "^6.6.0",
+    "electron-log": "^5.2.0",
+    "electron-store": "^8.2.0",
     "hl7parser": "^1.0.1",
     "moment": "^2.30.1",
     "mysql": "2.18.1",
-    "sqlite3": "^5.1.6"
+    "sqlite3": "^5.1.7"
   }
 }

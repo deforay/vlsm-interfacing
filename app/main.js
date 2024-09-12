@@ -24,30 +24,42 @@ let tray = null;
 function copyMigrationFiles() {
     const migrationSourceDir = path.join(__dirname, 'mysql-migrations');
     const migrationTargetDir = path.join(electron_1.app.getPath('userData'), 'mysql-migrations');
-    // Check if the source directory exists
+    // Log the source directory for debugging
+    //console.log(`Source Directory: ${migrationSourceDir}`);
     if (!fs.existsSync(migrationSourceDir)) {
         console.error(`Migration source directory not found: ${migrationSourceDir}`);
         return;
     }
-    // Check if migration directory exists in the userData folder
+    const sourceFiles = fs.readdirSync(migrationSourceDir);
+    //console.log('Files in source directory:', sourceFiles);
+    // Create the target directory if it doesn't exist
     if (!fs.existsSync(migrationTargetDir)) {
-        // Create the target directory if it doesn't exist
         fs.mkdirSync(migrationTargetDir, { recursive: true });
+        //console.log(`Created target directory: ${migrationTargetDir}`);
     }
-    // Copy migration files from source to target
-    fs.readdirSync(migrationSourceDir).forEach(file => {
-        console.error(file);
-        console.error(file);
-        console.error(file);
-        console.error(file);
-        console.error(file);
-        console.error(file);
+    // Check each file in the source directory
+    sourceFiles.forEach(file => {
         const sourceFile = path.join(migrationSourceDir, file);
         const targetFile = path.join(migrationTargetDir, file);
-        // Copy each migration file
-        fs.copyFileSync(sourceFile, targetFile);
+        if (!fs.existsSync(targetFile)) {
+            // If the target file doesn't exist, copy it
+            //console.log(`Copying new file ${file} to ${migrationTargetDir}`);
+            fs.copyFileSync(sourceFile, targetFile);
+        }
+        else {
+            // Check if the source file is newer than the target file
+            const sourceStat = fs.statSync(sourceFile);
+            const targetStat = fs.statSync(targetFile);
+            if (sourceStat.mtime > targetStat.mtime) {
+                //console.log(`Updating file ${file} in ${migrationTargetDir}`);
+                fs.copyFileSync(sourceFile, targetFile);
+            }
+            else {
+                //console.log(`File ${file} is already up to date.`);
+            }
+        }
     });
-    console.log('Migration files copied to userData folder.');
+    //console.log('Migration files synchronization completed.');
 }
 function createWindow() {
     const electronScreen = electron_1.screen;

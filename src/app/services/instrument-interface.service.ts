@@ -544,8 +544,8 @@ export class InstrumentInterfaceService {
           const astmArray = partData.split(/<CR>/);
           const dataArray = that.getASTMDataBlock(astmArray);
 
-          console.error(dataArray);
-          console.error(dataArray['R']);
+          // console.error(dataArray);
+          // console.error(dataArray['R']);
 
           //that.utilitiesService.logger('info', dataArray, instrumentConnectionData.instrumentId);
           //that.utilitiesService.logger('info',dataArray['R'][0], instrumentConnectionData.instrumentId);

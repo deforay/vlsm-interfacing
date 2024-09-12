@@ -19,7 +19,7 @@ function copyMigrationFiles() {
   const migrationTargetDir = path.join(app.getPath('userData'), 'mysql-migrations');
 
   // Log the source directory for debugging
-  console.log(`Source Directory: ${migrationSourceDir}`);
+  //console.log(`Source Directory: ${migrationSourceDir}`);
 
   if (!fs.existsSync(migrationSourceDir)) {
     console.error(`Migration source directory not found: ${migrationSourceDir}`);
@@ -27,12 +27,12 @@ function copyMigrationFiles() {
   }
 
   const sourceFiles = fs.readdirSync(migrationSourceDir);
-  console.log('Files in source directory:', sourceFiles);
+  //console.log('Files in source directory:', sourceFiles);
 
   // Create the target directory if it doesn't exist
   if (!fs.existsSync(migrationTargetDir)) {
     fs.mkdirSync(migrationTargetDir, { recursive: true });
-    console.log(`Created target directory: ${migrationTargetDir}`);
+    //console.log(`Created target directory: ${migrationTargetDir}`);
   }
 
   // Check each file in the source directory
@@ -42,7 +42,7 @@ function copyMigrationFiles() {
 
     if (!fs.existsSync(targetFile)) {
       // If the target file doesn't exist, copy it
-      console.log(`Copying new file ${file} to ${migrationTargetDir}`);
+      //console.log(`Copying new file ${file} to ${migrationTargetDir}`);
       fs.copyFileSync(sourceFile, targetFile);
     } else {
       // Check if the source file is newer than the target file
@@ -50,15 +50,14 @@ function copyMigrationFiles() {
       const targetStat = fs.statSync(targetFile);
 
       if (sourceStat.mtime > targetStat.mtime) {
-        console.log(`Updating file ${file} in ${migrationTargetDir}`);
+        //console.log(`Updating file ${file} in ${migrationTargetDir}`);
         fs.copyFileSync(sourceFile, targetFile);
       } else {
-        console.log(`File ${file} is already up to date.`);
+        //console.log(`File ${file} is already up to date.`);
       }
     }
   });
-
-  console.log('Migration files synchronization completed.');
+  //console.log('Migration files synchronization completed.');
 }
 
 
