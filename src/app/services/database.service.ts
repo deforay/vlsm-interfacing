@@ -342,9 +342,6 @@ export class DatabaseService {
     }
   }
 
-
-
-
   reSyncRecord(orderId: string): void {
     const updateQuery = `UPDATE orders SET lims_sync_status = '0' WHERE order_id = ?`;
     this.execQuery(

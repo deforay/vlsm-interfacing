@@ -9,8 +9,6 @@ import { ElectronService } from '../core/services';
 
 export class UtilitiesService {
 
-
-
   protected timer = null;
   protected logtext = [];
 
@@ -23,19 +21,14 @@ export class UtilitiesService {
   protected lastrawDataSubject = new BehaviorSubject([]);
   lastrawData = this.lastrawDataSubject.asObservable();
 
-
-
   constructor(
     public electronService: ElectronService,
     public dbService: DatabaseService) {
   }
 
-
   resyncTestResultsToMySQL(success, errorf) {
     this.dbService.resyncTestResultsToMySQL(success, errorf);
   }
-
-
 
   sleep(ms) {
     return new Promise(resolve => setTimeout(resolve, ms));
@@ -111,18 +104,6 @@ export class UtilitiesService {
     return astmData;
   }
 
-
-
-  // fetchLastOrders() {
-  //   const that = this;
-  //   that.dbService.fetchLastOrders((res) => {
-  //     res = [res]; // converting it into an array
-  //     that.lastOrdersSubject.next(res);
-  //   }, (err) => {
-  //     that.logger('error', 'Failed to fetch data ' + JSON.stringify(err));
-  //   });
-  // }
-
   fetchLastOrders(searchParam?: string) {
     const that = this;
     that.dbService.fetchLastOrders((res) => {
@@ -145,17 +126,6 @@ export class UtilitiesService {
   }
 
 
-  // fetchrawData() {
-  //   const that = this;
-  //   that.dbService.fetchrawData((res) => {
-  //     res = [res]; // converting it into an array
-  //     that.lastrawDataSubject.next(res);
-  //   }, (err) => {
-  //     that.logger('error', 'Failed to fetch data ' + JSON.stringify(err));
-  //   });
-  // }
-
-
   fetchRecentLogs(instrumentId = null) {
     this.dbService.fetchRecentLogs(instrumentId, (res) => {
       const logs = res.map(r => r.log); // Assuming r.log is the log message
@@ -164,9 +134,6 @@ export class UtilitiesService {
       this.logger('error', 'Failed to fetch recent logs: ' + JSON.stringify(err));
     });
   }
-
-
-
 
   clearLiveLog(instrumentId = null) {
     if (instrumentId) {

@@ -364,21 +364,15 @@ export class InstrumentInterfaceService {
         if (resultOutcome == 'Titer') {
           order.test_unit = singleObx.get('OBX.6.1').toString();
           order.results = singleObx.get('OBX.5.1').toString();
-        } else if (resultOutcome == '<20' || resultOutcome == '< 20') {
+        } else if (resultOutcome == '<20' || resultOutcome == '< 20' || resultOutcome == 'Target Not Detected') {
           order.test_unit = '';
           order.results = 'Target Not Detected';
         } else if (resultOutcome == '> Titer max') {
           order.test_unit = '';
           order.results = '> 10000000';
-        } else if (resultOutcome == 'Target Not Detected') {
+        } else if (resultOutcome == 'Invalid' || resultOutcome == 'Failed') {
           order.test_unit = '';
-          order.results = 'Target Not Detected';
-        } else if (resultOutcome == 'Invalid') {
-          order.test_unit = '';
-          order.results = 'Invalid';
-        } else if (resultOutcome == 'Failed') {
-          order.test_unit = '';
-          order.results = 'Failed';
+          order.results = resultOutcome;
         } else {
           order.test_unit = singleObx.get('OBX.6.1').toString();
           order.results = resultOutcome;
@@ -459,21 +453,12 @@ export class InstrumentInterfaceService {
         if (resultOutcome == 'Titer') {
           order.test_unit = singleObx.get('OBX.6.1').toString();
           order.results = singleObx.get('OBX.5.1').toString();
-        } else if (resultOutcome == '<20' || resultOutcome == '< 20') {
-          order.test_unit = '';
-          order.results = 'Target Not Detected';
         } else if (resultOutcome == '> Titer max') {
           order.test_unit = '';
           order.results = '> 10000000';
-        } else if (resultOutcome == 'Target Not Detected') {
+        } else if (resultOutcome == 'Invalid' || resultOutcome == 'Failed') {
           order.test_unit = '';
-          order.results = 'Target Not Detected';
-        } else if (resultOutcome == 'Invalid') {
-          order.test_unit = '';
-          order.results = 'Invalid';
-        } else if (resultOutcome == 'Failed') {
-          order.test_unit = '';
-          order.results = 'Failed';
+          order.results = resultOutcome;
         } else {
           order.test_unit = singleObx.get('OBX.6.1').toString();
           order.results = resultOutcome;

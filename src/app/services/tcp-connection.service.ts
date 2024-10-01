@@ -76,13 +76,18 @@ export class TcpConnectionService {
     if (connectionParams.connectionMode === 'tcpserver') {
       that.utilitiesService.logger('info', 'Listening for connection on port ' + connectionParams.port, instrumentConnectionData.instrumentId);
       instrumentConnectionData.connectionServer = that.net.createServer();
-      instrumentConnectionData.connectionServer.listen(connectionParams.port);
+      instrumentConnectionData.connectionServer.listen({
+        port: connectionParams.port,
+        host: connectionParams.host,
+        reuseAddress: true
+      });
 
       const sockets = [];
       instrumentConnectionData.connectionServer.on('connection', function (socket) {
-        // confirm socket connection from client
-        that.utilitiesService.logger('info', (new Date()) + ' : A remote client has connected to the Interfacing Server', instrumentConnectionData.instrumentId);
+        const clientAddress = socket.remoteAddress; // Get the client's IP address
+        that.utilitiesService.logger('info', (new Date()) + ' : A remote client (' + clientAddress + ') has connected to the Interfacing Server', instrumentConnectionData.instrumentId);
 
+        // confirm socket connection from client
         sockets.push(socket);
         that.socketClient = socket;
 
@@ -118,6 +123,10 @@ export class TcpConnectionService {
 
       });
 
+      instrumentConnectionData.connectionServer.on('close', () => {
+        that.utilitiesService.logger('info', 'Server closed', instrumentConnectionData.instrumentId);
+      });
+
       instrumentConnectionData.connectionServer.on('error', function (e) {
         instrumentConnectionData.errorOccurred = true;
         that._handleClientConnectionIssue(instrumentConnectionData, connectionParams, 'Error while connecting ' + e.code, true);
@@ -127,7 +136,8 @@ export class TcpConnectionService {
       instrumentConnectionData.connectionSocket = that.socketClient = new that.net.Socket();
       that.clientConnectionOptions = {
         port: connectionParams.port,
-        host: connectionParams.host
+        host: connectionParams.host,
+        reuseAddress: true
       };
 
       // since this is a CLIENT connection, we don't need a server object, so we set it to null
@@ -245,8 +255,17 @@ export class TcpConnectionService {
         }
 
         if (instrumentConnectionData.connectionServer) {
+
+          // Remove all listeners for the server to avoid any leaks or potential issues
+          instrumentConnectionData.connectionServer.removeAllListeners();
+
           instrumentConnectionData.connectionServer.close(() => {
             that.utilitiesService.logger('info', 'Server Stopped', instrumentConnectionData.instrumentId);
+          });
+
+          // Handle errors during close
+          instrumentConnectionData.connectionServer.on('error', (error) => {
+            that.utilitiesService.logger('error', `Error while closing server: ${error.message}`, instrumentConnectionData.instrumentId);
           });
         }
       } catch (error) {

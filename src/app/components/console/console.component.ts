@@ -133,7 +133,7 @@ export class ConsoleComponent implements OnInit, OnDestroy {
   setupInstruments() {
     this.availableInstruments = [];
 
-    this.instrumentsSettings.forEach((instrumentSetting, index) => {
+    this.instrumentsSettings.forEach((instrumentSetting: { interfaceCommunicationProtocol: string; interfaceConnectionMode: any; analyzerMachineHost: any; analyzerMachinePort: any; analyzerMachineName: any; analyzerMachineType: any; }, index: any) => {
       let instrument: any = {};
       if (instrumentSetting.interfaceCommunicationProtocol == 'astm-elecsys') {
         instrumentSetting.interfaceCommunicationProtocol = 'astm-nonchecksum';
@@ -229,7 +229,7 @@ export class ConsoleComponent implements OnInit, OnDestroy {
   fetchLastOrders(searchTerm?: string) {
     this.utilitiesService.fetchLastOrders(searchTerm);
 
-    this.utilitiesService.fetchLastSyncTimes(data => {
+    this.utilitiesService.fetchLastSyncTimes((data: { lastLimsSync: string; lastResultReceived: string; }) => {
       this.lastLimsSync = data.lastLimsSync;
       this.lastResultReceived = data.lastResultReceived;
     });
@@ -259,7 +259,7 @@ export class ConsoleComponent implements OnInit, OnDestroy {
 
 
   goToDashboard() {
-    const dataArray = this.data.map(item => ({
+    const dataArray = this.data.map((item: { added_on: any; machine_used: any; order_id: any; lims_sync_status: any; lims_sync_date_time: any; }) => ({
       added_on: item.added_on,
       machine_used: item.machine_used,
       order_id: item.order_id,
@@ -541,7 +541,7 @@ export class ConsoleComponent implements OnInit, OnDestroy {
       this.instrumentLogs[instrument.connectionParams.instrumentId].filteredLogs = [...this.instrumentLogs[instrument.connectionParams.instrumentId].logs];
     } else {
       // Apply filter on the original logs
-      this.instrumentLogs[instrument.connectionParams.instrumentId].filteredLogs = this.instrumentLogs[instrument.connectionParams.instrumentId].logs.filter(log =>
+      this.instrumentLogs[instrument.connectionParams.instrumentId].filteredLogs = this.instrumentLogs[instrument.connectionParams.instrumentId].logs.filter((log: string) =>
         log.toLowerCase().includes(instrument.searchText.trim().toLowerCase())
       );
     }
@@ -551,7 +551,7 @@ export class ConsoleComponent implements OnInit, OnDestroy {
 
 
 
-  copyLog(instrument) {
+  copyLog(instrument: { connectionParams: { instrumentId: string | number; }; }) {
     if (this.instrumentLogs[instrument.connectionParams.instrumentId]) {
       // Join the filtered logs with a newline character
       const logContent = this.instrumentLogs[instrument.connectionParams.instrumentId].filteredLogs.join('\n');
@@ -575,10 +575,10 @@ export class ConsoleComponent implements OnInit, OnDestroy {
 
   resyncTestResultsToMySQL() {
     this.utilitiesService.resyncTestResultsToMySQL(
-      (message) => {
+      (message: any) => {
         console.log(message);
       },
-      (error) => {
+      (error: any) => {
         console.error(error);
       }
     );
