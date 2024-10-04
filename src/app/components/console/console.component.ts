@@ -133,7 +133,7 @@ export class ConsoleComponent implements OnInit, OnDestroy {
   setupInstruments() {
     this.availableInstruments = [];
 
-    this.instrumentsSettings.forEach((instrumentSetting: { interfaceCommunicationProtocol: string; interfaceConnectionMode: any; analyzerMachineHost: any; analyzerMachinePort: any; analyzerMachineName: any; analyzerMachineType: any; }, index: any) => {
+    this.instrumentsSettings.forEach((instrumentSetting: { interfaceCommunicationProtocol: string; interfaceConnectionMode: any; analyzerMachineHost: any; analyzerMachinePort: any; analyzerMachineName: any; analyzerMachineType: any; displayorder: any; }, index: any) => {
       let instrument: any = {};
       if (instrumentSetting.interfaceCommunicationProtocol == 'astm-elecsys') {
         instrumentSetting.interfaceCommunicationProtocol = 'astm-nonchecksum';
@@ -149,6 +149,7 @@ export class ConsoleComponent implements OnInit, OnDestroy {
         instrumentId: instrumentSetting.analyzerMachineName,
         machineType: instrumentSetting.analyzerMachineType,
         labName: this.commonSettings.labName,
+        displayorder: instrumentSetting.displayorder,
         interfaceAutoConnect: this.commonSettings.interfaceAutoConnect
       };
 
@@ -177,6 +178,20 @@ export class ConsoleComponent implements OnInit, OnDestroy {
 
       this.availableInstruments.push(instrument);
     });
+
+    this.availableInstruments.sort((a, b) => {
+      // Sort by displayorder if available, otherwise by instrumentId
+      if (a.connectionParams.displayorder != null && b.connectionParams.displayorder != null) {
+        return a.connectionParams.displayorder - b.connectionParams.displayorder;
+      } else if (a.connectionParams.displayorder == null && b.connectionParams.displayorder != null) {
+        return 1; 
+      } else if (a.connectionParams.displayorder != null && b.connectionParams.displayorder == null) {
+        return -1; 
+      } else {
+        return a.connectionParams.instrumentId.localeCompare(b.connectionParams.instrumentId);
+      }
+    });
+
   }
 
   loadSettings() {

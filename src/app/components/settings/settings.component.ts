@@ -143,7 +143,8 @@ export class SettingsComponent implements OnInit {
       analyzerMachineName: ['', Validators.required],
       analyzerMachineHost: ['', Validators.required],
       analyzerMachinePort: ['', Validators.required],
-      interfaceConnectionMode: ['', Validators.required]
+      interfaceConnectionMode: ['', Validators.required],
+      displayorder: ['']
     });
   }
 
@@ -194,7 +195,8 @@ export class SettingsComponent implements OnInit {
         analyzerMachineName: '',
         analyzerMachineHost: '',
         analyzerMachinePort: '',
-        interfaceConnectionMode: ''
+        interfaceConnectionMode: '',
+        displayorder: ''
       });
     });
     console.log('Reset instrument variables.');
@@ -216,7 +218,8 @@ export class SettingsComponent implements OnInit {
           analyzerMachineName: '',
           analyzerMachineHost: '',
           analyzerMachinePort: '',
-          interfaceConnectionMode: ''
+          interfaceConnectionMode: '',
+          displayorder: ''
         };
         return { ...defaultInstrument, ...instrument };
       });

@@ -193,8 +193,12 @@
                       <div *ngIf="instrument.hasError('duplicateIpPort')" class="error-text">Duplicate IP Port
                         combinations are not
                         allowed.</div>
+                    </div>
 
-
+                    <div class="form-group col col-sm-6">
+                      <label for="displayorder" class="col-form-label-sm">Display Order</label>
+                      <input type="number" formControlName="displayorder" class="form-control form-control-sm"
+                         />
                     </div>
 
 
