@@ -3,6 +3,7 @@ import { DatabaseService } from './database.service';
 import { InstrumentConnectionStack } from '../interfaces/intrument-connections.interface';
 import { RawMachineData } from '../interfaces/raw-machine-data.interface';
 import { UtilitiesService } from './utilities.service';
+import { randomUUID } from 'crypto';
 import { TcpConnectionService } from './tcp-connection.service';
 
 @Injectable({
@@ -64,7 +65,7 @@ export class InstrumentInterfaceService {
   }
 
 
-  hl7ACK(messageID, characterSet, messageProfileIdentifier) {
+  hl7ACK(messageID: string | number, characterSet: string, messageProfileIdentifier: string, hl7Version = '2.5.1') {
 
     const that = this;
 
@@ -85,7 +86,7 @@ export class InstrumentInterfaceService {
     let ack = String.fromCharCode(11)
       + 'MSH|^~\\&|VLSM|VLSM|VLSM|VLSM|'
       + date + '||ACK^R22^ACK|'
-      + self.crypto.randomUUID() + '|P|2.5.1|||||'
+      + randomUUID() + '|P|' + hl7Version + '|||||'
       + "|" + characterSet
       + "|" + messageProfileIdentifier
       + String.fromCharCode(13);
@@ -100,14 +101,15 @@ export class InstrumentInterfaceService {
   }
 
 
-  processHL7DataAlinity(instrumentConnectionData, rawHl7Text: string) {
+  processHL7DataAlinity(instrumentConnectionData: InstrumentConnectionStack, rawHl7Text: string) {
 
     const that = this;
     const message = that.hl7parser.create(rawHl7Text.trim());
     const msgID = message.get('MSH.10').toString();
     const characterSet = message.get('MSH.18').toString();
     const messageProfileIdentifier = message.get('MSH.21').toString();
-    that.tcpService.socketClient.write(that.hl7ACK(msgID, characterSet, messageProfileIdentifier));
+    const hl7Version = message.get('MSH.12') ? message.get('MSH.12').toString() : '2.5.1'; // Default to 2.5.1 if not provided
+    that.tcpService.socketClient.write(that.hl7ACK(msgID, characterSet, messageProfileIdentifier, hl7Version));
     // let result = null;
     //console.log(message.get('OBX'));
 
@@ -163,12 +165,13 @@ export class InstrumentInterfaceService {
         } else if (resultOutcome === '> Titer max') {
           order.test_unit = '';
           order.results = '> 10000000';
-        } else if (resultOutcome === 'Invalid') {
+        } else if (
+          resultOutcome == 'Target Not Detected'
+          || resultOutcome == 'Failed'
+          || resultOutcome == 'Invalid'
+          || resultOutcome == 'Not Detected') {
           order.test_unit = '';
-          order.results = 'Invalid';
-        } else if (resultOutcome === 'Failed') {
-          order.test_unit = '';
-          order.results = 'Failed';
+          order.results = resultOutcome;
         } else {
           order.test_unit = singleObx.get('OBX.6.1').toString();
           if (!order.test_unit) {
@@ -188,7 +191,7 @@ export class InstrumentInterfaceService {
         order.authorised_date_time = that.utilitiesService.formatRawDate(singleObx.get('OBX.19').toString());
         order.result_accepted_date_time = that.utilitiesService.formatRawDate(singleObx.get('OBX.19').toString());
         order.test_location = instrumentConnectionData.labName;
-        order.machine_used = instrumentConnectionData.analyzerMachineName;
+        order.machine_used = instrumentConnectionData.instrumentId;
 
         that.saveOrder(order, instrumentConnectionData);
 
@@ -202,7 +205,8 @@ export class InstrumentInterfaceService {
     const msgID = message.get('MSH.10').toString();
     const characterSet = message.get('MSH.18').toString();
     const messageProfileIdentifier = message.get('MSH.21').toString();
-    that.tcpService.socketClient.write(that.hl7ACK(msgID, characterSet, messageProfileIdentifier));
+    const hl7Version = message.get('MSH.12') ? message.get('MSH.12').toString() : '2.5.1'; // Default to 2.5.1 if not provided
+    that.tcpService.socketClient.write(that.hl7ACK(msgID, characterSet, messageProfileIdentifier, hl7Version));
     // let result = null;
     //console.log(message.get('OBX'));
 
@@ -210,7 +214,9 @@ export class InstrumentInterfaceService {
 
     hl7DataArray.forEach(function (rawText: string) {
 
-      if (rawText.trim() === '') { return; }
+      if (rawText.trim() === '') {
+        return;
+      }
 
       rawText = 'MSH|' + rawText.trim();
       const message = that.hl7parser.create(rawText);
@@ -231,7 +237,7 @@ export class InstrumentInterfaceService {
       //console.log(obx[1]);
       spm.forEach(function (singleSpm) {
         sampleNumber = (singleSpm.get(1).toInteger());
-        if (isNaN(sampleNumber)) {
+        if (Number.isNaN(sampleNumber)) {
           sampleNumber = 1;
         }
         let singleObx = obx[(sampleNumber * 2) - 1]; // there are twice as many OBX .. so we take the even number - 1 OBX for each SPM
@@ -264,15 +270,13 @@ export class InstrumentInterfaceService {
         } else if (resultOutcome == '> Titer max') {
           order.test_unit = '';
           order.results = '> 10000000';
-        } else if (resultOutcome == 'Target Not Detected') {
+        } else if (
+          resultOutcome == 'Target Not Detected'
+          || resultOutcome == 'Failed'
+          || resultOutcome == 'Invalid'
+          || resultOutcome == 'Not Detected') {
           order.test_unit = '';
-          order.results = 'Target Not Detected';
-        } else if (resultOutcome == 'Invalid') {
-          order.test_unit = '';
-          order.results = 'Invalid';
-        } else if (resultOutcome == 'Failed') {
-          order.test_unit = '';
-          order.results = 'Failed';
+          order.results = resultOutcome;
         } else {
           order.test_unit = singleObx.get('OBX.6.1').toString();
           order.results = resultOutcome;
@@ -301,7 +305,8 @@ export class InstrumentInterfaceService {
     const msgID = message.get('MSH.10').toString();
     const characterSet = message.get('MSH.18').toString();
     const messageProfileIdentifier = message.get('MSH.21').toString();
-    that.tcpService.socketClient.write(that.hl7ACK(msgID, characterSet, messageProfileIdentifier));
+    const hl7Version = message.get('MSH.12') ? message.get('MSH.12').toString() : '2.5.1'; // Default to 2.5.1 if not provided
+    that.tcpService.socketClient.write(that.hl7ACK(msgID, characterSet, messageProfileIdentifier, hl7Version));
 
     const hl7DataArray = rawHl7Text.split('MSH|');
 
@@ -328,7 +333,7 @@ export class InstrumentInterfaceService {
       //console.log(obx[1]);
       spm.forEach(function (singleSpm) {
         sampleNumber = (singleSpm.get(1).toInteger());
-        if (isNaN(sampleNumber)) {
+        if (Number.isNaN(sampleNumber)) {
           sampleNumber = 1;
         }
         let index = (sampleNumber * 2) - 1
@@ -370,7 +375,11 @@ export class InstrumentInterfaceService {
         } else if (resultOutcome == '> Titer max') {
           order.test_unit = '';
           order.results = '> 10000000';
-        } else if (resultOutcome == 'Invalid' || resultOutcome == 'Failed') {
+        } else if (
+          resultOutcome == 'Target Not Detected'
+          || resultOutcome == 'Failed'
+          || resultOutcome == 'Invalid'
+          || resultOutcome == 'Not Detected') {
           order.test_unit = '';
           order.results = resultOutcome;
         } else {
@@ -401,7 +410,8 @@ export class InstrumentInterfaceService {
     const msgID = message.get('MSH.10').toString();
     const characterSet = message.get('MSH.18').toString();
     const messageProfileIdentifier = message.get('MSH.21').toString();
-    that.tcpService.socketClient.write(that.hl7ACK(msgID, characterSet, messageProfileIdentifier));
+    const hl7Version = message.get('MSH.12') ? message.get('MSH.12').toString() : '2.5.1'; // Default to 2.5.1 if not provided
+    that.tcpService.socketClient.write(that.hl7ACK(msgID, characterSet, messageProfileIdentifier, hl7Version));
 
     const hl7DataArray = rawHl7Text.split('MSH|');
 
@@ -456,7 +466,11 @@ export class InstrumentInterfaceService {
         } else if (resultOutcome == '> Titer max') {
           order.test_unit = '';
           order.results = '> 10000000';
-        } else if (resultOutcome == 'Invalid' || resultOutcome == 'Failed') {
+        } else if (
+          resultOutcome == 'Target Not Detected'
+          || resultOutcome == 'Failed'
+          || resultOutcome == 'Invalid'
+          || resultOutcome == 'Not Detected') {
           order.test_unit = '';
           order.results = resultOutcome;
         } else {
@@ -596,22 +610,15 @@ export class InstrumentInterfaceService {
       that.strData = that.strData.trim();
       that.strData = that.strData.replace(/[\r\n\x0B\x0C\u0085\u2028\u2029]+/gm, '\r');
 
-      if (instrumentConnectionData.machineType !== undefined
-        && instrumentConnectionData.machineType !== null
-        && instrumentConnectionData.machineType !== ""
-        && instrumentConnectionData.machineType === 'abbott-alinity-m') {
+      //console.error(that.strData);
+
+      if (instrumentConnectionData.machineType === 'abbott-alinity-m') {
         that.processHL7DataAlinity(instrumentConnectionData, that.strData);
       }
-      else if (instrumentConnectionData.machineType !== undefined
-        && instrumentConnectionData.machineType !== null
-        && instrumentConnectionData.machineType !== ""
-        && instrumentConnectionData.machineType === 'roche-cobas-5800') {
+      else if (instrumentConnectionData.machineType === 'roche-cobas-5800') {
         that.processHL7DataRoche5800(instrumentConnectionData, that.strData);
       }
-      else if (instrumentConnectionData.machineType !== undefined
-        && instrumentConnectionData.machineType !== null
-        && instrumentConnectionData.machineType !== ""
-        && instrumentConnectionData.machineType === 'roche-cobas-6800') {
+      else if (instrumentConnectionData.machineType === 'roche-cobas-6800') {
         that.processHL7DataRoche68008800(instrumentConnectionData, that.strData);
       }
       else {
