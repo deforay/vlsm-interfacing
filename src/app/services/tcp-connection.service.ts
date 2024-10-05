@@ -21,6 +21,8 @@ export class TcpConnectionService {
 
   public connectionStack: Map<string, InstrumentConnectionStack> = new Map();
 
+  public connectionTimeout = 300000; // 5 minutes in milliseconds
+
   constructor(public electronService: ElectronService,
     public utilitiesService: UtilitiesService) {
     this.net = this.electronService.net;
@@ -91,23 +93,34 @@ export class TcpConnectionService {
         sockets.push(socket);
         that.socketClient = socket;
 
+        // Enable TCP keep-alive with a 1-minute interval
+        socket.setKeepAlive(true, 60000); // 1 minute keep-alive interval
+
         // Set timeout for the server socket
-        socket.setTimeout(60000); // 1 minute timeout
+        socket.setTimeout(that.connectionTimeout);
+
         socket.on('timeout', () => {
+          // Increase timeout to 10 minutes if it times out
+          if (that.connectionTimeout === 300000) {
+            that.utilitiesService.logger('info', 'Increasing timeout to 10 minutes after timeout event', instrumentConnectionData.instrumentId);
+            that.connectionTimeout = 600000; // 10 minutes
+          }
           that.utilitiesService.logger('info', 'Server socket timeout', instrumentConnectionData.instrumentId);
           that._handleClientConnectionIssue(instrumentConnectionData, connectionParams, 'Client socket timeout', true);
           socket.end();
         });
 
-        socket.on('data', function (data) {
+        socket.on('data', function (data: any) {
           that.handleTCPCallback(connectionIdentifierKey, data);
+          // Reset the timeout to 5 minutes after a successful data transmission
+          that.connectionTimeout = 300000; // 5 minutes
         });
 
         instrumentConnectionData.connectionSocket = that.socketClient;
         instrumentConnectionData.statusSubject.next(true);
 
         // Add a 'close' event handler to this instance of socket
-        socket.on('close', function (data) {
+        socket.on('close', function () {
           if (instrumentConnectionData.errorOccurred) {
             instrumentConnectionData.errorOccurred = false;
             return;
@@ -148,15 +161,27 @@ export class TcpConnectionService {
       // Attempt to connect
       instrumentConnectionData.connectionSocket.connect(that.clientConnectionOptions);
 
+
       // Set connection timeout for client
-      instrumentConnectionData.connectionSocket.setTimeout(30000); // 30 seconds timeout
+      instrumentConnectionData.connectionSocket.setTimeout(that.connectionTimeout); // 30 seconds timeout
+
+      // Enable TCP keep-alive with a 1-minute interval
+      instrumentConnectionData.connectionSocket.setKeepAlive(true, 60000); // 1 minute keep-alive interval
+
+
       instrumentConnectionData.connectionSocket.on('timeout', () => {
+        // Increase timeout to 10 minutes if it times out
+        if (that.connectionTimeout === 300000) {
+          that.utilitiesService.logger('info', 'Increasing timeout to 10 minutes after timeout event', instrumentConnectionData.instrumentId);
+          that.connectionTimeout = 600000; // 10 minutes
+        }
         that.utilitiesService.logger('info', 'Client socket timeout', instrumentConnectionData.instrumentId);
         that._handleClientConnectionIssue(instrumentConnectionData, connectionParams, 'Server socket timeout', true);
       });
 
       // Successful connection
       instrumentConnectionData.connectionSocket.on('connect', function () {
+        that.connectionTimeout = 300000;
         instrumentConnectionData.statusSubject.next(true);
         instrumentConnectionData.reconnectAttempts = 0; // Reset retry attempts
         that.utilitiesService.logger('success', 'Connected as client successfully', instrumentConnectionData.instrumentId);
