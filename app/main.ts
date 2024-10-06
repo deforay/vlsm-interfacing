@@ -7,7 +7,7 @@ import { setupSqlite } from './sqlite3helper.main';
 
 let win: BrowserWindow = null;
 let store: Store = null;
-let sqlitePath: string = null;
+let sqlite3Obj: any = null;
 let sqliteDbName: string = 'interface.db';
 const args = process.argv.slice(1),
   serve = args.some(val => val === '--serve');
@@ -61,8 +61,6 @@ function copyMigrationFiles() {
 }
 
 
-
-
 function createWindow(): BrowserWindow {
   const electronScreen = screen;
   const size = electronScreen.getPrimaryDisplay().workAreaSize;
@@ -78,8 +76,7 @@ function createWindow(): BrowserWindow {
   Store.initRenderer();
   store = new Store();
 
-  sqlitePath = path.join(app.getPath('userData'), '/', sqliteDbName);
-  store.set('appPath', sqlitePath);
+  store.set('appPath', path.join(app.getPath('userData'), '/', sqliteDbName));
   store.set('appVersion', app.getVersion());
 
   win = new BrowserWindow({
@@ -90,7 +87,7 @@ function createWindow(): BrowserWindow {
     height: size.height,
     webPreferences: {
       nodeIntegration: true,
-      allowRunningInsecureContent: (serve) ? true : false,
+      allowRunningInsecureContent: serve,
       contextIsolation: false,
     },
   });
@@ -147,14 +144,14 @@ try {
     });
   }
 
-
-
   app.on('ready', () => {
     setupSqlite(store, (db, err) => {
       if (err) {
         console.error('Error during SQLite setup:', err);
-        return;
       }
+      sqlite3Obj = db;
+      console.error('SQLite setup complete');
+
 
       createWindow();
       copyMigrationFiles();  // Ensure migration files are moved
@@ -246,12 +243,12 @@ try {
 
       ipcMain.on('sqlite3-query', (event, sql, args) => {
         if (args === null || args === undefined) {
-          db.all(sql, (err, rows) => {
-            event.reply('sqlite3-reply', (err && err.message) || rows);
+          sqlite3Obj.all(sql, (err: { message: any; }, rows: any) => {
+            event.reply('sqlite3-reply', err?.message || rows);
           });
         } else {
-          db.all(sql, args, (err, rows) => {
-            event.reply('sqlite3-reply', (err && err.message) || rows);
+          sqlite3Obj.all(sql, args, (err: { message: any; }, rows: any) => {
+            event.reply('sqlite3-reply', err?.message || rows);
           });
         }
       });

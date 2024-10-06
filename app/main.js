@@ -17,7 +17,7 @@ const log = require("electron-log/main");
 const sqlite3helper_main_1 = require("./sqlite3helper.main");
 let win = null;
 let store = null;
-let sqlitePath = null;
+let sqlite3Obj = null;
 let sqliteDbName = 'interface.db';
 const args = process.argv.slice(1), serve = args.some(val => val === '--serve');
 let tray = null;
@@ -72,8 +72,7 @@ function createWindow() {
     log.transports.file.fileName = `${dateString}.log`;
     Store.initRenderer();
     store = new Store();
-    sqlitePath = path.join(electron_1.app.getPath('userData'), '/', sqliteDbName);
-    store.set('appPath', sqlitePath);
+    store.set('appPath', path.join(electron_1.app.getPath('userData'), '/', sqliteDbName));
     store.set('appVersion', electron_1.app.getVersion());
     win = new electron_1.BrowserWindow({
         x: 0,
@@ -83,7 +82,7 @@ function createWindow() {
         height: size.height,
         webPreferences: {
             nodeIntegration: true,
-            allowRunningInsecureContent: (serve) ? true : false,
+            allowRunningInsecureContent: serve,
             contextIsolation: false,
         },
     });
@@ -134,8 +133,9 @@ try {
         (0, sqlite3helper_main_1.setupSqlite)(store, (db, err) => {
             if (err) {
                 console.error('Error during SQLite setup:', err);
-                return;
             }
+            sqlite3Obj = db;
+            console.error('SQLite setup complete');
             createWindow();
             copyMigrationFiles(); // Ensure migration files are moved
             const trayIconPath = 'dist/assets/icons/favicon.png';
@@ -216,13 +216,13 @@ try {
             });
             electron_1.ipcMain.on('sqlite3-query', (event, sql, args) => {
                 if (args === null || args === undefined) {
-                    db.all(sql, (err, rows) => {
-                        event.reply('sqlite3-reply', (err && err.message) || rows);
+                    sqlite3Obj.all(sql, (err, rows) => {
+                        event.reply('sqlite3-reply', (err === null || err === void 0 ? void 0 : err.message) || rows);
                     });
                 }
                 else {
-                    db.all(sql, args, (err, rows) => {
-                        event.reply('sqlite3-reply', (err && err.message) || rows);
+                    sqlite3Obj.all(sql, args, (err, rows) => {
+                        event.reply('sqlite3-reply', (err === null || err === void 0 ? void 0 : err.message) || rows);
                     });
                 }
             });

@@ -16,9 +16,9 @@ export class DatabaseService {
   private migrationDir: string; // Path for migrations
   private hasRunMigrations = false;
 
-  constructor(private electronService: ElectronService,
-    private store: ElectronStoreService,
-    private cryptoService: CryptoService
+  constructor(private readonly electronService: ElectronService,
+    private readonly store: ElectronStoreService,
+    private readonly cryptoService: CryptoService
   ) {
 
     this.store.electronStoreObservable().subscribe(config => {
@@ -38,7 +38,7 @@ export class DatabaseService {
     console.log('User Data Path:', userDataPath);
 
     // Ensure mysqlPool and dbConfig are not initialized multiple times
-    if (!this.mysqlPool && this.commonSettings && this.commonSettings.mysqlHost && this.commonSettings.mysqlUser && this.commonSettings.mysqlDb) {
+    if (!this.mysqlPool && this.commonSettings?.mysqlHost && this.commonSettings?.mysqlUser && this.commonSettings?.mysqlDb) {
       let decryptedPassword = this.commonSettings.mysqlPassword;
       decryptedPassword = this.cryptoService.decrypt(decryptedPassword);
 
@@ -85,15 +85,15 @@ export class DatabaseService {
         console.error('Error creating versions table:', err);
         return;
       }
-      this.getCurrentVersion(connection, (currentVersion) => {
+      this.getCurrentVersion(connection, (currentVersion: number) => {
         console.log(`Current DB version: ${currentVersion}`); // Log the current version before running migrations
         this.runMigrations(connection, currentVersion);
       });
     });
   }
 
-  private getCurrentVersion(connection, callback) {
-    connection.query('SELECT MAX(version) AS version FROM versions', (err, results) => {
+  private getCurrentVersion(connection: any, callback: any) {
+    connection.query('SELECT MAX(version) AS version FROM versions', (err: any, results: any) => {
       if (err) {
         console.error('Error fetching current version:', err);
         callback(0);  // Return 0 if there's an error fetching the version
@@ -104,7 +104,7 @@ export class DatabaseService {
       }
     });
   }
-  private runMigrations(connection, currentVersion) {
+  private runMigrations(connection: any, currentVersion: number) {
     console.log('Starting migrations...');
     const migrationFiles = fs.readdirSync(this.migrationDir).filter(file => file.endsWith('.sql'));
     const sortedMigrations = migrationFiles
@@ -117,7 +117,7 @@ export class DatabaseService {
       return;
     }
 
-    const runNextMigration = (index) => {
+    const runNextMigration = (index: number) => {
       if (index < sortedMigrations.length) {
         const { version, file } = sortedMigrations[index];
         console.log(`Applying migration ${version} from file ${file}`);  // Added log for visibility
@@ -145,7 +145,7 @@ export class DatabaseService {
     runNextMigration(0);
   }
 
-  private runSqlStatements(connection, sql, callback) {
+  private runSqlStatements(connection: any, sql: string, callback: any) {
     const statements = sql.split(';').map(stmt => stmt.trim()).filter(stmt => stmt.length > 0);
 
     const runNextStatement = (index) => {
@@ -167,7 +167,7 @@ export class DatabaseService {
 
 
 
-  execQuery(query, data, success, errorf, callback = null) {
+  execQuery(query: string, data: any, success: any, errorf: any, callback = null) {
     if (!this.mysqlPool) {
       errorf({ error: 'Database not found' });
       return;
@@ -206,7 +206,7 @@ export class DatabaseService {
   }
 
 
-  recordTestResults(data, success, errorf) {
+  recordTestResults(data: any, success: any, errorf: any) {
     const placeholders = Object.values(data).map(() => '?').join(',');
     const mysqlQuery = 'INSERT INTO orders (' + Object.keys(data).join(',') + ') VALUES (' + placeholders + ')';
 
@@ -216,7 +216,7 @@ export class DatabaseService {
     //   console.log(`${key}:`, value);
     // });
 
-    const handleSQLiteInsert = (mysqlInserted) => {
+    const handleSQLiteInsert = (mysqlInserted: any) => {
       console.log('MySQL Inserted:', mysqlInserted);
       data.mysql_inserted = mysqlInserted ? 1 : 0;
       const placeholders = Object.values(data).map(() => '?').join(',');
@@ -242,7 +242,7 @@ export class DatabaseService {
     }
   }
 
-  resyncTestResultsToMySQL(success, errorf) {
+  resyncTestResultsToMySQL(success: any, errorf: any) {
     const sqliteQuery = 'SELECT * FROM orders WHERE mysql_inserted = 0';
 
     this.electronService.execSqliteQuery(sqliteQuery, [])
@@ -252,32 +252,38 @@ export class DatabaseService {
           return;
         }
 
-        records.forEach((record) => {
-          const placeholders = Object.values(record).map(() => '?').join(',');
-          const t = 'INSERT INTO orders (' + Object.keys(record).join(',') + ') VALUES (' + placeholders + ')';
-
-          this.execQuery(t, Object.values(record),
-            () => {
-              const updateQuery = 'UPDATE orders SET mysql_inserted = 1 WHERE order_id = ?';
-              this.electronService.execSqliteQuery(updateQuery, [record.order_id])
-                .then(() => {
-                  console.log('Record successfully resynced and updated in SQLite:', record.order_id);
-                })
-                .catch((error) => {
-                  console.error('Error updating SQLite after successful MySQL insert:', error);
-                });
-            },
-            (mysqlError) => {
-              console.error('Error inserting record into MySQL:', mysqlError);
-              // No need to update SQLite as the mysql_inserted is already 0
-            }
-          );
-        });
-
-        success('Resync process completed.');
+        this.processResyncRecords(records, success, errorf);
       })
-      .catch((err) => {
+      .catch((err: any) => {
         errorf('Error fetching records from SQLite:', err);
+      });
+  }
+
+  private processResyncRecords(records: any[], success: any, errorf: any) {
+    records.forEach((record: any) => {
+      const placeholders = Object.values(record).map(() => '?').join(',');
+      const t = 'INSERT INTO orders (' + Object.keys(record).join(',') + ') VALUES (' + placeholders + ')';
+
+      this.execQuery(t, Object.values(record),
+        () => this.updateSQLiteAfterMySQLInsert(record),
+        (mysqlError: any) => {
+          console.error('Error inserting record into MySQL:', mysqlError);
+          // No need to update SQLite as the mysql_inserted is already 0
+        }
+      );
+    });
+
+    success('Resync process completed.');
+  }
+
+  private updateSQLiteAfterMySQLInsert(record: any) {
+    const updateQuery = 'UPDATE orders SET mysql_inserted = 1 WHERE order_id = ?';
+    this.electronService.execSqliteQuery(updateQuery, [record.order_id])
+      .then(() => {
+        console.log('Record successfully resynced and updated in SQLite:', record.order_id);
+      })
+      .catch((error: any) => {
+        console.error('Error updating SQLite after successful MySQL insert:', error);
       });
   }
 
@@ -299,7 +305,7 @@ export class DatabaseService {
   //     (this.electronService.execSqliteQuery(t, null)).then((results) => { success(results) });
   //   }
   // }
-  fetchrawData(success, errorf, searchParam = '') {
+  fetchrawData(success: any, errorf: any, searchParam = '') {
     let that = 'SELECT * FROM raw_data';
 
     if (searchParam) {
@@ -318,7 +324,7 @@ export class DatabaseService {
     }
   }
 
-  fetchLastOrders(success, errorf, searchParam = '') {
+  fetchLastOrders(success: any, errorf: any, searchParam = '') {
     let t = 'SELECT * FROM orders';
 
     if (searchParam) {
@@ -427,7 +433,6 @@ export class DatabaseService {
         .catch((err) => { if (errorf) errorf(err); });
     }
   }
-
 
   /**
    * Fetches an order that is ready to be sent.

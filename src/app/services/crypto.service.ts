@@ -1,7 +1,5 @@
 import { Injectable } from '@angular/core';
 import { ElectronStoreService } from './electron-store.service';
-
-import * as CryptoJS from 'crypto-js';
 import * as crypto from 'crypto';
 
 @Injectable({
@@ -9,18 +7,19 @@ import * as crypto from 'crypto';
 })
 export class CryptoService {
 
-  private readonly keyLength = 32;
+  private readonly keyLength = 32; // Key length should be 32 bytes for AES-256
   private readonly prefix = 'ENC(';
   private readonly suffix = ')';
+  private readonly algorithm = 'aes-256-gcm';
+  private readonly ivLength = 16;  // AES-GCM requires a 16-byte IV
 
-  constructor(private store: ElectronStoreService) { }
+  constructor(private readonly store: ElectronStoreService) { }
 
   private getEncryptionKey(): string {
-    let that = this;
-    let key = that.store.get('encryptionKey');
+    let key = this.store.get('encryptionKey');
     if (!key) {
-      key = that.generateEncryptionKey();
-      that.store.set('encryptionKey', key);
+      key = this.generateEncryptionKey();
+      this.store.set('encryptionKey', key);
     }
     return key;
   }
@@ -30,41 +29,56 @@ export class CryptoService {
   }
 
   encrypt(data: string, key: string = null): string {
-    let that = this;
-    if (!data || that.isEncrypted(data)) {
-      //console.error('Cannot encrypt empty or already encrypted data');
-      return data;
+    if (!data || this.isEncrypted(data)) {
+      return data; // Return as is if it's already encrypted
     }
 
     if (!key) {
-      key = that.getEncryptionKey();
+      key = this.getEncryptionKey();
     }
 
-    const encrypted = CryptoJS.AES.encrypt(data, key).toString();
-    return `${that.prefix}${encrypted}${that.suffix}`;
+    // Ensure key is 32 bytes (64 hex characters) long for AES-256
+    const encryptionKey = Buffer.from(key, 'hex');
+
+    // Generate a random initialization vector (IV)
+    const iv = crypto.randomBytes(this.ivLength);
+    const cipher = crypto.createCipheriv(this.algorithm, encryptionKey, iv);
+
+    let encrypted = Buffer.concat([cipher.update(data, 'utf8'), cipher.final()]);
+    const authTag = cipher.getAuthTag();
+
+    // Combine the IV, auth tag, and encrypted data
+    const encryptedDataWithIv = iv.toString('hex') + ':' + authTag.toString('hex') + ':' + encrypted.toString('hex');
+
+    return `${this.prefix}${encryptedDataWithIv}${this.suffix}`;
   }
 
   decrypt(data: string, key: string = null): string {
-    let that = this;
-    if (!data || !that.isEncrypted(data)) {
-      //console.error('Data does not appear to be encrypted');
+    if (!data || !this.isEncrypted(data)) {
       return data;
     }
+
     if (!key) {
-      key = that.getEncryptionKey();
+      key = this.getEncryptionKey();
     }
 
-    const encryptedData = data.slice(that.prefix.length, -that.suffix.length);
-    const bytes = CryptoJS.AES.decrypt(encryptedData, key);
-    const decryptedData = bytes.toString(CryptoJS.enc.Utf8);
-    if (!decryptedData) {
-      throw new Error('Failed to decrypt data');
-    }
-    return decryptedData;
+    // Ensure key is 32 bytes (64 hex characters) long for AES-256
+    const encryptionKey = Buffer.from(key, 'hex');
+
+    const encryptedData = data.slice(this.prefix.length, -this.suffix.length);
+    const [ivHex, authTagHex, encrypted] = encryptedData.split(':');
+
+    const iv = Buffer.from(ivHex, 'hex');
+    const decipher = crypto.createDecipheriv(this.algorithm, encryptionKey, iv);
+    decipher.setAuthTag(Buffer.from(authTagHex, 'hex'));
+
+    let decrypted = decipher.update(encrypted, 'hex', 'utf8');
+    decrypted += decipher.final('utf8');
+
+    return decrypted;
   }
 
   isEncrypted(data: string): boolean {
-    let that = this;
-    return data.startsWith(that.prefix) && data.endsWith(that.suffix);
+    return data.startsWith(this.prefix) && data.endsWith(this.suffix);
   }
 }

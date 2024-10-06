@@ -1,4 +1,4 @@
-import { Component, OnInit, NgZone, OnDestroy, ChangeDetectorRef } from '@angular/core';
+import { Component, OnInit, NgZone, OnDestroy, ChangeDetectorRef, ViewChild } from '@angular/core';
 import { DomSanitizer } from '@angular/platform-browser';
 import { Router } from '@angular/router';
 import { ElectronStoreService } from '../../services/electron-store.service';
@@ -9,7 +9,6 @@ import { ConnectionParams } from '../../interfaces/connection-params.interface';
 import { MatPaginator } from '@angular/material/paginator';
 import { MatTableDataSource } from '@angular/material/table';
 import { MatSort } from '@angular/material/sort';
-import { ViewChild } from '@angular/core';
 import { SelectionModel } from "@angular/cdk/collections";
 import { MatCheckboxChange } from '@angular/material/checkbox';
 import { distinctUntilChanged } from 'rxjs/operators';
@@ -37,7 +36,7 @@ export class ConsoleComponent implements OnInit, OnDestroy {
   public interval: any;
   public data: any;
   public lastOrders: any;
-  private ipc: IpcRenderer;
+  private readonly ipc: IpcRenderer;
   public availableInstruments = [];
   public instrumentLogs = [];
   public connectionParams: ConnectionParams = null;
@@ -66,24 +65,18 @@ export class ConsoleComponent implements OnInit, OnDestroy {
   @ViewChild(MatPaginator, { static: true }) paginator: MatPaginator;
   @ViewChild(MatSort, { static: true }) sort: MatSort;
 
-
-
   constructor(
-    private dialog: MatDialog,
-    private cdRef: ChangeDetectorRef,
-    private sanitizer: DomSanitizer,
-    private store: ElectronStoreService,
-    private _ngZone: NgZone,
-    private instrumentInterfaceService: InstrumentInterfaceService,
-    private tcpService: TcpConnectionService,
-    private utilitiesService: UtilitiesService,
-    private router: Router) {
+    private readonly dialog: MatDialog,
+    private readonly cdRef: ChangeDetectorRef,
+    private readonly sanitizer: DomSanitizer,
+    private readonly store: ElectronStoreService,
+    private readonly _ngZone: NgZone,
+    private readonly instrumentInterfaceService: InstrumentInterfaceService,
+    private readonly tcpService: TcpConnectionService,
+    private readonly utilitiesService: UtilitiesService,
+    private readonly router: Router) {
     if ((<any>window).require) {
-      try {
-        this.ipc = (<any>window).require('electron').ipcRenderer;
-      } catch (e) {
-        throw e;
-      }
+      this.ipc = (<any>window).require('electron').ipcRenderer;
     } else {
       console.warn('App not running inside Electron!');
     }
@@ -99,8 +92,6 @@ export class ConsoleComponent implements OnInit, OnDestroy {
       this.selection.toggle(row);
     }
   }
-
-
 
   onChange(typeValue: number) {
     this.displayType = typeValue;
@@ -129,7 +120,6 @@ export class ConsoleComponent implements OnInit, OnDestroy {
     }, 1000 * 60 * 5);
   }
 
-
   setupInstruments() {
     this.availableInstruments = [];
 
@@ -154,7 +144,8 @@ export class ConsoleComponent implements OnInit, OnDestroy {
       };
 
       instrument.isConnected = false;
-      instrument.instrumentButtonText = 'Connect';
+      const isTcpServer = instrument.connectionParams.connectionMode === 'tcpserver';
+      instrument.instrumentButtonText = isTcpServer ? 'Start Server' : 'Connect';
 
       if (!this.commonSettings || !instrument.connectionParams.port || (instrument.connectionParams.connectionProtocol === 'tcpclient' && !instrument.connectionParams.host)) {
         this.router.navigate(['/settings']);
@@ -184,9 +175,9 @@ export class ConsoleComponent implements OnInit, OnDestroy {
       if (a.connectionParams.displayorder != null && b.connectionParams.displayorder != null) {
         return a.connectionParams.displayorder - b.connectionParams.displayorder;
       } else if (a.connectionParams.displayorder == null && b.connectionParams.displayorder != null) {
-        return 1; 
+        return 1;
       } else if (a.connectionParams.displayorder != null && b.connectionParams.displayorder == null) {
-        return -1; 
+        return -1;
       } else {
         return a.connectionParams.instrumentId.localeCompare(b.connectionParams.instrumentId);
       }
@@ -288,14 +279,10 @@ export class ConsoleComponent implements OnInit, OnDestroy {
       data: { dashboardData: dataArray }
     });
 
-
-
     dialogRef.afterClosed().subscribe(result => {
 
     });
   }
-
-
 
   filterData($event: any) {
     const searchTerm = $event.target.value;
@@ -506,10 +493,13 @@ export class ConsoleComponent implements OnInit, OnDestroy {
           // Update the availableInstruments array
           that.availableInstruments = this.availableInstruments.map(inst => {
             if (inst.connectionParams.instrumentId === instrument.connectionParams.instrumentId) {
+              const isTcpServer = inst.connectionParams.connectionMode === 'tcpserver';
+              const statusText = isTcpServer ? 'Wating for client..' : 'Please wait..';
+              const defaultText = isTcpServer ? 'Start Server' : 'Connect';
               return {
                 ...inst,
                 connectionInProcess: status,
-                instrumentButtonText: status ? 'Please wait ...' : 'Connect'
+                instrumentButtonText: status ? statusText : defaultText
               };
             }
             return inst;

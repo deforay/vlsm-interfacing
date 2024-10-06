@@ -73,11 +73,11 @@ function runMigration(db: Database, version: number, callback: (err?: Error) => 
 }
 
 function migrate(db: Database, callback: (err?: Error) => void): void {
-  db.run('CREATE TABLE IF NOT EXISTS versions ( \
-    id INTEGER PRIMARY KEY AUTOINCREMENT, \
-    version INTEGER NOT NULL, \
-    applied_at DATETIME DEFAULT CURRENT_TIMESTAMP \
-  );', (err) => {
+  db.run(`CREATE TABLE IF NOT EXISTS versions (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    version INTEGER NOT NULL,
+    applied_at DATETIME DEFAULT CURRENT_TIMESTAMP
+  );`, (err) => {
     if (err) return callback(err);
 
     getCurrentVersion(db, (currentVersion) => {

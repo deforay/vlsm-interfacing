@@ -64,16 +64,16 @@ function runMigration(db, version, callback) {
     });
 }
 function migrate(db, callback) {
-    db.run('CREATE TABLE IF NOT EXISTS versions ( \
-    id INTEGER PRIMARY KEY AUTOINCREMENT, \
-    version INTEGER NOT NULL, \
-    applied_at DATETIME DEFAULT CURRENT_TIMESTAMP \
-  );', (err) => {
+    db.run(`CREATE TABLE IF NOT EXISTS versions (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    version INTEGER NOT NULL,
+    applied_at DATETIME DEFAULT CURRENT_TIMESTAMP
+  );`, (err) => {
         if (err)
             return callback(err);
         getCurrentVersion(db, (currentVersion) => {
             const migrations = [
-                { version: 1 },
+                { version: 1 }, // Add new migrations here as { version: <number> }
                 { version: 2 }
             ];
             let migrationIndex = 0;
