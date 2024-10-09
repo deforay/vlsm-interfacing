@@ -505,7 +505,7 @@ export class InstrumentInterfaceService {
       instrumentConnectionData.connectionSocket.write(that.ACK);
       that.utilitiesService.logger('info', 'Received EOT. Sending ACK.', instrumentConnectionData.instrumentId);
       that.utilitiesService.logger('info', 'Processing ' + astmProtocolType, instrumentConnectionData.instrumentId);
-      that.utilitiesService.logger('info', 'Data ' + that.strData, instrumentConnectionData.instrumentId);
+      that.utilitiesService.logger('info', 'Received  ' + that.strData, instrumentConnectionData.instrumentId);
 
       const rawData: RawMachineData = {
         data: that.strData,
@@ -520,20 +520,20 @@ export class InstrumentInterfaceService {
       let astmData = that.strData;
       switch (astmProtocolType) {
         case 'astm-nonchecksum':
-          astmData = that.utilitiesService.replaceControlCharacters(astmData, false);
+          astmData = that.utilitiesService.removeControlCharacters(astmData, false);
           break;
         case 'astm-checksum':
-          astmData = that.utilitiesService.replaceControlCharacters(astmData, true);
+          astmData = that.utilitiesService.removeControlCharacters(astmData, true);
           break;
         default:
-          astmData = that.utilitiesService.replaceControlCharacters(astmData, true);
+          astmData = that.utilitiesService.removeControlCharacters(astmData, true);
           break;
       }
 
-      astmData = that.cleanAndReconstructASTMData(astmData);
+      astmData = that.reconstructASTM(astmData);
       const fullDataArray = astmData.split(that.START);
 
-      // that.utilitiesService.logger('info', "AFTER SPLITTING USING " + that.START, instrumentConnectionData.instrumentId);
+      //that.utilitiesService.logger('info', "AFTER SPLITTING USING " + that.START, instrumentConnectionData.instrumentId);
       // that.utilitiesService.logger('info', fullDataArray, instrumentConnectionData.instrumentId);
 
       fullDataArray.forEach(function (partData) {
@@ -543,6 +543,7 @@ export class InstrumentInterfaceService {
           const astmArray = partData.split(/<CR>/);
           const dataArray = that.getASTMDataBlock(astmArray);
 
+          // console.error(partData);
           // console.error(dataArray);
           // console.error(dataArray['R']);
 
@@ -556,8 +557,6 @@ export class InstrumentInterfaceService {
 
           that.saveASTMDataBlock(dataArray, partData, instrumentConnectionData);
 
-        } else {
-          that.utilitiesService.logger('error', "Failed to save :" + JSON.stringify(astmData), instrumentConnectionData.instrumentId);
         }
       });
 
@@ -643,42 +642,60 @@ export class InstrumentInterfaceService {
     }
   }
 
-  private cleanAndReconstructASTMData(data: string): string {
+  // private reconstructASTM(data: string): string {
 
-    // Split the data at the valid record starts, marked by R|, O|, P|, Q|, L|, C|
-    const splitData = data.split(/<CR>(?=H\|)|<CR>(?=R\|)|<CR>(?=O\|)|<CR>(?=P\|)|<CR>(?=Q\|)|<CR>(?=L\|)|<CR>(?=C\|)/);
+  //   // Split the data at the valid record starts, marked by R|, O|, P|, Q|, L|, C|
+  //   const splitData = data.split(/<CR>(?=H\|)|<CR>(?=R\|)|<CR>(?=O\|)|<CR>(?=P\|)|<CR>(?=Q\|)|<CR>(?=L\|)|<CR>(?=C\|)/);
+
+  //   // Remove all <CR> markers from the data (if any are left within the split parts)
+  //   const cleanedSplitData = splitData.map(part => part.replace(/<CR>/g, ''));
+  //   // Rejoin the split data with <CR> at the end of each segment
+  //   let reconstructedData = cleanedSplitData.join('<CR>') + '<CR>';  // Ensure <CR> at the end of the final part
+
+  //   return reconstructedData;
+  // }
+
+  private reconstructASTM(data: string): string {
+    // Split the data at the valid record starts, marked by H|, P|, O|, R|, L|, C|, Q|, M|, S|, I|
+    const splitData = data.split(/<CR>(?=H\|)|<CR>(?=P\|)|<CR>(?=O\|)|<CR>(?=R\|)|<CR>(?=L\|)|<CR>(?=C\|)|<CR>(?=Q\|)|<CR>(?=M\|)|<CR>(?=S\|)|<CR>(?=I\|)/);
 
     // Remove all <CR> markers from the data (if any are left within the split parts)
-    const cleanedSplitData = splitData.map(part => part.replace(/<CR>/g, ''));
+    let cleanedSplitData = splitData.map(part => part.replace(/<CR>/g, ''));
+
+    // Join broken lines within each segment
+    cleanedSplitData = this.joinBrokenLines(splitData);
 
     // Rejoin the split data with <CR> at the end of each segment
-    let reconstructedData = cleanedSplitData.join('<CR>') + '<CR>';  // Ensure <CR> at the end of the final part
+    let reconstructedASTMData = cleanedSplitData.join('<CR>') + '<CR>';  // Ensure <CR> at the end of the final part
 
-    return reconstructedData;
+    return reconstructedASTMData;
+  }
+
+  private joinBrokenLines(segments: string[]): string[] {
+    const joinedSegments: string[] = [];
+    let currentSegment = '';
+
+    segments.forEach(segment => {
+      // Check if the segment starts with a record type character (H, P, O, R, L, C, Q, M, S, I)
+      if (/^(H\||P\||O\||R\||L\||C\||Q\||M\||S\||I\|)/.test(segment) && currentSegment) {
+        joinedSegments.push(currentSegment);
+        currentSegment = segment;
+      } else {
+        currentSegment += segment;
+      }
+    });
+
+    if (currentSegment) {
+      joinedSegments.push(currentSegment);
+    }
+
+    return joinedSegments;
   }
 
 
-
-
-  // private saveOrder(order: any, instrumentConnectionData: InstrumentConnectionStack) {
-  //   const that = this;
-  //   if (order.results) {
-  //     that.dbService.recordTestResults(order, (res) => {
-  //       that.utilitiesService.logger('success', 'Successfully saved result : ' + order.test_id + '|' + order.order_id, instrumentConnectionData.instrumentId);
-  //       return true;
-  //     }, (err) => {
-  //       that.utilitiesService.logger('error', 'Failed to save result : ' + order.test_id + '|' + order.order_id + ' | ' + JSON.stringify(err), instrumentConnectionData.instrumentId);
-  //       return false;
-  //     });
-  //   } else {
-  //     that.utilitiesService.logger('error', 'Failed to store data into the database', instrumentConnectionData.instrumentId);
-  //     return false;
-  //   }
-  // }
-
   private saveOrder(order: any, instrumentConnectionData: InstrumentConnectionStack) {
     const that = this;
-    if (order.results) {
+    if (order) {
       const data = { ...order, instrument_id: instrumentConnectionData.instrumentId }; // Add instrument_id here
       that.dbService.recordTestResults(data,
         (res) => {
@@ -690,7 +707,7 @@ export class InstrumentInterfaceService {
           return false;
         });
     } else {
-      that.utilitiesService.logger('error', 'Failed to store data into the database', instrumentConnectionData.instrumentId);
+      that.utilitiesService.logger('error', 'Failed to save result into the database : ' + JSON.stringify(order), instrumentConnectionData.instrumentId);
       return false;
     }
   }
@@ -749,8 +766,8 @@ export class InstrumentInterfaceService {
           order.test_unit = rSegmentFields[4];
 
           let resultSegment = rSegmentFields[3];
-          let finalResult = null;
 
+          let finalResult = null;
           if (resultSegment) {
             let resultSegmentComponents = resultSegment.split("^");
             // Check if the primary result is non-empty and use it; otherwise, check the additional result

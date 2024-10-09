@@ -79,7 +79,7 @@ export class UtilitiesService {
     return d;
   }
 
-  replaceControlCharacters(astmData, removeChecksum = true, replaceNewLine = true) {
+  removeControlCharacters(astmData: string, removeChecksum = true, replaceNewLine = true) {
     const controlCharMap = {
       '\x05': '',
       '\x02': '',
