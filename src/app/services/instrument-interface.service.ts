@@ -512,7 +512,7 @@ export class InstrumentInterfaceService {
         machine: instrumentConnectionData.instrumentId,
       };
 
-      that.dbService.addRawData(rawData, () => {
+      that.dbService.recordRawData(rawData, () => {
         that.utilitiesService.logger('success', 'Successfully saved raw astm data', instrumentConnectionData.instrumentId);
       }, (err: any) => {
         that.utilitiesService.logger('error', 'Failed to save raw data : ' + JSON.stringify(err), instrumentConnectionData.instrumentId);
@@ -599,7 +599,7 @@ export class InstrumentInterfaceService {
         machine: instrumentConnectionData.instrumentId,
       };
 
-      that.dbService.addRawData(rawData, () => {
+      that.dbService.recordRawData(rawData, () => {
         that.utilitiesService.logger('success', 'Successfully saved raw hl7 data', instrumentConnectionData.instrumentId);
       }, (err: any) => {
         that.utilitiesService.logger('error', 'Failed to save raw data ' + JSON.stringify(err), instrumentConnectionData.instrumentId);

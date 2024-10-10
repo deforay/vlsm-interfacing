@@ -219,14 +219,13 @@ export class DatabaseService {
     const handleSQLiteInsert = (mysqlInserted: any) => {
       console.log('MySQL Inserted:', mysqlInserted);
       data.mysql_inserted = mysqlInserted ? 1 : 0;
-      const placeholders = Object.values(data).map(() => '?').join(',');
-      const sqliteQuery = `INSERT INTO orders (${Object.keys(data).join(',')}) VALUES (${placeholders}, ?, ?)`;
-      this.electronService.execSqliteQuery(sqliteQuery, [...Object.values(data)])
+      const sqlitePlaceholders = Object.values(data).map(() => '?').join(',');
+      const sqliteQuery = `INSERT INTO orders (${Object.keys(data).join(',')}, mysql_inserted) VALUES (${sqlitePlaceholders}, ?)`;
+      this.electronService.execSqliteQuery(sqliteQuery, [...Object.values(data), data.mysql_inserted])
         .then(success)
         .catch(errorf);
       //console.log('SQLite Query:', sqliteQuery);
     };
-
 
     if (this.mysqlPool != null) {
       this.execQuery(mysqlQuery, [...Object.values(data)],
@@ -387,7 +386,7 @@ export class DatabaseService {
     (this.electronService.execSqliteQuery(t, data)).then((results) => { success(results) });
   }
 
-  addRawData(data, success, errorf) {
+  recordRawData(data, success, errorf) {
     // console.log("======Raw Data=======");
     // console.log(data);
     // console.log(Object.keys(data));
@@ -403,7 +402,7 @@ export class DatabaseService {
     (this.electronService.execSqliteQuery(t, Object.values(data))).then((results) => { success(results) });
   }
 
-  addApplicationLog(data, success, errorf) {
+  addApplicationLog(data: any, success: any, errorf: any) {
 
     const placeholders = Object.values(data).map(() => '?').join(',');
     const t = 'INSERT INTO app_log (' + Object.keys(data).join(',') + ') VALUES (' + placeholders + ')';
@@ -448,7 +447,7 @@ export class DatabaseService {
           success(null); // No orders to send
         }
       },
-      (err) => {
+      (err: any) => {
         errorf(err);
       }
     );
