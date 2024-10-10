@@ -657,18 +657,16 @@ export class InstrumentInterfaceService {
 
   private reconstructASTM(data: string): string {
     // Split the data at the valid record starts, marked by H|, P|, O|, R|, L|, C|, Q|, M|, S|, I|
-    let splitData = data.split(/<CR>(?=[HPORLCQMSI]\|)/);
+    const splitData = data.split(/<CR>(?=[HPORLCQMSI]\|)/);
 
     // Remove all <CR> markers from the data (if any are left within the split parts)
-    console.error(splitData);
-    splitData = splitData.map(part => part.replace(/<CR>/g, ''));
-    console.error(splitData);
+    const cleanedSplitData = splitData.map(part => part.replace(/<CR>/g, ''));
+
     // Join broken lines within each segment
-    let reconstructedASTMData = this.joinBrokenLines(splitData);
-    let x = reconstructedASTMData.join('<CR>') + '<CR>';
-    console.error(x);
+    let reconstructedASTMData = this.joinBrokenLines(cleanedSplitData);
+
     // Rejoin the split data with <CR> at the end of each segment
-    return x;  // Ensure <CR> at the end of the final part
+    return reconstructedASTMData.join('<CR>') + '<CR>';  // Ensure <CR> at the end of the final part
   }
 
   private joinBrokenLines(segments: string[]): string[] {
