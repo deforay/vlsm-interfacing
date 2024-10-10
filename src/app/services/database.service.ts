@@ -224,7 +224,7 @@ export class DatabaseService {
       this.electronService.execSqliteQuery(sqliteQuery, [...Object.values(data)])
         .then(success)
         .catch(errorf);
-      console.log('SQLite Query:', sqliteQuery);
+      //console.log('SQLite Query:', sqliteQuery);
     };
 
 

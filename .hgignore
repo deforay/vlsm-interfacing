@@ -20,3 +20,4 @@ public/system/lib
 .bower-registry/
 .bower-tmp/
 .tmp/
+.nx/
