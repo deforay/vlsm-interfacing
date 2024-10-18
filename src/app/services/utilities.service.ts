@@ -22,9 +22,15 @@ export class UtilitiesService {
   lastrawData = this.lastrawDataSubject.asObservable();
 
   constructor(
-    public electronService: ElectronService,
-    public dbService: DatabaseService) {
+    private readonly electronService: ElectronService,
+    private readonly dbService: DatabaseService
+  ) {
   }
+
+  checkMysqlConnection(mysqlParams: { host: string, user: string, password: string, port: string }, successCallback: Function, errorCallback: Function): void {
+    this.dbService.checkMysqlConnection(mysqlParams, successCallback, errorCallback);
+  }
+
 
   resyncTestResultsToMySQL(success, errorf) {
     this.dbService.resyncTestResultsToMySQL(success, errorf);
@@ -104,13 +110,13 @@ export class UtilitiesService {
     return astmData;
   }
 
-  fetchLastOrders(searchParam?: string) {
+  fetchRecentResults(searchParam?: string) {
     const that = this;
-    that.dbService.fetchLastOrders((res) => {
+    that.dbService.fetchRecentResults((res) => {
       res = [res];
       that.lastOrdersSubject.next(res);
     }, (err) => {
-      that.logger('error', 'Failed to fetch data ' + JSON.stringify(err));
+      that.logger('error', 'Failed to fetch recent results ' + JSON.stringify(err));
     }, searchParam);
   }
 
@@ -121,7 +127,7 @@ export class UtilitiesService {
       res = [res];
       that.lastrawDataSubject.next(res);
     }, (err) => {
-      that.logger('error', 'Failed to fetch data ' + JSON.stringify(err));
+      that.logger('error', 'Failed to fetch raw data ' + JSON.stringify(err));
     }, searchParam)
   }
 
@@ -161,7 +167,7 @@ export class UtilitiesService {
 
       callback(res[0]);
     }, (err) => {
-      that.logger('error', 'Failed to fetch data ' + JSON.stringify(err));
+      that.logger('error', 'Failed to fetch last sync time ' + JSON.stringify(err));
     });
   }
 
@@ -210,7 +216,7 @@ export class UtilitiesService {
         const dbLog: any = {};
         dbLog.log = logMessage;
 
-        that.dbService.addApplicationLog(dbLog, (res) => { }, (err) => { });
+        that.dbService.recordConsoleLogs(dbLog, (res) => { }, (err) => { });
       }
     }
   }

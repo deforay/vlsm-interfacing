@@ -214,16 +214,26 @@ try {
             electron_1.ipcMain.handle('dialog', (event, method, params) => {
                 return electron_1.dialog[method](params);
             });
-            electron_1.ipcMain.on('sqlite3-query', (event, sql, args) => {
-                if (args === null || args === undefined) {
-                    sqlite3Obj.all(sql, (err, rows) => {
-                        event.reply('sqlite3-reply', (err === null || err === void 0 ? void 0 : err.message) || rows);
-                    });
+            // ipcMain.on('sqlite3-query', (event, sql, args) => {
+            //   if (args === null || args === undefined) {
+            //     sqlite3Obj.all(sql, (err: { message: any; }, rows: any) => {
+            //       event.reply('sqlite3-reply', err?.message || rows);
+            //     });
+            //   } else {
+            //     sqlite3Obj.all(sql, args, (err: { message: any; }, rows: any) => {
+            //       event.reply('sqlite3-reply', err?.message || rows);
+            //     });
+            //   }
+            // });
+            electron_1.ipcMain.on('sqlite3-query', (event, sql, args, uniqueEvent) => {
+                const queryCallback = (err, rows) => {
+                    event.reply(uniqueEvent, (err === null || err === void 0 ? void 0 : err.message) || rows); // Use the unique event name to reply
+                };
+                if (!args) {
+                    sqlite3Obj.all(sql, queryCallback);
                 }
                 else {
-                    sqlite3Obj.all(sql, args, (err, rows) => {
-                        event.reply('sqlite3-reply', (err === null || err === void 0 ? void 0 : err.message) || rows);
-                    });
+                    sqlite3Obj.all(sql, args, queryCallback);
                 }
             });
             electron_1.ipcMain.handle('log-info', (event, message, instrumentId = null) => {

@@ -6,7 +6,6 @@ import { ElectronStoreService } from '../../services/electron-store.service';
 import * as os from 'os';
 import { ipcRenderer } from 'electron';
 import { UtilitiesService } from '../../services/utilities.service';
-import { DatabaseService } from '../../services/database.service';
 import { CryptoService } from '../../services/crypto.service';
 import { v4 as uuidv4 } from 'uuid';
 
@@ -22,15 +21,14 @@ export class SettingsComponent implements OnInit {
   public machineIps: string[] = [];
 
   constructor(
-    private formBuilder: FormBuilder,
-    private electronService: ElectronService,
-    private router: Router,
-    private electronStoreService: ElectronStoreService,
-    private utilitiesService: UtilitiesService,
-    private database: DatabaseService,
-    private cryptoService: CryptoService
+    private readonly formBuilder: FormBuilder,
+    private readonly electronService: ElectronService,
+    private readonly router: Router,
+    private readonly electronStoreService: ElectronStoreService,
+    private readonly utilitiesService: UtilitiesService,
+    private readonly cryptoService: CryptoService
   ) {
-   
+
     const commonSettingsStore = this.electronStoreService.get('commonConfig');
     const instrumentSettingsStore = this.electronStoreService.get('instrumentsConfig');
     this.appPath = this.electronStoreService.get('appPath');
@@ -240,41 +238,33 @@ export class SettingsComponent implements OnInit {
   }
 
   checkMysqlConnection() {
-
     const that = this;
-    const mysql = that.electronService.mysql;
     const commonSettings = that.settingsForm.get('commonSettings').value;
-    let password = that.cryptoService.decrypt(commonSettings.mysqlPassword);
-    const connection = mysql.createConnection({
+    const mysqlParams = {
       host: commonSettings.mysqlHost,
       user: commonSettings.mysqlUser,
-      password: password,
+      password: commonSettings.mysqlPassword,
       port: commonSettings.mysqlPort
-    });
+    };
 
-    connection.connect(function (err: string) {
-
-      if (err) {
-
-        const dialogConfig = {
-          type: 'error',
-          message: 'Oops! Something went wrong! Unable to connect to the MySQL database on host ' + commonSettings.mysqlHost,
-          detail: err + '\n\nPlease check if all the database connection settings are correct and the MySQL server is running.',
-          buttons: ['OK']
-        };
-        that.electronService.openDialog('showMessageBox', dialogConfig);
-      } else {
-        const dialogConfig = {
+    that.utilitiesService.checkMysqlConnection(
+      mysqlParams,
+      () => {
+        that.electronService.openDialog('showMessageBox', {
           type: 'info',
-          message: 'MySQL Connected successfully. Please click on SAVE SETTINGS to update these settings.',
-          buttons: ['OK']
-        };
-        that.electronService.openDialog('showMessageBox', dialogConfig);
-        connection.destroy();
+          message: 'MySQL Connected successfully. Please click on SAVE SETTINGS to update these settings.'
+        });
+      },
+      (err: string) => {
+        that.electronService.openDialog('showMessageBox', {
+          type: 'error',
+          message: `Unable to connect to MySQL database on host ${commonSettings.mysqlHost}`,
+          detail: `${err}\n\nPlease check if all the database connection settings are correct and MySQL server is running.`
+        });
       }
-
-    });
+    );
   }
+
 
   exportSettings() {
     this.electronStoreService.exportSettings();

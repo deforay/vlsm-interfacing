@@ -64,14 +64,24 @@ export class ElectronService {
     this.ipcRenderer.invoke('dialog', method, config);
   }
 
-  execSqliteQuery(sql: any, args: any): any {
+  // execSqliteQuery(sql: any, args?: any): any {
+  //   return new Promise((resolve) => {
+  //     this.ipcRenderer.once('sqlite3-reply', (_, arg) => {
+  //       resolve(arg)
+  //     });
+  //     this.ipcRenderer.send('sqlite3-query', sql, args);
+  //   });
+  // }
+  execSqliteQuery(sql: any, args?: any): any {
     return new Promise((resolve) => {
-      this.ipcRenderer.once('sqlite3-reply', (_, arg) => {
-        resolve(arg)
+      const uniqueEvent = `sqlite3-reply-${Date.now()}-${Math.random()}`; // Unique event name
+      this.ipcRenderer.once(uniqueEvent, (_, arg) => {
+        resolve(arg);
       });
-      this.ipcRenderer.send('sqlite3-query', sql, args);
+      this.ipcRenderer.send('sqlite3-query', sql, args, uniqueEvent); // Send unique event name
     });
   }
+
 
   logInfo(message: string, instrumentId: string = null) {
     ipcRenderer.invoke('log-info', message, instrumentId);

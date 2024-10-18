@@ -241,17 +241,30 @@ try {
         return dialog[method](params);
       });
 
-      ipcMain.on('sqlite3-query', (event, sql, args) => {
-        if (args === null || args === undefined) {
-          sqlite3Obj.all(sql, (err: { message: any; }, rows: any) => {
-            event.reply('sqlite3-reply', err?.message || rows);
-          });
+      // ipcMain.on('sqlite3-query', (event, sql, args) => {
+      //   if (args === null || args === undefined) {
+      //     sqlite3Obj.all(sql, (err: { message: any; }, rows: any) => {
+      //       event.reply('sqlite3-reply', err?.message || rows);
+      //     });
+      //   } else {
+      //     sqlite3Obj.all(sql, args, (err: { message: any; }, rows: any) => {
+      //       event.reply('sqlite3-reply', err?.message || rows);
+      //     });
+      //   }
+      // });
+
+      ipcMain.on('sqlite3-query', (event, sql, args, uniqueEvent) => {
+        const queryCallback = (err: { message: any }, rows: any) => {
+          event.reply(uniqueEvent, err?.message || rows); // Use the unique event name to reply
+        };
+
+        if (!args) {
+          sqlite3Obj.all(sql, queryCallback);
         } else {
-          sqlite3Obj.all(sql, args, (err: { message: any; }, rows: any) => {
-            event.reply('sqlite3-reply', err?.message || rows);
-          });
+          sqlite3Obj.all(sql, args, queryCallback);
         }
       });
+
 
       ipcMain.handle('log-info', (event, message, instrumentId = null) => {
         let appLog = log.scope('app');

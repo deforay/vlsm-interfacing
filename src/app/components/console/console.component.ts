@@ -33,7 +33,9 @@ export class ConsoleComponent implements OnInit, OnDestroy {
   public appVersion: string = null;
   public lastLimsSync = '';
   public lastResultReceived = '';
-  public interval: any;
+  public recentResultsInterval: any; // Interval for fetching recent results
+  public mysqlCheckInterval: any; // Interval for checking MySQL connection
+  public mysqlConnected: boolean = false;  // To store the MySQL connection status
   public data: any;
   public lastOrders: any;
   private readonly ipc: IpcRenderer;
@@ -82,14 +84,15 @@ export class ConsoleComponent implements OnInit, OnDestroy {
     }
   }
   selectHandler(row: any, event: MatCheckboxChange) {
+    const that = this;
     if (row === null) {
       if (event.checked) {
-        this.dataSource.data.forEach(row => this.selection.select(row));
+        that.dataSource.data.forEach(row => that.selection.select(row));
       } else {
-        this.selection.clear();
+        that.selection.clear();
       }
     } else {
-      this.selection.toggle(row);
+      that.selection.toggle(row);
     }
   }
 
@@ -99,31 +102,39 @@ export class ConsoleComponent implements OnInit, OnDestroy {
   }
 
   ngOnInit() {
-    this.loadSettings();
+    const that = this;
+    that.loadSettings();
+    that.checkMysqlConnection();
 
     // Scroll to the top of the page when the component initializes
     window.scrollTo(0, 0);
 
     // Fetch last few orders and logs on load
     setTimeout(() => {
-      this.fetchLastOrders('');
-      this.fetchRecentLogs();
+      that.fetchRecentResults('');
+      that.fetchRecentLogs();
     }, 600);
 
-    // Refresh last orders every 5 minutes
-    this.interval = setInterval(() => { this.fetchLastOrders(''); }, 1000 * 60 * 5);
+    // Check MySQL connection every 30 seconds (you can adjust this as needed)
+    that.mysqlCheckInterval = setInterval(() => {
+      that.checkMysqlConnection();
+    }, 1000 * 5); // Every 5 seconds
 
     // Refresh last orders every 5 minutes
-    this.interval = setInterval(() => {
-      this.fetchLastOrders('');
-      this.resyncTestResultsToMySQL();
+    that.recentResultsInterval = setInterval(() => { that.fetchRecentResults(''); }, 1000 * 60 * 5);
+
+    // Refresh last orders every 5 minutes
+    that.recentResultsInterval = setInterval(() => {
+      that.fetchRecentResults('');
+      that.resyncTestResultsToMySQL();
     }, 1000 * 60 * 5);
   }
 
   setupInstruments() {
-    this.availableInstruments = [];
+    const that = this;
+    that.availableInstruments = [];
 
-    this.instrumentsSettings.forEach((instrumentSetting: { interfaceCommunicationProtocol: string; interfaceConnectionMode: any; analyzerMachineHost: any; analyzerMachinePort: any; analyzerMachineName: any; analyzerMachineType: any; displayorder: any; }, index: any) => {
+    that.instrumentsSettings.forEach((instrumentSetting: { interfaceCommunicationProtocol: string; interfaceConnectionMode: any; analyzerMachineHost: any; analyzerMachinePort: any; analyzerMachineName: any; analyzerMachineType: any; displayorder: any; }, index: any) => {
       let instrument: any = {};
       if (instrumentSetting.interfaceCommunicationProtocol == 'astm-elecsys') {
         instrumentSetting.interfaceCommunicationProtocol = 'astm-nonchecksum';
@@ -138,39 +149,39 @@ export class ConsoleComponent implements OnInit, OnDestroy {
         port: instrumentSetting.analyzerMachinePort,
         instrumentId: instrumentSetting.analyzerMachineName,
         machineType: instrumentSetting.analyzerMachineType,
-        labName: this.commonSettings.labName,
+        labName: that.commonSettings.labName,
         displayorder: instrumentSetting.displayorder,
-        interfaceAutoConnect: this.commonSettings.interfaceAutoConnect
+        interfaceAutoConnect: that.commonSettings.interfaceAutoConnect
       };
 
       instrument.isConnected = false;
       const isTcpServer = instrument.connectionParams.connectionMode === 'tcpserver';
       instrument.instrumentButtonText = isTcpServer ? 'Start Server' : 'Connect';
 
-      if (!this.commonSettings || !instrument.connectionParams.port || (instrument.connectionParams.connectionProtocol === 'tcpclient' && !instrument.connectionParams.host)) {
-        this.router.navigate(['/settings']);
+      if (!that.commonSettings || !instrument.connectionParams.port || (instrument.connectionParams.connectionProtocol === 'tcpclient' && !instrument.connectionParams.host)) {
+        that.router.navigate(['/settings']);
         return;
       }
 
       if (instrument.connectionParams.interfaceAutoConnect === 'yes') {
         setTimeout(() => {
-          this.reconnect(instrument);
+          that.reconnect(instrument);
         }, 1000);
       }
 
-      this.utilitiesService.getInstrumentLogSubject(instrument.connectionParams.instrumentId)
+      that.utilitiesService.getInstrumentLogSubject(instrument.connectionParams.instrumentId)
         .subscribe(logs => {
-          this._ngZone.run(() => {
-            this.updateLogsForInstrument(instrument.connectionParams.instrumentId, logs);
-            this.filterInstrumentLogs(instrument);
-            this.cdRef.detectChanges();
+          that._ngZone.run(() => {
+            that.updateLogsForInstrument(instrument.connectionParams.instrumentId, logs);
+            that.filterInstrumentLogs(instrument);
+            that.cdRef.detectChanges();
           });
         });
 
-      this.availableInstruments.push(instrument);
+      that.availableInstruments.push(instrument);
     });
 
-    this.availableInstruments.sort((a, b) => {
+    that.availableInstruments.sort((a, b) => {
       // Sort by displayorder if available, otherwise by instrumentId
       if (a.connectionParams.displayorder != null && b.connectionParams.displayorder != null) {
         return a.connectionParams.displayorder - b.connectionParams.displayorder;
@@ -186,41 +197,43 @@ export class ConsoleComponent implements OnInit, OnDestroy {
   }
 
   loadSettings() {
-    const initialSettings = this.store.getAll();
+    const that = this;
+    const initialSettings = that.store.getAll();
 
     if (!initialSettings.commonConfig || !initialSettings.instrumentsConfig) {
-      const initialCommonSettings = this.store.get('commonConfig');
-      const initialInstrumentsSettings = this.store.get('instrumentsConfig');
+      const initialCommonSettings = that.store.get('commonConfig');
+      const initialInstrumentsSettings = that.store.get('instrumentsConfig');
 
       if (!initialCommonSettings || !initialInstrumentsSettings) {
         console.warn('Settings not found, redirecting to settings page');
-        this.router.navigate(['/settings']);
+        that.router.navigate(['/settings']);
         return;
       }
     }
 
-    this.electronStoreSubscription = this.store.electronStoreObservable().subscribe(electronStoreObject => {
-      this._ngZone.run(() => {
-        this.commonSettings = electronStoreObject.commonConfig;
-        this.instrumentsSettings = electronStoreObject.instrumentsConfig;
-        this.appVersion = electronStoreObject.appVersion;
+    that.electronStoreSubscription = that.store.electronStoreObservable().subscribe(electronStoreObject => {
+      that._ngZone.run(() => {
+        that.commonSettings = electronStoreObject.commonConfig;
+        that.instrumentsSettings = electronStoreObject.instrumentsConfig;
+        that.appVersion = electronStoreObject.appVersion;
 
-        this.setupInstruments();
-        this.cdRef.detectChanges();
+        that.setupInstruments();
+        that.cdRef.detectChanges();
       });
     });
   }
 
 
   reSyncSelectedRecords() {
-    this.selection.selected.forEach(selectedRow => {
-      if (this.utilitiesService) {
-        this.utilitiesService.reSyncRecord(selectedRow.order_id).subscribe({
+    const that = this;
+    that.selection.selected.forEach(selectedRow => {
+      if (that.utilitiesService) {
+        that.utilitiesService.reSyncRecord(selectedRow.order_id).subscribe({
           next: (response) => {
             selectedRow.lims_sync_status = '0';
-            this.dataSource.data = [...this.dataSource.data];
+            that.dataSource.data = [...that.dataSource.data];
             // Clear selection after re-sync
-            this.selection.clear();
+            that.selection.clear();
           },
           error: (error) => {
             console.error('Error during re-sync:', error);
@@ -232,23 +245,26 @@ export class ConsoleComponent implements OnInit, OnDestroy {
     });
   }
 
-  fetchLastOrders(searchTerm?: string) {
-    this.utilitiesService.fetchLastOrders(searchTerm);
+  fetchRecentResults(searchTerm?: string) {
+    const that = this;
 
-    this.utilitiesService.fetchLastSyncTimes((data: { lastLimsSync: string; lastResultReceived: string; }) => {
-      this.lastLimsSync = data.lastLimsSync;
-      this.lastResultReceived = data.lastResultReceived;
+    that.resyncTestResultsToMySQL();
+    that.utilitiesService.fetchRecentResults(searchTerm);
+
+    that.utilitiesService.fetchLastSyncTimes((data: { lastLimsSync: string; lastResultReceived: string; }) => {
+      that.lastLimsSync = data.lastLimsSync;
+      that.lastResultReceived = data.lastResultReceived;
     });
 
-    this.utilitiesService.lastOrders.subscribe({
+    that.utilitiesService.lastOrders.subscribe({
       next: lastFewOrders => {
-        this._ngZone.run(() => {
-          this.lastOrders = lastFewOrders[0];
-          this.data = lastFewOrders[0];
-          this.dataSource.data = this.lastOrders;
-          //console.log(this.dataSource.data);
-          this.dataSource.paginator = this.paginator;
-          this.dataSource.sort = this.sort;
+        that._ngZone.run(() => {
+          that.lastOrders = lastFewOrders[0];
+          that.data = lastFewOrders[0];
+          that.dataSource.data = that.lastOrders;
+          //console.log(that.dataSource.data);
+          that.dataSource.paginator = that.paginator;
+          that.dataSource.sort = that.sort;
         });
       },
       error: error => {
@@ -265,15 +281,19 @@ export class ConsoleComponent implements OnInit, OnDestroy {
 
 
   goToDashboard() {
-    const dataArray = this.data.map((item: { added_on: any; machine_used: any; order_id: any; lims_sync_status: any; lims_sync_date_time: any; }) => ({
-      added_on: item.added_on,
-      machine_used: item.machine_used,
-      order_id: item.order_id,
-      lims_sync_status: item.lims_sync_status,
-      lims_sync_date_time: item.lims_sync_date_time
-    }));
+    const that = this;
+    let dataArray = [];
+    if (that.data) {
+      dataArray = that.data.map((item: { added_on: any; machine_used: any; order_id: any; lims_sync_status: any; lims_sync_date_time: any; }) => ({
+        added_on: item.added_on,
+        machine_used: item.machine_used,
+        order_id: item.order_id,
+        lims_sync_status: item.lims_sync_status,
+        lims_sync_date_time: item.lims_sync_date_time
+      }));
+    }
 
-    const dialogRef = this.dialog.open(DashboardComponent, {
+    const dialogRef = that.dialog.open(DashboardComponent, {
       maxWidth: '90vw',
       maxHeight: '90vh',
       data: { dashboardData: dataArray }
@@ -287,10 +307,10 @@ export class ConsoleComponent implements OnInit, OnDestroy {
   filterData($event: any) {
     const searchTerm = $event.target.value;
     if (searchTerm.length >= 2) {
-      this.fetchLastOrders(searchTerm);
+      this.fetchRecentResults(searchTerm);
     } else {
 
-      this.fetchLastOrders('');
+      this.fetchRecentResults('');
     }
   }
 
@@ -338,7 +358,7 @@ export class ConsoleComponent implements OnInit, OnDestroy {
       // Generate a unique session ID
       const sessionId = uuidv4();
       const connectionMode = instrument.connectionParams.instrumentId;
-      const startTime = this.getFormattedDateTime();
+      const startTime = that.getFormattedDateTime();
 
       // Get existing data from localStorage or initialize new data
       let storedData = JSON.parse(localStorage.getItem('sessionDatas') || '{}');
@@ -389,11 +409,11 @@ export class ConsoleComponent implements OnInit, OnDestroy {
         // Generate a new session ID and start time if no data exists for this connectionMode
         sessionData[connectionMode] = {
           sessionId: uuidv4(),
-          startTime: this.getFormattedDateTime()
+          startTime: that.getFormattedDateTime()
         };
       } else {
         // Update the start time if session ID already exists
-        sessionData[connectionMode].startTime = this.getFormattedDateTime();
+        sessionData[connectionMode].startTime = that.getFormattedDateTime();
       }
 
       // Save the updated session data back to localStorage
@@ -433,7 +453,7 @@ export class ConsoleComponent implements OnInit, OnDestroy {
 
         if (sessionId) {
           // Store the disconnection time in the session data
-          const endTime = this.getFormattedDateTime();
+          const endTime = that.getFormattedDateTime();
           sessionData[connectionMode].endTime = endTime;
 
           // Save updated session data back to localStorage
@@ -483,7 +503,7 @@ export class ConsoleComponent implements OnInit, OnDestroy {
           }
           return inst;
         });
-        this.cdRef.detectChanges();
+        that.cdRef.detectChanges();
       });
     });
 
@@ -491,7 +511,7 @@ export class ConsoleComponent implements OnInit, OnDestroy {
       .subscribe(status => {
         that._ngZone.run(() => {
           // Update the availableInstruments array
-          that.availableInstruments = this.availableInstruments.map(inst => {
+          that.availableInstruments = that.availableInstruments.map(inst => {
             if (inst.connectionParams.instrumentId === instrument.connectionParams.instrumentId) {
               const isTcpServer = inst.connectionParams.connectionMode === 'tcpserver';
               const statusText = isTcpServer ? 'Wating for client..' : 'Please wait..';
@@ -504,7 +524,7 @@ export class ConsoleComponent implements OnInit, OnDestroy {
             }
             return inst;
           });
-          this.cdRef.detectChanges();
+          that.cdRef.detectChanges();
         });
       });
 
@@ -513,7 +533,7 @@ export class ConsoleComponent implements OnInit, OnDestroy {
       .subscribe(status => {
         that._ngZone.run(() => {
           // Update the availableInstruments array
-          that.availableInstruments = this.availableInstruments.map(inst => {
+          that.availableInstruments = that.availableInstruments.map(inst => {
             if (inst.connectionParams.instrumentId === instrument.connectionParams.instrumentId) {
               return {
                 ...inst,
@@ -522,7 +542,7 @@ export class ConsoleComponent implements OnInit, OnDestroy {
             }
             return inst;
           });
-          this.cdRef.detectChanges();
+          that.cdRef.detectChanges();
         });
       });
   }
@@ -532,10 +552,10 @@ export class ConsoleComponent implements OnInit, OnDestroy {
   }
 
   filterInstrumentLogs(instrument: any) {
-
-    if (!this.instrumentLogs[instrument.connectionParams.instrumentId]) {
+    const that = this;
+    if (!that.instrumentLogs[instrument.connectionParams.instrumentId]) {
       // Initialize the logs structure for the instrument if not already done
-      this.instrumentLogs[instrument.connectionParams.instrumentId] = {
+      that.instrumentLogs[instrument.connectionParams.instrumentId] = {
         logs: [...instrument.logs],
         filteredLogs: [...instrument.logs]
       };
@@ -543,15 +563,15 @@ export class ConsoleComponent implements OnInit, OnDestroy {
 
     if (!instrument.searchText || instrument.searchText === '') {
       // If search text is empty, show all logs
-      this.instrumentLogs[instrument.connectionParams.instrumentId].filteredLogs = [...this.instrumentLogs[instrument.connectionParams.instrumentId].logs];
+      that.instrumentLogs[instrument.connectionParams.instrumentId].filteredLogs = [...that.instrumentLogs[instrument.connectionParams.instrumentId].logs];
     } else {
       // Apply filter on the original logs
-      this.instrumentLogs[instrument.connectionParams.instrumentId].filteredLogs = this.instrumentLogs[instrument.connectionParams.instrumentId].logs.filter((log: string) =>
+      that.instrumentLogs[instrument.connectionParams.instrumentId].filteredLogs = that.instrumentLogs[instrument.connectionParams.instrumentId].logs.filter((log: string) =>
         log.toLowerCase().includes(instrument.searchText.trim().toLowerCase())
       );
     }
 
-    this.cdRef.detectChanges(); // Trigger change detection if needed
+    that.cdRef.detectChanges(); // Trigger change detection if needed
   }
 
 
@@ -574,19 +594,23 @@ export class ConsoleComponent implements OnInit, OnDestroy {
       this.instrumentLogs[instrument.connectionParams.instrumentId].logs = [];
       this.instrumentLogs[instrument.connectionParams.instrumentId].filteredLogs = [];
     }
+
     this.cdRef.detectChanges(); // Trigger change detection if needed
   }
 
 
   resyncTestResultsToMySQL() {
-    this.utilitiesService.resyncTestResultsToMySQL(
-      (message: any) => {
-        console.log(message);
-      },
-      (error: any) => {
-        console.error(error);
-      }
-    );
+
+    if (this.mysqlConnected) {
+      this.utilitiesService.resyncTestResultsToMySQL(
+        (message: any) => {
+          console.log(message);
+        },
+        (error: any) => {
+          console.error(error);
+        }
+      );
+    }
   }
 
   copyTextToClipboard(text: string) {
@@ -601,8 +625,40 @@ export class ConsoleComponent implements OnInit, OnDestroy {
     return this.sanitizer.bypassSecurityTrustHtml(logEntry);
   }
 
+  checkMysqlConnection() {
+    const that = this;
+    const commonSettings = that.store.get('commonConfig');
+    const mysqlParams = {
+      host: commonSettings.mysqlHost,
+      user: commonSettings.mysqlUser,
+      password: commonSettings.mysqlPassword,
+      port: commonSettings.mysqlPort
+    };
+
+    that.utilitiesService.checkMysqlConnection(
+      mysqlParams,
+      () => {
+        that.mysqlConnected = true;
+        that.cdRef.detectChanges();
+        // console.error(that.mysqlConnected);
+        // console.log('MySQL is connected');
+      },
+      (err) => {
+        that.mysqlConnected = false;
+        that.cdRef.detectChanges();
+        // console.error(that.mysqlConnected);
+        // console.error('MySQL connection lost:', err);
+      }
+    );
+  }
+
   ngOnDestroy() {
-    clearInterval(this.interval);
+    if (this.recentResultsInterval) {
+      clearInterval(this.recentResultsInterval);  // Clear the recent results interval
+    }
+    if (this.mysqlCheckInterval) {
+      clearInterval(this.mysqlCheckInterval);  // Clear the MySQL check interval
+    }
     if (this.electronStoreSubscription) {
       this.electronStoreSubscription.unsubscribe(); // Unsubscribe to avoid memory leaks
     }
