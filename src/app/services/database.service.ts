@@ -315,7 +315,7 @@ export class DatabaseService {
 
   fetchrawData(success: any, errorf: any, searchParam = '') {
     const that = this;
-    let recentRawDataQuery = 'SELECT * FROM raw_data';
+    let recentRawDataQuery = 'SELECT * FROM `raw_data` ';
 
     if (searchParam) {
       const columns = [
@@ -352,28 +352,26 @@ export class DatabaseService {
       recentResultsQuery += ` WHERE ${searchConditions}`;
     }
 
-    this.electronService.execSqliteQuery(recentResultsQuery, null)
-      .then(success)
-      .catch(errorf);
+    // this.electronService.execSqliteQuery(recentResultsQuery, null)
+    //   .then(success)
+    //   .catch(errorf);
 
-    // this.checkMysqlConnection(null, () => {
-    //   // MySQL is connected, use MySQL
-    //   this.execQuery(recentResultsQuery, null, success, (mysqlError) => {
-    //     console.error('MySQL query error:', mysqlError.message);
-    //     // If MySQL query fails, fallback to SQLite
-    //     this.electronService.execSqliteQuery(recentResultsQuery, null)
-    //       .then(success)
-    //       .catch(errorf);
-    //   });
-    // }, (err) => {
-    //   // MySQL not connected, fallback to SQLite
-    //   this.electronService.execSqliteQuery(recentResultsQuery, null)
-    //     .then(success)
-    //     .catch(errorf);
-    // });
+    this.checkMysqlConnection(null, () => {
+      // MySQL is connected, use MySQL
+      this.execQuery(recentResultsQuery, null, success, (mysqlError) => {
+        console.error('MySQL query error:', mysqlError.message);
+        // If MySQL query fails, fallback to SQLite
+        this.electronService.execSqliteQuery(recentResultsQuery, null)
+          .then(success)
+          .catch(errorf);
+      });
+    }, (err) => {
+      // MySQL not connected, fallback to SQLite
+      this.electronService.execSqliteQuery(recentResultsQuery, null)
+        .then(success)
+        .catch(errorf);
+    });
   }
-
-
 
   reSyncRecord(orderId: string): void {
     const updateQuery = `UPDATE orders SET lims_sync_status = '0' WHERE order_id = ?`;
