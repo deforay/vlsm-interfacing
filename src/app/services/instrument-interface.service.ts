@@ -144,56 +144,56 @@ export class InstrumentInterfaceService {
 
         const resultOutcome = singleObx.get('OBX.5.1').toString();
 
-        const order: any = {};
-        order.raw_text = rawText;
-        order.order_id = singleSpm.get('SPM.3').toString().replace('&ROCHE', '');
-        order.test_id = singleSpm.get('SPM.3').toString().replace('&ROCHE', '');
+        const sampleResult: any = {};
+        sampleResult.raw_text = rawText;
+        sampleResult.order_id = singleSpm.get('SPM.3').toString().replace('&ROCHE', '');
+        sampleResult.test_id = singleSpm.get('SPM.3').toString().replace('&ROCHE', '');
 
-        if (order.order_id === "") {
+        if (sampleResult.order_id === "") {
           // const sac = message.get('SAC').toArray();
           // const singleSAC = sac[0];
           //Let us use the Sample Container ID as the Order ID
-          order.order_id = message.get('SAC.3').toString();
-          order.test_id = message.get('SAC.3').toString();
+          sampleResult.order_id = message.get('SAC.3').toString();
+          sampleResult.test_id = message.get('SAC.3').toString();
         }
 
-        order.test_type = message.get('OBR.4.2')?.toString() || message.get('OBX.3.2')?.toString() || 'HIVVL';
+        sampleResult.test_type = message.get('OBR.4.2')?.toString() || message.get('OBX.3.2')?.toString() || 'HIVVL';
 
         if (resultOutcome === 'Titer') {
-          order.test_unit = singleObx.get('OBX.6.1').toString();
-          order.results = singleObx.get('OBX.5.1').toString();
+          sampleResult.test_unit = singleObx.get('OBX.6.1').toString();
+          sampleResult.results = singleObx.get('OBX.5.1').toString();
         } else if (resultOutcome === '> Titer max') {
-          order.test_unit = '';
-          order.results = '> 10000000';
+          sampleResult.test_unit = '';
+          sampleResult.results = '> 10000000';
         } else if (
           resultOutcome == 'Target Not Detected'
           || resultOutcome == 'Failed'
           || resultOutcome == 'Invalid'
           || resultOutcome == 'Not Detected') {
-          order.test_unit = '';
-          order.results = resultOutcome;
+          sampleResult.test_unit = '';
+          sampleResult.results = resultOutcome;
         } else {
-          order.test_unit = singleObx.get('OBX.6.1').toString();
-          if (!order.test_unit) {
-            order.test_unit = singleObx.get('OBX.6.2').toString();
+          sampleResult.test_unit = singleObx.get('OBX.6.1').toString();
+          if (!sampleResult.test_unit) {
+            sampleResult.test_unit = singleObx.get('OBX.6.2').toString();
           }
-          if (!order.test_unit) {
-            order.test_unit = singleObx.get('OBX.6').toString();
+          if (!sampleResult.test_unit) {
+            sampleResult.test_unit = singleObx.get('OBX.6').toString();
           }
-          order.results = resultOutcome;
+          sampleResult.results = resultOutcome;
         }
 
-        order.tested_by = singleObx.get('OBX.16').toString();
-        order.result_status = 1;
-        order.lims_sync_status = 0;
-        order.analysed_date_time = that.utilitiesService.formatRawDate(singleObx.get('OBX.19').toString());
-        //order.specimen_date_time = that.formatRawDate(message.get('OBX').get(0).get('OBX.19').toString());
-        order.authorised_date_time = that.utilitiesService.formatRawDate(singleObx.get('OBX.19').toString());
-        order.result_accepted_date_time = that.utilitiesService.formatRawDate(singleObx.get('OBX.19').toString());
-        order.test_location = instrumentConnectionData.labName;
-        order.machine_used = instrumentConnectionData.instrumentId;
+        sampleResult.tested_by = singleObx.get('OBX.16').toString();
+        sampleResult.result_status = 1;
+        sampleResult.lims_sync_status = 0;
+        sampleResult.analysed_date_time = that.utilitiesService.formatRawDate(singleObx.get('OBX.19').toString());
+        //sampleResult.specimen_date_time = that.formatRawDate(message.get('OBX').get(0).get('OBX.19').toString());
+        sampleResult.authorised_date_time = that.utilitiesService.formatRawDate(singleObx.get('OBX.19').toString());
+        sampleResult.result_accepted_date_time = that.utilitiesService.formatRawDate(singleObx.get('OBX.19').toString());
+        sampleResult.test_location = instrumentConnectionData.labName;
+        sampleResult.machine_used = instrumentConnectionData.instrumentId;
 
-        that.saveOrder(order, instrumentConnectionData);
+        that.saveResult(sampleResult, instrumentConnectionData);
 
       });
     });
@@ -246,53 +246,53 @@ export class InstrumentInterfaceService {
 
         let resultOutcome = singleObx.get('OBX.5.1').toString();
 
-        const order: any = {};
-        order.raw_text = rawText;
-        order.order_id = singleSpm.get('SPM.2').toString().replace("&ROCHE", "");
-        order.test_id = singleSpm.get('SPM.2').toString().replace("&ROCHE", "");;
+        const sampleResult: any = {};
+        sampleResult.raw_text = rawText;
+        sampleResult.order_id = singleSpm.get('SPM.2').toString().replace("&ROCHE", "");
+        sampleResult.test_id = singleSpm.get('SPM.2').toString().replace("&ROCHE", "");;
 
-        if (order.order_id === "") {
+        if (sampleResult.order_id === "") {
           // const sac = message.get('SAC').toArray();
           // const singleSAC = sac[0];
           //Let us use the Sample Container ID as the Order ID
-          order.order_id = message.get('SAC.3').toString();
-          order.test_id = message.get('SAC.3').toString();
+          sampleResult.order_id = message.get('SAC.3').toString();
+          sampleResult.test_id = message.get('SAC.3').toString();
         }
 
-        order.test_type = message.get('OBR.4.2')?.toString() || message.get('OBX.3.2')?.toString() || 'HIVVL';
+        sampleResult.test_type = message.get('OBR.4.2')?.toString() || message.get('OBX.3.2')?.toString() || 'HIVVL';
 
         if (resultOutcome == 'Titer') {
-          order.test_unit = singleObx.get('OBX.6.1').toString();
-          order.results = singleObx.get('OBX.5.1').toString();
+          sampleResult.test_unit = singleObx.get('OBX.6.1').toString();
+          sampleResult.results = singleObx.get('OBX.5.1').toString();
         } else if (resultOutcome == '<20' || resultOutcome == '< 20') {
-          order.test_unit = '';
-          order.results = 'Target Not Detected';
+          sampleResult.test_unit = '';
+          sampleResult.results = 'Target Not Detected';
         } else if (resultOutcome == '> Titer max') {
-          order.test_unit = '';
-          order.results = '> 10000000';
+          sampleResult.test_unit = '';
+          sampleResult.results = '> 10000000';
         } else if (
           resultOutcome == 'Target Not Detected'
           || resultOutcome == 'Failed'
           || resultOutcome == 'Invalid'
           || resultOutcome == 'Not Detected') {
-          order.test_unit = '';
-          order.results = resultOutcome;
+          sampleResult.test_unit = '';
+          sampleResult.results = resultOutcome;
         } else {
-          order.test_unit = singleObx.get('OBX.6.1').toString();
-          order.results = resultOutcome;
+          sampleResult.test_unit = singleObx.get('OBX.6.1').toString();
+          sampleResult.results = resultOutcome;
         }
 
-        order.tested_by = singleObx.get('OBX.16').toString();
-        order.result_status = 1;
-        order.lims_sync_status = 0;
-        order.analysed_date_time = that.utilitiesService.formatRawDate(singleObx.get('OBX.19').toString());
-        //order.specimen_date_time = that.formatRawDate(message.get('OBX').get(0).get('OBX.19').toString());
-        order.authorised_date_time = that.utilitiesService.formatRawDate(singleObx.get('OBX.19').toString());
-        order.result_accepted_date_time = that.utilitiesService.formatRawDate(singleObx.get('OBX.19').toString());
-        order.test_location = instrumentConnectionData.labName;
-        order.machine_used = instrumentConnectionData.instrumentId;
+        sampleResult.tested_by = singleObx.get('OBX.16').toString();
+        sampleResult.result_status = 1;
+        sampleResult.lims_sync_status = 0;
+        sampleResult.analysed_date_time = that.utilitiesService.formatRawDate(singleObx.get('OBX.19').toString());
+        //sampleResult.specimen_date_time = that.formatRawDate(message.get('OBX').get(0).get('OBX.19').toString());
+        sampleResult.authorised_date_time = that.utilitiesService.formatRawDate(singleObx.get('OBX.19').toString());
+        sampleResult.result_accepted_date_time = that.utilitiesService.formatRawDate(singleObx.get('OBX.19').toString());
+        sampleResult.test_location = instrumentConnectionData.labName;
+        sampleResult.machine_used = instrumentConnectionData.instrumentId;
 
-        that.saveOrder(order, instrumentConnectionData);
+        that.saveResult(sampleResult, instrumentConnectionData);
 
       });
     });
@@ -351,53 +351,53 @@ export class InstrumentInterfaceService {
 
         let resultOutcome = singleObx.get('OBX.5.1').toString();
 
-        const order: any = {};
-        order.raw_text = rawText;
-        order.order_id = singleSpm.get('SPM.2').toString().replace("&ROCHE", "");
-        order.test_id = singleSpm.get('SPM.2').toString().replace("&ROCHE", "");;
+        const sampleResult: any = {};
+        sampleResult.raw_text = rawText;
+        sampleResult.order_id = singleSpm.get('SPM.2').toString().replace("&ROCHE", "");
+        sampleResult.test_id = singleSpm.get('SPM.2').toString().replace("&ROCHE", "");;
 
-        if (order.order_id === "") {
+        if (sampleResult.order_id === "") {
           // const sac = message.get('SAC').toArray();
           // const singleSAC = sac[0];
           //Let us use the Sample Container ID as the Order ID
-          order.order_id = message.get('SAC.3').toString();
-          order.test_id = message.get('SAC.3').toString();
+          sampleResult.order_id = message.get('SAC.3').toString();
+          sampleResult.test_id = message.get('SAC.3').toString();
         }
 
-        order.test_type = message.get('OBR.4.2')?.toString() || message.get('OBX.3.2')?.toString() || 'HIVVL';
+        sampleResult.test_type = message.get('OBR.4.2')?.toString() || message.get('OBX.3.2')?.toString() || 'HIVVL';
 
         if (resultOutcome == 'Titer') {
-          order.test_unit = singleObx.get('OBX.6.1').toString();
-          order.results = singleObx.get('OBX.5.1').toString();
+          sampleResult.test_unit = singleObx.get('OBX.6.1').toString();
+          sampleResult.results = singleObx.get('OBX.5.1').toString();
         } else if (resultOutcome == '<20' || resultOutcome == '< 20' || resultOutcome == 'Target Not Detected') {
-          order.test_unit = '';
-          order.results = 'Target Not Detected';
+          sampleResult.test_unit = '';
+          sampleResult.results = 'Target Not Detected';
         } else if (resultOutcome == '> Titer max') {
-          order.test_unit = '';
-          order.results = '> 10000000';
+          sampleResult.test_unit = '';
+          sampleResult.results = '> 10000000';
         } else if (
           resultOutcome == 'Target Not Detected'
           || resultOutcome == 'Failed'
           || resultOutcome == 'Invalid'
           || resultOutcome == 'Not Detected') {
-          order.test_unit = '';
-          order.results = resultOutcome;
+          sampleResult.test_unit = '';
+          sampleResult.results = resultOutcome;
         } else {
-          order.test_unit = singleObx.get('OBX.6.1').toString();
-          order.results = resultOutcome;
+          sampleResult.test_unit = singleObx.get('OBX.6.1').toString();
+          sampleResult.results = resultOutcome;
         }
 
-        order.tested_by = singleObx.get('OBX.16').toString();
-        order.result_status = 1;
-        order.lims_sync_status = 0;
-        order.analysed_date_time = that.utilitiesService.formatRawDate(singleObx.get('OBX.19').toString());
-        //order.specimen_date_time = that.formatRawDate(message.get('OBX').get(0).get('OBX.19').toString());
-        order.authorised_date_time = that.utilitiesService.formatRawDate(singleObx.get('OBX.19').toString());
-        order.result_accepted_date_time = that.utilitiesService.formatRawDate(singleObx.get('OBX.19').toString());
-        order.test_location = instrumentConnectionData.labName;
-        order.machine_used = instrumentConnectionData.instrumentId;
+        sampleResult.tested_by = singleObx.get('OBX.16').toString();
+        sampleResult.result_status = 1;
+        sampleResult.lims_sync_status = 0;
+        sampleResult.analysed_date_time = that.utilitiesService.formatRawDate(singleObx.get('OBX.19').toString());
+        //sampleResult.specimen_date_time = that.formatRawDate(message.get('OBX').get(0).get('OBX.19').toString());
+        sampleResult.authorised_date_time = that.utilitiesService.formatRawDate(singleObx.get('OBX.19').toString());
+        sampleResult.result_accepted_date_time = that.utilitiesService.formatRawDate(singleObx.get('OBX.19').toString());
+        sampleResult.test_location = instrumentConnectionData.labName;
+        sampleResult.machine_used = instrumentConnectionData.instrumentId;
 
-        that.saveOrder(order, instrumentConnectionData);
+        that.saveResult(sampleResult, instrumentConnectionData);
 
       });
     });
@@ -445,50 +445,50 @@ export class InstrumentInterfaceService {
           }
         });
 
-        const order: any = {};
-        order.raw_text = rawText;
-        order.order_id = singleSpm.get('SPM.2').toString().replace("&ROCHE", "");
-        order.test_id = singleSpm.get('SPM.2').toString().replace("&ROCHE", "");;
+        const sampleResult: any = {};
+        sampleResult.raw_text = rawText;
+        sampleResult.order_id = singleSpm.get('SPM.2').toString().replace("&ROCHE", "");
+        sampleResult.test_id = singleSpm.get('SPM.2').toString().replace("&ROCHE", "");;
 
-        if (order.order_id === "") {
+        if (sampleResult.order_id === "") {
           // const sac = message.get('SAC').toArray();
           // const singleSAC = sac[0];
           //Let us use the Sample Container ID as the Order ID
-          order.order_id = message.get('SAC.3').toString();
-          order.test_id = message.get('SAC.3').toString();
+          sampleResult.order_id = message.get('SAC.3').toString();
+          sampleResult.test_id = message.get('SAC.3').toString();
         }
 
-        order.test_type = message.get('OBR.4.2')?.toString() || message.get('OBX.3.2')?.toString() || 'HIVVL';
+        sampleResult.test_type = message.get('OBR.4.2')?.toString() || message.get('OBX.3.2')?.toString() || 'HIVVL';
 
         if (resultOutcome == 'Titer') {
-          order.test_unit = singleObx.get('OBX.6.1').toString();
-          order.results = singleObx.get('OBX.5.1').toString();
+          sampleResult.test_unit = singleObx.get('OBX.6.1').toString();
+          sampleResult.results = singleObx.get('OBX.5.1').toString();
         } else if (resultOutcome == '> Titer max') {
-          order.test_unit = '';
-          order.results = '> 10000000';
+          sampleResult.test_unit = '';
+          sampleResult.results = '> 10000000';
         } else if (
           resultOutcome == 'Target Not Detected'
           || resultOutcome == 'Failed'
           || resultOutcome == 'Invalid'
           || resultOutcome == 'Not Detected') {
-          order.test_unit = '';
-          order.results = resultOutcome;
+          sampleResult.test_unit = '';
+          sampleResult.results = resultOutcome;
         } else {
-          order.test_unit = singleObx.get('OBX.6.1').toString();
-          order.results = resultOutcome;
+          sampleResult.test_unit = singleObx.get('OBX.6.1').toString();
+          sampleResult.results = resultOutcome;
         }
 
-        order.tested_by = singleObx.get('OBX.16').toString();
-        order.result_status = 1;
-        order.lims_sync_status = 0;
-        order.analysed_date_time = that.utilitiesService.formatRawDate(singleObx.get('OBX.19').toString());
-        //order.specimen_date_time = that.formatRawDate(message.get('OBX').get(0).get('OBX.19').toString());
-        order.authorised_date_time = that.utilitiesService.formatRawDate(singleObx.get('OBX.19').toString());
-        order.result_accepted_date_time = that.utilitiesService.formatRawDate(singleObx.get('OBX.19').toString());
-        order.test_location = instrumentConnectionData.labName;
-        order.machine_used = instrumentConnectionData.instrumentId;
+        sampleResult.tested_by = singleObx.get('OBX.16').toString();
+        sampleResult.result_status = 1;
+        sampleResult.lims_sync_status = 0;
+        sampleResult.analysed_date_time = that.utilitiesService.formatRawDate(singleObx.get('OBX.19').toString());
+        //sampleResult.specimen_date_time = that.formatRawDate(message.get('OBX').get(0).get('OBX.19').toString());
+        sampleResult.authorised_date_time = that.utilitiesService.formatRawDate(singleObx.get('OBX.19').toString());
+        sampleResult.result_accepted_date_time = that.utilitiesService.formatRawDate(singleObx.get('OBX.19').toString());
+        sampleResult.test_location = instrumentConnectionData.labName;
+        sampleResult.machine_used = instrumentConnectionData.instrumentId;
 
-        that.saveOrder(order, instrumentConnectionData);
+        that.saveResult(sampleResult, instrumentConnectionData);
 
       });
     });
@@ -513,7 +513,7 @@ export class InstrumentInterfaceService {
       };
 
       that.dbService.recordRawData(rawData, () => {
-        that.utilitiesService.logger('success', 'Successfully saved raw astm data', instrumentConnectionData.instrumentId);
+        that.utilitiesService.logger('success', 'Successfully saved raw ASTM data', instrumentConnectionData.instrumentId);
       }, (err: any) => {
         that.utilitiesService.logger('error', 'Failed to save raw data : ' + JSON.stringify(err), instrumentConnectionData.instrumentId);
       });
@@ -535,17 +535,23 @@ export class InstrumentInterfaceService {
 
       //that.utilitiesService.logger('info', "AFTER SPLITTING USING " + that.START, instrumentConnectionData.instrumentId);
       // that.utilitiesService.logger('info', fullDataArray, instrumentConnectionData.instrumentId);
+      console.error('-------------------');
+      console.error('-------------------');
+      console.error(fullDataArray);
+      console.error(fullDataArray.length);
+      console.error('-------------------');
+      console.error('-------------------');
 
       fullDataArray.forEach(function (partData) {
-
+        // console.error(partData);
         if (partData !== '' && partData !== undefined && partData !== null) {
 
           const astmArray = partData.split(/<CR>/);
           const dataArray = that.getASTMDataBlock(astmArray);
 
-          // console.error(partData);
-          // console.error(dataArray);
-          // console.error(dataArray['R']);
+          console.error(partData);
+          console.error(dataArray);
+          console.error(dataArray['R']);
 
           //that.utilitiesService.logger('info', dataArray, instrumentConnectionData.instrumentId);
           //that.utilitiesService.logger('info',dataArray['R'][0], instrumentConnectionData.instrumentId);
@@ -600,7 +606,7 @@ export class InstrumentInterfaceService {
       };
 
       that.dbService.recordRawData(rawData, () => {
-        that.utilitiesService.logger('success', 'Successfully saved raw hl7 data', instrumentConnectionData.instrumentId);
+        that.utilitiesService.logger('success', 'Successfully saved raw HL7 data', instrumentConnectionData.instrumentId);
       }, (err: any) => {
         that.utilitiesService.logger('error', 'Failed to save raw data ' + JSON.stringify(err), instrumentConnectionData.instrumentId);
       });
@@ -691,21 +697,21 @@ export class InstrumentInterfaceService {
   }
 
 
-  private saveOrder(order: any, instrumentConnectionData: InstrumentConnectionStack) {
+  private saveResult(sampleResult: any, instrumentConnectionData: InstrumentConnectionStack) {
     const that = this;
-    if (order) {
-      const data = { ...order, instrument_id: instrumentConnectionData.instrumentId }; // Add instrument_id here
+    if (sampleResult) {
+      const data = { ...sampleResult, instrument_id: instrumentConnectionData.instrumentId }; // Add instrument_id here
       that.dbService.recordTestResults(data,
         (res) => {
-          that.utilitiesService.logger('success', 'Successfully saved result : ' + order.test_id + '|' + order.order_id, instrumentConnectionData.instrumentId);
+          that.utilitiesService.logger('success', 'Successfully saved result : ' + sampleResult.test_id + '|' + sampleResult.order_id, instrumentConnectionData.instrumentId);
           return true;
         },
         (err) => {
-          that.utilitiesService.logger('error', 'Failed to save result : ' + order.test_id + '|' + order.order_id + ' | ' + JSON.stringify(err), instrumentConnectionData.instrumentId);
+          that.utilitiesService.logger('error', 'Failed to save result : ' + sampleResult.test_id + '|' + sampleResult.order_id + ' | ' + JSON.stringify(err), instrumentConnectionData.instrumentId);
           return false;
         });
     } else {
-      that.utilitiesService.logger('error', 'Failed to save result into the database : ' + JSON.stringify(order), instrumentConnectionData.instrumentId);
+      that.utilitiesService.logger('error', 'Failed to save result into the database : ' + JSON.stringify(sampleResult), instrumentConnectionData.instrumentId);
       return false;
     }
   }
@@ -737,14 +743,14 @@ export class InstrumentInterfaceService {
 
   private saveASTMDataBlock(dataArray: {}, partData: string, instrumentConnectionData: InstrumentConnectionStack) {
     const that = this;
-    const order: any = {};
+    const sampleResult: any = {};
     try {
       if (dataArray['O'] && dataArray['O'].length > 0) {
 
         const oSegmentFields = dataArray['O'][0]; // dataArray['O'] is an array of arrays (each sub-array is a segment's fields)
 
-        order.order_id = oSegmentFields[2];
-        order.test_id = oSegmentFields[1];
+        sampleResult.order_id = oSegmentFields[2];
+        sampleResult.test_id = oSegmentFields[1];
 
         const resultStatus = oSegmentFields[25]; // X = Failed, F = Final, P = Preliminary
 
@@ -752,16 +758,16 @@ export class InstrumentInterfaceService {
         const testTypeDetails = universalTestIdentifier.split('^');
         const testType = testTypeDetails.length > 1 ? testTypeDetails[3] : ''; // Adjust based on your ASTM format
 
-        order.test_type = testType;
+        sampleResult.test_type = testType;
 
         if (dataArray['R'] && dataArray['R'].length > 0) {
 
           const rSegmentFields = dataArray['R'][0];
 
-          if (!order.test_type) {
-            order.test_type = (rSegmentFields[2]) ? rSegmentFields[2].replace('^^^', '') : rSegmentFields[2];
+          if (!sampleResult.test_type) {
+            sampleResult.test_type = (rSegmentFields[2]) ? rSegmentFields[2].replace('^^^', '') : rSegmentFields[2];
           }
-          order.test_unit = rSegmentFields[4];
+          sampleResult.test_unit = rSegmentFields[4];
 
           let resultSegment = rSegmentFields[3];
 
@@ -776,27 +782,30 @@ export class InstrumentInterfaceService {
             }
           }
 
-          order.results = finalResult;
-          order.tested_by = rSegmentFields[10];
-          order.analysed_date_time = that.utilitiesService.formatRawDate(rSegmentFields[12]);
-          order.authorised_date_time = that.utilitiesService.formatRawDate(rSegmentFields[12]);
-          order.result_accepted_date_time = that.utilitiesService.formatRawDate(rSegmentFields[12]);
+          sampleResult.results = finalResult;
+          sampleResult.tested_by = rSegmentFields[10];
+          sampleResult.analysed_date_time = that.utilitiesService.formatRawDate(rSegmentFields[12]);
+          sampleResult.authorised_date_time = that.utilitiesService.formatRawDate(rSegmentFields[12]);
+          sampleResult.result_accepted_date_time = that.utilitiesService.formatRawDate(rSegmentFields[12]);
         } else {
-          order.test_type = testType;
-          order.test_unit = null;
-          order.results = 'Failed';
-          order.tested_by = null;
-          order.analysed_date_time = null;
-          order.authorised_date_time = null;
-          order.result_accepted_date_time = null;
+          sampleResult.test_type = testType;
+          sampleResult.test_unit = null;
+          sampleResult.results = 'Failed';
+          sampleResult.tested_by = null;
+          sampleResult.analysed_date_time = null;
+          sampleResult.authorised_date_time = null;
+          sampleResult.result_accepted_date_time = null;
         }
-        order.raw_text = partData;
-        order.result_status = 1;
-        order.lims_sync_status = 0;
-        order.test_location = instrumentConnectionData.labName;
-        order.machine_used = instrumentConnectionData.instrumentId;
+        sampleResult.raw_text = partData;
+        sampleResult.result_status = resultStatus === 'F' ? 1 : 0;
+        sampleResult.lims_sync_status = 0;
+        sampleResult.test_location = instrumentConnectionData.labName;
+        sampleResult.machine_used = instrumentConnectionData.instrumentId;
 
-        return that.saveOrder(order, instrumentConnectionData);
+        return that.saveResult(sampleResult, instrumentConnectionData);
+      }else{
+        that.utilitiesService.logger('error', 'No result data found in ASTM data block', instrumentConnectionData.instrumentId);
+        return false;
       }
     }
 
@@ -808,9 +817,7 @@ export class InstrumentInterfaceService {
     }
   }
 
-
   // TEST ORDERS SECTION
-
 
   // Method to fetch orders and send as ASTM messages
   fetchAndSendASTMOrders(instrument: any) {
@@ -843,12 +850,12 @@ export class InstrumentInterfaceService {
 
 
   // Method to generate ASTM message for an order
-  private generateASTMMessageForOrder(order: any): string {
+  private generateASTMMessageForOrder(sampleResult: any): string {
     // Assuming order fields map directly to ASTM message fields
     // This will vary based on your specific ASTM message format requirements
-    let message = `H|\\^&|||${order.test_location}|||||||P|1\r`;
-    message += `P|1||||${order.order_id}|||||||||||||||||||||||\r`;
-    message += `O|1|${order.test_id}|${order.test_id}||${order.test_type}||||||||||||||O\r`;
+    let message = `H|\\^&|||${sampleResult.test_location}|||||||P|1\r`;
+    message += `P|1||||${sampleResult.order_id}|||||||||||||||||||||||\r`;
+    message += `O|1|${sampleResult.test_id}|${sampleResult.test_id}||${sampleResult.test_type}||||||||||||||O\r`;
     message += `L|1|N\r`;
 
     return message;
@@ -910,6 +917,50 @@ export class InstrumentInterfaceService {
     // Reset the sequence number to 1 (or 0, depending on protocol specifics)
     console.error("Resetting sequence number for " + instrumentId);
     that.astmSequenceNumbers.set(instrumentId, 100);
+  }
+
+  fetchAndSendHL7Orders(instrument: any) {
+    const that = this;
+    that.dbService.getOrdersToSend(
+      (orders: any[]) => {
+        if (!orders || orders.length === 0) {
+          that.utilitiesService.logger('error', 'No orders to send for ' + instrument.connectionParams.instrumentId, instrument.connectionParams.instrumentId);
+          return;
+        }
+
+        orders.forEach(order => {
+          // Generate HL7 message for each order
+          const hl7Message = that.generateHL7MessageForOrder(order);
+
+          // Frame the HL7 message with necessary control characters
+          const framedMessage = that.frameHL7Message(hl7Message);
+
+          // Send the framed message over TCP
+          that.tcpService.sendData(instrument.connectionParams, framedMessage);
+        });
+      },
+      (err: any) => {
+        console.error('Error fetching orders to send:', err);
+      }
+    );
+  }
+
+  // Method to generate HL7 message for an order
+  private generateHL7MessageForOrder(sampleResult: any): string {
+    const moment = require('moment');
+    const date = moment(new Date()).format('YYYYMMDDHHmmss');
+
+    let message = 'MSH|^~\\&|LIS|LISFacility|Roche|x800|' + date + '||ORM^O01|' + randomUUID() + '|P|2.3\r';
+    message += 'PID|||123456^^^LIS||Doe^John\r';
+    message += 'ORC|NW|' + sampleResult.order_id + '|||' + date + '\r';
+    message += 'OBR|1||' + sampleResult.order_id + '^LIS|' + sampleResult.test_id + '^' + sampleResult.test_type + '^L\r';
+
+    return message;
+  }
+
+  // Method to frame HL7 message with control characters
+  private frameHL7Message(message: string): string {
+    return '\x0B' + message + '\x1C' + '\x0D'; // \x0B is the start block, \x1C is the end block, and \x0D is carriage return
   }
 
 }

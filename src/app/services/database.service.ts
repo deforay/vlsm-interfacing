@@ -427,7 +427,7 @@ export class DatabaseService {
     // Try inserting into MySQL if connected
     that.checkMysqlConnection(null, () => {
       that.execQuery(mysqlQuery, Object.values(data), (mysqlResults) => {
-        console.log('MySQL Inserted:', mysqlResults);
+        //console.log('MySQL Inserted:', mysqlResults);
       }, (mysqlError) => {
         console.error('Error inserting into MySQL:', mysqlError.message);
       });
@@ -455,7 +455,7 @@ export class DatabaseService {
     // Independently try inserting into MySQL if connected
     that.checkMysqlConnection(null, () => {
       that.execQuery(mysqlQuery, Object.values(data), (mysqlResults) => {
-        console.log('MySQL Inserted:', mysqlResults);
+        //console.log('MySQL Inserted:', mysqlResults);
       }, (mysqlError) => {
         console.error('Error inserting into MySQL:', mysqlError);
       });
