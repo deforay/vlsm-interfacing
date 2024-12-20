@@ -111,7 +111,7 @@ export class ConsoleComponent implements OnInit, OnDestroy {
 
     // Fetch last few orders and logs on load
     setTimeout(() => {
-      that.fetchRecentResults('');
+      that.fetchRecentResults();
       that.fetchRecentLogs();
     }, 600);
 
@@ -125,7 +125,7 @@ export class ConsoleComponent implements OnInit, OnDestroy {
 
     // Refresh last orders every 5 minutes
     that.recentResultsInterval = setInterval(() => {
-      that.fetchRecentResults('');
+      that.fetchRecentResults();
       that.resyncTestResultsToMySQL();
     }, 1000 * 60 * 5);
   }
@@ -603,6 +603,14 @@ export class ConsoleComponent implements OnInit, OnDestroy {
 
     if (this.mysqlConnected) {
       this.utilitiesService.resyncTestResultsToMySQL(
+        (message: any) => {
+          console.log(message);
+        },
+        (error: any) => {
+          console.error(error);
+        }
+      );
+      this.utilitiesService.syncLimsStatusToSQLite(
         (message: any) => {
           console.log(message);
         },

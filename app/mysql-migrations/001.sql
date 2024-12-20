@@ -25,14 +25,14 @@ CREATE TABLE IF NOT EXISTS `orders` (
   `raw_text` mediumtext,
   `added_on` datetime DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (`id`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE utf8mb4_general_ci;
 
 CREATE TABLE IF NOT EXISTS `app_log` (
   `id` int(11) NOT NULL AUTO_INCREMENT,
   `log` text NOT NULL,
   `added_on` datetime DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (`id`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE utf8mb4_general_ci;
 
 CREATE TABLE IF NOT EXISTS `raw_data` (
   `id` int(11) NOT NULL AUTO_INCREMENT,
@@ -40,5 +40,5 @@ CREATE TABLE IF NOT EXISTS `raw_data` (
   `machine` varchar(500) NOT NULL,
   `added_on` datetime DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (`id`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE utf8mb4_general_ci;
 

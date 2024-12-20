@@ -36,6 +36,10 @@ export class UtilitiesService {
     this.dbService.resyncTestResultsToMySQL(success, errorf);
   }
 
+  syncLimsStatusToSQLite(success, errorf) {
+    this.dbService.syncLimsStatusToSQLite(success, errorf);
+  }
+
   sleep(ms) {
     return new Promise(resolve => setTimeout(resolve, ms));
   }

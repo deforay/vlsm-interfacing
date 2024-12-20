@@ -105,7 +105,11 @@ export class DatabaseService {
     that.hasRunMigrations = true;
 
     console.log('Checking and running migrations...');
-    connection.query('CREATE TABLE IF NOT EXISTS versions (id INT AUTO_INCREMENT PRIMARY KEY, version INT NOT NULL)ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;', (err) => {
+    let versionsTable = `CREATE TABLE IF NOT EXISTS versions(
+                            id INT AUTO_INCREMENT PRIMARY KEY,
+                            version INT NOT NULL
+                            )ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;`;
+    connection.query(versionsTable, (err) => {
       if (err) {
         console.error('Error creating versions table:', err);
         return;
@@ -352,29 +356,29 @@ export class DatabaseService {
       recentResultsQuery += ` WHERE ${searchConditions}`;
     }
 
-    // this.electronService.execSqliteQuery(recentResultsQuery, null)
-    //   .then(success)
-    //   .catch(errorf);
+    this.electronService.execSqliteQuery(recentResultsQuery, null)
+      .then(success)
+      .catch(errorf);
 
-    this.checkMysqlConnection(null, () => {
-      // MySQL is connected, use MySQL
-      this.execQuery(recentResultsQuery, null, success, (mysqlError) => {
-        console.error('MySQL query error:', mysqlError.message);
-        // If MySQL query fails, fallback to SQLite
-        this.electronService.execSqliteQuery(recentResultsQuery, null)
-          .then(success)
-          .catch(errorf);
-      });
-    }, (err) => {
-      // MySQL not connected, fallback to SQLite
-      this.electronService.execSqliteQuery(recentResultsQuery, null)
-        .then(success)
-        .catch(errorf);
-    });
+    // this.checkMysqlConnection(null, () => {
+    //   // MySQL is connected, use MySQL
+    //   this.execQuery(recentResultsQuery, null, success, (mysqlError) => {
+    //     console.error('MySQL query error:', mysqlError.message);
+    //     // If MySQL query fails, fallback to SQLite
+    //     this.electronService.execSqliteQuery(recentResultsQuery, null)
+    //       .then(success)
+    //       .catch(errorf);
+    //   });
+    // }, (err) => {
+    //   // MySQL not connected, fallback to SQLite
+    //   this.electronService.execSqliteQuery(recentResultsQuery, null)
+    //     .then(success)
+    //     .catch(errorf);
+    // });
   }
 
   reSyncRecord(orderId: string): void {
-    const updateQuery = `UPDATE orders SET lims_sync_status = '0' WHERE order_id = ?`;
+    const updateQuery = `UPDATE orders SET lims_sync_status = '0', lims_sync_date_time = CURRENT_TIMESTAMP WHERE order_id = ?`;
     this.execQuery(
       updateQuery,
       [orderId],
@@ -386,6 +390,78 @@ export class DatabaseService {
       }
     );
   }
+
+  syncLimsStatusToSQLite(success: any, errorf: any) {
+    const that = this;
+
+    // Step 1: Get the maximum `lims_sync_date_time` from SQLite
+    const sqliteMaxQuery = 'SELECT MAX(lims_sync_date_time) as maxSyncDate FROM orders';
+
+    that.electronService.execSqliteQuery(sqliteMaxQuery, [])
+      .then((sqliteResult: any) => {
+        const maxSyncDate = sqliteResult[0]?.maxSyncDate || '0000-00-00 00:00:00'; // Default to the earliest date
+        console.log('SQLite max lims_sync_date_time:', maxSyncDate);
+
+        // Step 2: Query MySQL for records with `lims_sync_date_time` greater than `maxSyncDate`
+        const mysqlQuery = `
+          SELECT order_id, lims_sync_status, lims_sync_date_time
+          FROM orders
+          WHERE lims_sync_date_time > ?
+          ORDER BY lims_sync_date_time ASC
+        `;
+
+        that.checkMysqlConnection(null, () => {
+          that.execQuery(mysqlQuery, [maxSyncDate],
+            (mysqlResults: any[]) => {
+              if (mysqlResults.length === 0) {
+                console.log('No new updates to sync from MySQL to SQLite.');
+                success('No updates to sync.');
+                return;
+              }
+
+              console.log('Records to sync from MySQL to SQLite:', mysqlResults);
+
+              // Step 3: Update SQLite with new data
+              const updatePromises = mysqlResults.map(record => {
+                const sqliteUpdateQuery = `
+                  UPDATE orders
+                  SET lims_sync_status = ?, lims_sync_date_time = ?
+                  WHERE order_id = ?
+                `;
+                return that.electronService.execSqliteQuery(sqliteUpdateQuery, [
+                  record.lims_sync_status,
+                  record.lims_sync_date_time,
+                  record.order_id
+                ]);
+              });
+
+              // Wait for all updates to complete
+              Promise.all(updatePromises)
+                .then(() => {
+                  console.log('Sync from MySQL to SQLite completed successfully.');
+                  success('Sync completed.');
+                })
+                .catch(error => {
+                  console.error('Error updating SQLite:', error);
+                  errorf(error);
+                });
+            },
+            (mysqlError) => {
+              console.error('Error querying MySQL for updates:', mysqlError);
+              errorf(mysqlError);
+            });
+        }, (mysqlConnectionError) => {
+          console.error('Error connecting to MySQL:', mysqlConnectionError);
+          errorf(mysqlConnectionError);
+        });
+
+      })
+      .catch((sqliteError: any) => {
+        console.error('Error fetching max lims_sync_date_time from SQLite:', sqliteError);
+        errorf(sqliteError);
+      });
+  }
+
 
   fetchLastSyncTimes(success, errorf) {
     const that = this;
