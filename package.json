@@ -1,6 +1,6 @@
 {
   "main": "app/main.js",
-  "version": "2.2.9",
+  "version": "2.3.0",
   "private": true,
   "scripts": {
     "postinstall": "electron-builder install-app-deps",

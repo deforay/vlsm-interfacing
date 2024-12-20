@@ -517,51 +517,46 @@ export class InstrumentInterfaceService {
       }, (err: any) => {
         that.utilitiesService.logger('error', 'Failed to save raw data : ' + JSON.stringify(err), instrumentConnectionData.instrumentId);
       });
-      let astmData = that.strData;
-      switch (astmProtocolType) {
-        case 'astm-nonchecksum':
-          astmData = that.utilitiesService.removeControlCharacters(astmData, false);
-          break;
-        case 'astm-checksum':
-          astmData = that.utilitiesService.removeControlCharacters(astmData, true);
-          break;
-        default:
-          astmData = that.utilitiesService.removeControlCharacters(astmData, true);
-          break;
+
+      let origAstmData = that.strData;
+
+      let withChecksum = true; // assume checksum is present by default
+
+      if (astmProtocolType === 'astm-nonchecksum') {
+        withChecksum = false;
       }
 
-      astmData = that.reconstructASTM(astmData);
+      let astmData = that.utilitiesService.removeControlCharacters(origAstmData, withChecksum);
+      //astmData = that.reconstructASTM(astmData);
       const fullDataArray = astmData.split(that.START);
 
       //that.utilitiesService.logger('info', "AFTER SPLITTING USING " + that.START, instrumentConnectionData.instrumentId);
       // that.utilitiesService.logger('info', fullDataArray, instrumentConnectionData.instrumentId);
-      console.error('-------------------');
-      console.error('-------------------');
-      console.error(fullDataArray);
-      console.error(fullDataArray.length);
-      console.error('-------------------');
-      console.error('-------------------');
+
 
       fullDataArray.forEach(function (partData) {
-        // console.error(partData);
-        if (partData !== '' && partData !== undefined && partData !== null) {
+        if (partData){
 
           const astmArray = partData.split(/<CR>/);
-          const dataArray = that.getASTMDataBlock(astmArray);
 
-          console.error(partData);
-          console.error(dataArray);
-          console.error(dataArray['R']);
+          if (Array.isArray(astmArray) && astmArray.length > 0) {
+            const dataArray = that.getASTMDataBlock(astmArray);
 
-          //that.utilitiesService.logger('info', dataArray, instrumentConnectionData.instrumentId);
-          //that.utilitiesService.logger('info',dataArray['R'][0], instrumentConnectionData.instrumentId);
+            // console.error(partData);
+            // console.error(dataArray);
+            // console.error(dataArray['R']);
 
-          if (dataArray === null || dataArray === undefined) {
-            that.utilitiesService.logger('info', 'No ASTM data received.', instrumentConnectionData.instrumentId);
-            return;
+            //that.utilitiesService.logger('info',dataArray['R'][0], instrumentConnectionData.instrumentId);
+
+            // Check if dataArray is empty
+            if (Object.keys(dataArray).length === 0) {
+              that.utilitiesService.logger('info', 'No ASTM data received for following:', instrumentConnectionData.instrumentId);
+              that.utilitiesService.logger('info', astmArray, instrumentConnectionData.instrumentId);
+              return;
+            }
+
+            that.saveASTMDataBlock(dataArray, partData, instrumentConnectionData);
           }
-
-          that.saveASTMDataBlock(dataArray, partData, instrumentConnectionData);
 
         }
       });
@@ -648,19 +643,6 @@ export class InstrumentInterfaceService {
     }
   }
 
-  // private reconstructASTM(data: string): string {
-
-  //   // Split the data at the valid record starts, marked by R|, O|, P|, Q|, L|, C|
-  //   const splitData = data.split(/<CR>(?=H\|)|<CR>(?=R\|)|<CR>(?=O\|)|<CR>(?=P\|)|<CR>(?=Q\|)|<CR>(?=L\|)|<CR>(?=C\|)/);
-
-  //   // Remove all <CR> markers from the data (if any are left within the split parts)
-  //   const cleanedSplitData = splitData.map(part => part.replace(/<CR>/g, ''));
-  //   // Rejoin the split data with <CR> at the end of each segment
-  //   let reconstructedData = cleanedSplitData.join('<CR>') + '<CR>';  // Ensure <CR> at the end of the final part
-
-  //   return reconstructedData;
-  // }
-
   private reconstructASTM(data: string): string {
     // Split the data at the valid record starts, marked by H|, P|, O|, R|, L|, C|, Q|, M|, S|, I|
     const splitData = data.split(/<CR>(?=[HPORLCQMSI]\|)/);
@@ -745,6 +727,10 @@ export class InstrumentInterfaceService {
     const that = this;
     const sampleResult: any = {};
     try {
+
+      that.utilitiesService.logger('info', 'Processing following ASTM Data to save into database...', instrumentConnectionData.instrumentId);
+      that.utilitiesService.logger('info', dataArray, instrumentConnectionData.instrumentId);
+
       if (dataArray['O'] && dataArray['O'].length > 0) {
 
         const oSegmentFields = dataArray['O'][0]; // dataArray['O'] is an array of arrays (each sub-array is a segment's fields)
@@ -803,15 +789,16 @@ export class InstrumentInterfaceService {
         sampleResult.machine_used = instrumentConnectionData.instrumentId;
 
         return that.saveResult(sampleResult, instrumentConnectionData);
-      }else{
-        that.utilitiesService.logger('error', 'No result data found in ASTM data block', instrumentConnectionData.instrumentId);
+      } else {
+        that.utilitiesService.logger('error', 'Order record not found in the following ASTM data block', instrumentConnectionData.instrumentId);
+        that.utilitiesService.logger('error', dataArray, instrumentConnectionData.instrumentId);
         return false;
       }
     }
 
     catch (error) {
       that.utilitiesService.logger('error', error, instrumentConnectionData.instrumentId);
-      console.error(error);
+      that.utilitiesService.logger('error', dataArray, instrumentConnectionData.instrumentId);
       return false;
 
     }
@@ -843,7 +830,7 @@ export class InstrumentInterfaceService {
         });
       },
       (err: any) => {
-        console.error("Error fetching orders to send:", err);
+        //console.error("Error fetching orders to send:", err);
       }
     );
   }

@@ -85,30 +85,40 @@ export class UtilitiesService {
     return d;
   }
 
-  removeControlCharacters(astmData: string, removeChecksum = true, replaceNewLine = true) {
+  removeControlCharacters(astmData: string, withChecksum = true) {
     const controlCharMap = {
-      '\x05': '',
-      '\x02': '',
-      '\x03': '',
-      '\x04': '',
-      '\x17': '<ETB>'
+      '\x05': '',       // ENQ (Enquiry)
+      '\x02': '',       // STX (Start of Text)
+      '\x03': '<ETX>',  // ETX (End of Text)
+      '\x04': '',       // EOT (End of Transmission)
+      '\x17': '<ETB>',  // ETB (End of Transmission Block)
+      '\n': '<CR>',     // Line Feed to <CR>
+      '\r': '<CR>'      // Carriage Return to <CR>
     };
 
-    // Replace control characters based on the mapping
-    astmData = astmData.replace(/[\x05\x02\x03\x04\x17]/g, match => controlCharMap[match]);
+    // Replace control characters, but conditionally handle <ETB>
+    astmData = astmData.replace(
+      withChecksum ? /[\x05\x02\x03\x04\x17\n\r]/g : /[\x05\x02\x03\x04\x17\n\r]/g,
+      match => controlCharMap[match]
+    );
 
-    if (replaceNewLine) {
-      // Replace any combination of \r\n, \n\r, \n, or \r with <CR>
-      astmData = astmData.replace(/\r\n|\n\r|\n|\r/g, '<CR>');
+    // Replace consecutive <CR>
+    astmData = astmData.replace(/(<CR>)+/g, '<CR>');
+
+    // Conditionally remove checksums associated with <ETB> or <ETX>
+    if (withChecksum) {
+      // Match <ETB> or <ETX> followed by a 2-character checksum and optional <CR>
+      astmData = astmData.replace(/<(ETB|ETX)>\w{2}(<CR>)?/g, '');
     }
 
-    // Conditionally remove the transmission blocks (which include the checksum)
-    if (removeChecksum) {
-      astmData = astmData.replace(/<ETB>\w{2}/g, '');  // Removes <ETB> and the checksum
-    }
+    // Always remove remaining <ETX>
+    astmData = astmData.replace(/<ETX>/g, ''); // Ensure <ETX> is removed completely
 
     return astmData;
   }
+
+
+
 
   fetchRecentResults(searchParam?: string) {
     const that = this;
