@@ -98,7 +98,7 @@ export class UtilitiesService {
 
     // Replace control characters, but conditionally handle <ETB>
     astmData = astmData.replace(
-      withChecksum ? /[\x05\x02\x03\x04\x17\n\r]/g : /[\x05\x02\x03\x04\x17\n\r]/g,
+      withChecksum ? /[\x05\x02\x03\x04\x17\n\r]/g : /[\x05\x02\x03\n\r]/g,
       match => controlCharMap[match]
     );
 
