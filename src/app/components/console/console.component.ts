@@ -115,10 +115,10 @@ export class ConsoleComponent implements OnInit, OnDestroy {
       that.fetchRecentLogs();
     }, 600);
 
-    // Check MySQL connection every 30 seconds (you can adjust this as needed)
+    // Check MySQL connection on regular intervals
     that.mysqlCheckInterval = setInterval(() => {
       that.checkMysqlConnection();
-    }, 1000 * 5); // Every 5 seconds
+    }, 1000 * 7);
 
     // Refresh last orders every 5 minutes
     that.recentResultsInterval = setInterval(() => { that.fetchRecentResults(''); }, 1000 * 60 * 5);
@@ -588,14 +588,15 @@ export class ConsoleComponent implements OnInit, OnDestroy {
 
 
   clearLiveLog(instrument: any) {
-    this.utilitiesService.clearLiveLog(instrument.connectionParams.instrumentId);
+    const that = this;
+    that.utilitiesService.clearLiveLog(instrument.connectionParams.instrumentId);
     // Clear logs and filtered logs for the specific instrument
-    if (this.instrumentLogs[instrument.connectionParams.instrumentId]) {
-      this.instrumentLogs[instrument.connectionParams.instrumentId].logs = [];
-      this.instrumentLogs[instrument.connectionParams.instrumentId].filteredLogs = [];
+    if (that.instrumentLogs[instrument.connectionParams.instrumentId]) {
+      that.instrumentLogs[instrument.connectionParams.instrumentId].logs = [];
+      that.instrumentLogs[instrument.connectionParams.instrumentId].filteredLogs = [];
     }
 
-    this.cdRef.detectChanges(); // Trigger change detection if needed
+    that.cdRef.detectChanges(); // Trigger change detection if needed
   }
 
 

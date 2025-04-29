@@ -66,16 +66,16 @@ export class InstrumentInterfaceService {
 
 
   hl7ACK(messageID: string | number, characterSet: string, messageProfileIdentifier: string, hl7Version = '2.5.1') {
-
     const that = this;
 
     if (!messageID || messageID === '') {
-      messageID = Math.random();
+      messageID = Math.random().toString();
     }
 
     if (!characterSet || characterSet === '') {
       characterSet = 'UNICODE UTF-8';
     }
+
     if (!messageProfileIdentifier || messageProfileIdentifier === '') {
       messageProfileIdentifier = '';
     }
@@ -83,32 +83,50 @@ export class InstrumentInterfaceService {
     const moment = require('moment');
     const date = moment(new Date()).format('YYYYMMDDHHmmss');
 
-    let ack = String.fromCharCode(11)
-      + 'MSH|^~\\&|VLSM|VLSM|VLSM|VLSM|'
-      + date + '||ACK^R22^ACK|'
-      + randomUUID() + '|P|' + hl7Version + '|||||'
-      + "|" + characterSet
-      + "|" + messageProfileIdentifier
-      + String.fromCharCode(13);
+    const mshFields = [
+      'MSH',                     // MSH-1 (not transmitted, added by framing)
+      '^~\\&',                   // MSH-2 Encoding Characters
+      'VLSM',                    // MSH-3 Sending Application
+      'VLSM',                    // MSH-4 Sending Facility
+      'VLSM',                    // MSH-5 Receiving Application
+      'VLSM',                    // MSH-6 Receiving Facility
+      date,                      // MSH-7 Date/Time
+      '',                        // MSH-8 Security
+      'ACK^R22^ACK',             // MSH-9 Message Type
+      randomUUID(),              // MSH-10 Message Control ID
+      'P',                       // MSH-11 Processing ID
+      hl7Version,                // MSH-12 Version ID
+      '',                        // MSH-13 Sequence Number
+      '',                        // MSH-14 Continuation Pointer
+      'NE',                      // MSH-15 Accept Acknowledgment Type
+      'AL',                      // MSH-16 Application Acknowledgment Type
+      '',                        // MSH-17 Country Code
+      characterSet,              // MSH-18 Character Set
+      '',                        // MSH-19 Principal Language of Message
+      '',                        // MSH-20 Alternate Character Set Handling Scheme
+      messageProfileIdentifier   // MSH-21 Message Profile Identifier
+    ];
 
-    ack += 'MSA|AA|' + messageID
-      + String.fromCharCode(13)
-      + String.fromCharCode(28)
-      + String.fromCharCode(13);
+    let ack = String.fromCharCode(11) // <VT>
+      + mshFields.join('|') + String.fromCharCode(13) // <CR>
+      + 'MSA|AA|' + messageID + String.fromCharCode(13)
+      + String.fromCharCode(28) + String.fromCharCode(13); // <FS><CR>
 
     that.utilitiesService.logger('info', 'Sending HL7 ACK : ' + ack);
     return ack;
   }
 
 
+
   processHL7DataAlinity(instrumentConnectionData: InstrumentConnectionStack, rawHl7Text: string) {
 
     const that = this;
     const message = that.hl7parser.create(rawHl7Text.trim());
-    const msgID = message.get('MSH.10').toString();
-    const characterSet = message.get('MSH.18').toString();
-    const messageProfileIdentifier = message.get('MSH.21').toString();
-    const hl7Version = message.get('MSH.12') ? message.get('MSH.12').toString() : '2.5.1'; // Default to 2.5.1 if not provided
+    const msgID = message.get('MSH.10')?.toString() || '';
+    const characterSet = message.get('MSH.18')?.toString() || 'UNICODE UTF-8';
+    const messageProfileIdentifier = message.get('MSH.21')?.toString() || '';
+    const hl7Version = message.get('MSH.12')?.toString() || '2.5.1';
+
     that.tcpService.socketClient.write(that.hl7ACK(msgID, characterSet, messageProfileIdentifier, hl7Version));
     // let result = null;
     //console.log(message.get('OBX'));
@@ -202,10 +220,10 @@ export class InstrumentInterfaceService {
 
     const that = this;
     const message = that.hl7parser.create(rawHl7Text.trim());
-    const msgID = message.get('MSH.10').toString();
-    const characterSet = message.get('MSH.18').toString();
-    const messageProfileIdentifier = message.get('MSH.21').toString();
-    const hl7Version = message.get('MSH.12') ? message.get('MSH.12').toString() : '2.5.1'; // Default to 2.5.1 if not provided
+    const msgID = message.get('MSH.10')?.toString() || '';
+    const characterSet = message.get('MSH.18')?.toString() || 'UNICODE UTF-8';
+    const messageProfileIdentifier = message.get('MSH.21')?.toString() || '';
+    const hl7Version = message.get('MSH.12')?.toString() || '2.5.1'; // Default to 2.5.1 if not provided
     that.tcpService.socketClient.write(that.hl7ACK(msgID, characterSet, messageProfileIdentifier, hl7Version));
     // let result = null;
     //console.log(message.get('OBX'));
@@ -535,7 +553,7 @@ export class InstrumentInterfaceService {
 
 
       fullDataArray.forEach(function (partData) {
-        if (partData){
+        if (partData) {
 
           const astmArray = partData.split(/<CR>/);
 

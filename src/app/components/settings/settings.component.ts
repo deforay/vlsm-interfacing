@@ -227,7 +227,7 @@ export class SettingsComponent implements OnInit {
       that.electronStoreService.set('instrumentsConfig', updatedSettings.instrumentsSettings);
       console.log('Updated Instruments Settings:', updatedSettings.instrumentsSettings);
 
-      new Notification('Success', {
+      new window.Notification('Success', {
         body: 'Updated Interface Tool settings'
       });
       that.resetInstrumentVariables();

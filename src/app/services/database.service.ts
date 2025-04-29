@@ -48,6 +48,7 @@ export class DatabaseService {
         acquireTimeout: 10000,
         connectTimeout: 10000,
         timeout: 600,
+        enableKeepAlive: true,
         host: that.commonSettings.mysqlHost,
         user: that.commonSettings.mysqlUser,
         password: that.cryptoService.decrypt(that.commonSettings.mysqlPassword),
@@ -70,6 +71,20 @@ export class DatabaseService {
       console.warn('MySQL Pool or configuration is already initialized or incomplete.');
     }
   }
+
+  /**
+  * Checks if the given MySQL error is transient and safe to retry.
+  * Typical retryable errors include connection loss, timeouts, and resets.
+  */
+  public shouldRetry(err: any): boolean {
+    return [
+      'PROTOCOL_CONNECTION_LOST',
+      'ECONNRESET',
+      'ETIMEDOUT',
+      'ER_SERVER_GONE_ERROR'
+    ].includes(err?.code);
+  }
+
 
   public checkMysqlConnection(
     mysqlParams?: { host?: string, user?: string, password?: string, port?: string },
@@ -196,6 +211,16 @@ export class DatabaseService {
   }
 
 
+  /**
+   * Executes a MySQL query with retry-on-error support and ensures connection release.
+   * Optionally runs a callback for custom processing before releasing the connection.
+   *
+   * @param query - SQL query to execute
+   * @param data - Bound parameters for the query
+   * @param success - Success callback
+   * @param errorf - Error callback
+   * @param callback - Optional custom callback before releasing connection
+  */
 
   execQuery(query: string, data: any, success: any, errorf: any, callback = null) {
     if (!this.mysqlPool) {
@@ -203,36 +228,45 @@ export class DatabaseService {
       return;
     }
 
-    this.mysqlPool.getConnection((err, connection) => {
-      if (err) {
-        errorf(err);
-        return;
-      }
-
-      connection.query({ sql: query }, data, (queryError, results) => {
-        if (queryError) {
-          connection.release();
-          errorf(queryError);
-          return;
+    const execute = (retryAttempt = false) => {
+      this.mysqlPool.getConnection((connErr, connection) => {
+        if (connErr) {
+          if (!retryAttempt && this.shouldRetry(connErr)) {
+            console.warn('Retrying connection after error:', connErr.code);
+            setTimeout(() => execute(true), 300); // Retry after 300ms delay
+            return;
+          }
+          return errorf(connErr);
         }
 
-        // If a callback is provided, use it and let it handle the connection release
-        if (callback) {
-          callback(results, error => {
+        connection.query({ sql: query }, data, (queryErr, results) => {
+          if (queryErr) {
             connection.release();
-            if (error) {
-              errorf(error);
-            } else {
-              success(results);
+            if (!retryAttempt && this.shouldRetry(queryErr)) {
+              console.warn('Retrying query after error:', queryErr.code);
+              setTimeout(() => execute(true), 300); // Retry after 300ms delay
+              return;
             }
-          });
-        } else {
-          // If no callback, handle success and release the connection
-          success(results);
-          connection.release();
-        }
+            return errorf(queryErr);
+          }
+
+          const done = () => connection.release();
+
+          if (callback) {
+            callback(results, (cbErr: any) => {
+              done();
+              if (cbErr) errorf(cbErr);
+              else success(results);
+            });
+          } else {
+            success(results);
+            done();
+          }
+        });
       });
-    });
+    };
+
+    execute();
   }
 
 
