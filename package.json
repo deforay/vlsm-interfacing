@@ -37,6 +37,7 @@
     "@angular/platform-browser-dynamic": "17.3.6",
     "@angular/router": "17.3.6",
     "@fortawesome/fontawesome-free": "^6.6.0",
+    "better-sqlite3": "^11.9.1",
     "electron-log": "^5.2.0",
     "electron-store": "^8.2.0",
     "hl7parser": "^1.0.1",
@@ -44,7 +45,6 @@
     "mysql": "2.18.1",
     "ngx-pagination": "^6.0.3",
     "rxjs": "7.8.1",
-    "sqlite3": "5.1.6",
     "tslib": "2.6.2",
     "uuid": "^10.0.0",
     "zone.js": "0.14.4"

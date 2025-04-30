@@ -12,11 +12,11 @@ Object.defineProperty(exports, "__esModule", { value: true });
 const electron_1 = require("electron");
 const path = require("path");
 const fs = require("fs");
-const Store = require("electron-store");
 const log = require("electron-log/main");
 const sqlite3helper_main_1 = require("./sqlite3helper.main");
+const Store = require('electron-store');
 let win = null;
-let store = null;
+let store = new Store();
 let sqlite3Obj = null;
 let sqliteDbName = 'interface.db';
 const args = process.argv.slice(1), serve = args.some(val => val === '--serve');
@@ -226,14 +226,13 @@ try {
             //   }
             // });
             electron_1.ipcMain.on('sqlite3-query', (event, sql, args, uniqueEvent) => {
-                const queryCallback = (err, rows) => {
-                    event.reply(uniqueEvent, (err === null || err === void 0 ? void 0 : err.message) || rows); // Use the unique event name to reply
-                };
-                if (!args) {
-                    sqlite3Obj.all(sql, queryCallback);
+                try {
+                    const stmt = sqlite3Obj.prepare(sql);
+                    const result = args ? stmt.all(...args) : stmt.all();
+                    event.reply(uniqueEvent, result);
                 }
-                else {
-                    sqlite3Obj.all(sql, args, queryCallback);
+                catch (err) {
+                    event.reply(uniqueEvent, { error: err.message });
                 }
             });
             electron_1.ipcMain.handle('log-info', (event, message, instrumentId = null) => {

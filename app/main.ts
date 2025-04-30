@@ -1,12 +1,13 @@
 import { app, BrowserWindow, screen, ipcMain, dialog, Tray, Menu, nativeImage } from 'electron';
 import * as path from 'path';
 import * as fs from 'fs';
-import * as Store from 'electron-store';
+
 import * as log from 'electron-log/main';
 import { setupSqlite } from './sqlite3helper.main';
 
+const Store = require('electron-store');
 let win: BrowserWindow = null;
-let store: Store = null;
+let store = new Store();
 let sqlite3Obj: any = null;
 let sqliteDbName: string = 'interface.db';
 const args = process.argv.slice(1),
@@ -254,16 +255,16 @@ try {
       // });
 
       ipcMain.on('sqlite3-query', (event, sql, args, uniqueEvent) => {
-        const queryCallback = (err: { message: any }, rows: any) => {
-          event.reply(uniqueEvent, err?.message || rows); // Use the unique event name to reply
-        };
-
-        if (!args) {
-          sqlite3Obj.all(sql, queryCallback);
-        } else {
-          sqlite3Obj.all(sql, args, queryCallback);
+        try {
+          const stmt = sqlite3Obj.prepare(sql);
+          const result = args ? stmt.all(...args) : stmt.all();
+          event.reply(uniqueEvent, result);
+        } catch (err) {
+          event.reply(uniqueEvent, { error: err.message });
         }
       });
+
+
 
 
       ipcMain.handle('log-info', (event, message, instrumentId = null) => {

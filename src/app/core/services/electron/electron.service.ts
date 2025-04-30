@@ -18,7 +18,6 @@ export class ElectronService {
   fs: typeof fs;
   mysql: typeof mysql;
   net: typeof net;
-  sqlite: any;
 
   constructor() {
 
@@ -33,8 +32,6 @@ export class ElectronService {
 
       that.mysql = window.require('mysql');
       that.net = window.require('net');
-
-      that.sqlite = window.require('sqlite3');
 
       // Notes :
       // * A NodeJS's dependency imported with 'window.require' MUST BE present in `dependencies` of both `app/package.json`

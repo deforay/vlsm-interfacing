@@ -4,114 +4,81 @@ exports.setupSqlite = void 0;
 const electron_1 = require("electron");
 const path = require("path");
 const fs = require("fs");
-const sqlite3_1 = require("sqlite3");
 const log = require("electron-log/main");
+const Database = require('better-sqlite3');
 let sqlitePath = null;
 let sqliteDbName = 'interface.db';
 let store = null;
 const migrationsDir = path.join(__dirname, 'sqlite-migrations');
 function ensureDirectoryExistence(filePath) {
     const dirname = path.dirname(filePath);
-    if (fs.existsSync(dirname)) {
-        return true;
+    if (!fs.existsSync(dirname)) {
+        fs.mkdirSync(dirname, { recursive: true });
     }
-    fs.mkdirSync(dirname, { recursive: true });
 }
-function initializeDatabase(callback) {
-    sqlitePath = path.join(electron_1.app.getPath('userData'), sqliteDbName);
-    // Ensure the directory exists
-    ensureDirectoryExistence(sqlitePath);
-    const database = new sqlite3_1.Database(sqlitePath, (err) => {
-        if (err) {
-            store.set('appPath', JSON.stringify(err));
-            log.error('Database opening error: ', err);
-            callback(database, err);
-        }
-        else {
-            log.info('SQLite database initialized at:', sqlitePath);
-            callback(database);
-        }
-    });
+function getCurrentVersion(db) {
+    try {
+        const row = db.prepare("SELECT version FROM versions ORDER BY version DESC LIMIT 1").get();
+        return (row === null || row === void 0 ? void 0 : row.version) || 0;
+    }
+    catch (err) {
+        return 0;
+    }
 }
-function getCurrentVersion(db, callback) {
-    db.get("SELECT version FROM versions ORDER BY version DESC LIMIT 1", (err, row) => {
-        if (err) {
-            callback(0);
-        }
-        else {
-            callback(row ? row.version : 0);
-        }
-    });
-}
-function runMigration(db, version, callback) {
+function runMigration(db, version) {
     const filePath = path.join(migrationsDir, `${String(version).padStart(3, '0')}.sql`);
     const sql = fs.readFileSync(filePath, 'utf8');
     const statements = sql.split(';').map(stmt => stmt.trim()).filter(stmt => stmt.length > 0);
-    db.serialize(() => {
-        statements.forEach((statement, index) => {
-            db.run(statement, (err) => {
-                if (err && !err.message.includes('duplicate column name')) {
-                    callback(err);
-                    return;
-                }
-                if (index === statements.length - 1) {
-                    db.run("INSERT INTO versions (version) VALUES (?)", [version], (err) => {
-                        callback(err);
-                    });
-                }
-            });
-        });
+    const insertVersionStmt = db.prepare("INSERT INTO versions (version) VALUES (?)");
+    const transaction = db.transaction(() => {
+        for (const stmt of statements) {
+            try {
+                db.prepare(stmt).run();
+            }
+            catch (err) {
+                if (!String(err.message).includes('duplicate column name'))
+                    throw err;
+            }
+        }
+        insertVersionStmt.run(version);
     });
+    transaction();
 }
-function migrate(db, callback) {
-    db.run(`CREATE TABLE IF NOT EXISTS versions (
+function migrate(db) {
+    db.prepare(`CREATE TABLE IF NOT EXISTS versions (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     version INTEGER NOT NULL,
     applied_at DATETIME DEFAULT CURRENT_TIMESTAMP
-  );`, (err) => {
-        if (err)
-            return callback(err);
-        getCurrentVersion(db, (currentVersion) => {
-            const migrations = [
-                { version: 1 }, // Add new migrations here as { version: <number> }
-                { version: 2 }
-            ];
-            let migrationIndex = 0;
-            const runNextMigration = () => {
-                if (migrationIndex < migrations.length) {
-                    const migration = migrations[migrationIndex];
-                    if (migration.version > currentVersion) {
-                        runMigration(db, migration.version, (err) => {
-                            if (err)
-                                return callback(err);
-                            migrationIndex++;
-                            runNextMigration();
-                        });
-                    }
-                    else {
-                        migrationIndex++;
-                        runNextMigration();
-                    }
-                }
-                else {
-                    callback();
-                }
-            };
-            runNextMigration();
-        });
-    });
+  )`).run();
+    const migrations = [
+        { version: 1 },
+        { version: 2 }
+    ];
+    const currentVersion = getCurrentVersion(db);
+    for (const m of migrations) {
+        if (m.version > currentVersion) {
+            runMigration(db, m.version);
+        }
+    }
 }
 function setupSqlite(storeInstance, callback) {
-    store = storeInstance;
-    initializeDatabase((db, err) => {
-        if (err) {
-            callback(db, err);
-            return;
+    try {
+        if (!storeInstance) {
+            throw new Error('storeInstance is null or undefined.');
         }
-        migrate(db, (err) => {
-            callback(db, err);
-        });
-    });
+        sqlitePath = path.join(electron_1.app.getPath('userData'), sqliteDbName);
+        ensureDirectoryExistence(sqlitePath);
+        const db = new Database(sqlitePath);
+        storeInstance.set('appPath', sqlitePath);
+        storeInstance.set('appVersion', electron_1.app.getVersion());
+        log.info('SQLite database initialized at:', sqlitePath);
+        migrate(db);
+        callback(db); // Success
+    }
+    catch (err) {
+        log.error('Failed to set up SQLite:', err);
+        callback(null, err); // Failure
+    }
 }
 exports.setupSqlite = setupSqlite;
 //# sourceMappingURL=sqlite3helper.main.js.map
