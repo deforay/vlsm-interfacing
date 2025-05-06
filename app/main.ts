@@ -151,7 +151,7 @@ try {
         console.error('Error during SQLite setup:', err);
       }
       sqlite3Obj = db;
-      console.error('SQLite setup complete');
+      console.info('SQLite setup complete');
 
 
       createWindow();
@@ -256,15 +256,36 @@ try {
 
       ipcMain.on('sqlite3-query', (event, sql, args, uniqueEvent) => {
         try {
+          if (!sqlite3Obj) {
+            throw new Error('Database not initialized');
+          }
+          
           const stmt = sqlite3Obj.prepare(sql);
-          const result = args ? stmt.all(...args) : stmt.all();
+          let result;
+          
+          // Check if it's a SELECT query or other statement type
+          if (sql.trim().toLowerCase().startsWith('select')) {
+            result = args ? stmt.all(...args) : stmt.all();
+          } else if (sql.trim().toLowerCase().startsWith('insert')) {
+            result = args ? stmt.run(...args) : stmt.run();
+            // For better debugging of inserts, log the changes
+            console.log(`Insert operation completed. Changes: ${result.changes}, Last ID: ${result.lastInsertRowid}`);
+          } else {
+            // UPDATE, DELETE, etc.
+            result = args ? stmt.run(...args) : stmt.run();
+          }
+          
           event.reply(uniqueEvent, result);
         } catch (err) {
-          event.reply(uniqueEvent, { error: err.message });
+          console.error(`SQLite error for query [${sql}]:`, err);
+          // Return structured error object
+          event.reply(uniqueEvent, { 
+            error: err.message,
+            code: err.code || 'SQLITE_ERROR',
+            sql: sql
+          });
         }
       });
-
-
 
 
       ipcMain.handle('log-info', (event, message, instrumentId = null) => {

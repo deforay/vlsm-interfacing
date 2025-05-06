@@ -324,7 +324,7 @@ export class DatabaseService {
 
     if (searchParam) {
       const columns = [
-        'machine', 'added_on', 'date'
+        'machine', 'added_on', 'data'
       ];
       const searchConditions = columns.map(col => `${col} LIKE '%${searchParam}%'`).join(' OR ');
       recentRawDataQuery += ` WHERE ${searchConditions}`;

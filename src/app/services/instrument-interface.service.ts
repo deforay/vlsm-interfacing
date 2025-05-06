@@ -216,6 +216,20 @@ export class InstrumentInterfaceService {
       });
     });
   }
+
+  private getHL7ResultStatusType(singleObx: any): string {
+    const resultStatus = singleObx.get('OBX.11')?.toString().toUpperCase() || '';
+    const resultValue = singleObx.get('OBX.5.1')?.toString().toLowerCase() || '';
+    const badValues = ['failed', 'invalid'];
+    if (resultStatus === 'X' || badValues.includes(resultValue)) {
+      return 'ERROR';
+    }
+    if (['I', 'R'].includes(resultStatus)) {
+      return 'INCOMPLETE';
+    }
+    return 'FINAL';
+  }
+
   processHL7Data(instrumentConnectionData: InstrumentConnectionStack, rawHl7Text: string) {
 
     const that = this;
@@ -279,25 +293,38 @@ export class InstrumentInterfaceService {
 
         sampleResult.test_type = message.get('OBR.4.2')?.toString() || message.get('OBX.3.2')?.toString() || 'HIVVL';
 
-        if (resultOutcome == 'Titer') {
-          sampleResult.test_unit = singleObx.get('OBX.6.1').toString();
-          sampleResult.results = singleObx.get('OBX.5.1').toString();
-        } else if (resultOutcome == '<20' || resultOutcome == '< 20') {
+
+        const resultStatusType = that.getHL7ResultStatusType(singleObx);
+
+        if (resultStatusType === 'ERROR') {
+          // Handle error results
           sampleResult.test_unit = '';
-          sampleResult.results = 'Target Not Detected';
-        } else if (resultOutcome == '> Titer max') {
+          sampleResult.results = 'Failed';
+        } else if (resultStatusType === 'INCOMPLETE') {
+          // Handle incomplete results
           sampleResult.test_unit = '';
-          sampleResult.results = '> 10000000';
-        } else if (
-          resultOutcome == 'Target Not Detected'
-          || resultOutcome == 'Failed'
-          || resultOutcome == 'Invalid'
-          || resultOutcome == 'Not Detected') {
-          sampleResult.test_unit = '';
-          sampleResult.results = resultOutcome;
+          sampleResult.results = 'Incomplete';
         } else {
-          sampleResult.test_unit = singleObx.get('OBX.6.1').toString();
-          sampleResult.results = resultOutcome;
+          if (resultOutcome == 'Titer') {
+            sampleResult.test_unit = singleObx.get('OBX.6.1').toString();
+            sampleResult.results = singleObx.get('OBX.5.1').toString();
+          } else if (resultOutcome == '<20' || resultOutcome == '< 20') {
+            sampleResult.test_unit = '';
+            sampleResult.results = 'Target Not Detected';
+          } else if (resultOutcome == '> Titer max') {
+            sampleResult.test_unit = '';
+            sampleResult.results = '> 10000000';
+          } else if (
+            resultOutcome == 'Target Not Detected'
+            || resultOutcome == 'Failed'
+            || resultOutcome == 'Invalid'
+            || resultOutcome == 'Not Detected') {
+            sampleResult.test_unit = '';
+            sampleResult.results = resultOutcome;
+          } else {
+            sampleResult.test_unit = singleObx.get('OBX.6.1').toString();
+            sampleResult.results = resultOutcome;
+          }
         }
 
         sampleResult.tested_by = singleObx.get('OBX.16').toString();
@@ -384,25 +411,37 @@ export class InstrumentInterfaceService {
 
         sampleResult.test_type = message.get('OBR.4.2')?.toString() || message.get('OBX.3.2')?.toString() || 'HIVVL';
 
-        if (resultOutcome == 'Titer') {
-          sampleResult.test_unit = singleObx.get('OBX.6.1').toString();
-          sampleResult.results = singleObx.get('OBX.5.1').toString();
-        } else if (resultOutcome == '<20' || resultOutcome == '< 20' || resultOutcome == 'Target Not Detected') {
+        const resultStatusType = that.getHL7ResultStatusType(singleObx);
+
+        if (resultStatusType === 'ERROR') {
+          // Handle error results
           sampleResult.test_unit = '';
-          sampleResult.results = 'Target Not Detected';
-        } else if (resultOutcome == '> Titer max') {
+          sampleResult.results = 'Failed';
+        } else if (resultStatusType === 'INCOMPLETE') {
+          // Handle incomplete results
           sampleResult.test_unit = '';
-          sampleResult.results = '> 10000000';
-        } else if (
-          resultOutcome == 'Target Not Detected'
-          || resultOutcome == 'Failed'
-          || resultOutcome == 'Invalid'
-          || resultOutcome == 'Not Detected') {
-          sampleResult.test_unit = '';
-          sampleResult.results = resultOutcome;
+          sampleResult.results = 'Incomplete';
         } else {
-          sampleResult.test_unit = singleObx.get('OBX.6.1').toString();
-          sampleResult.results = resultOutcome;
+          if (resultOutcome == 'Titer') {
+            sampleResult.test_unit = singleObx.get('OBX.6.1').toString();
+            sampleResult.results = singleObx.get('OBX.5.1').toString();
+          } else if (resultOutcome == '<20' || resultOutcome == '< 20' || resultOutcome == 'Target Not Detected') {
+            sampleResult.test_unit = '';
+            sampleResult.results = 'Target Not Detected';
+          } else if (resultOutcome == '> Titer max') {
+            sampleResult.test_unit = '';
+            sampleResult.results = '> 10000000';
+          } else if (
+            resultOutcome == 'Target Not Detected'
+            || resultOutcome == 'Failed'
+            || resultOutcome == 'Invalid'
+            || resultOutcome == 'Not Detected') {
+            sampleResult.test_unit = '';
+            sampleResult.results = resultOutcome;
+          } else {
+            sampleResult.test_unit = singleObx.get('OBX.6.1').toString();
+            sampleResult.results = resultOutcome;
+          }
         }
 
         sampleResult.tested_by = singleObx.get('OBX.16').toString();
@@ -478,25 +517,40 @@ export class InstrumentInterfaceService {
 
         sampleResult.test_type = message.get('OBR.4.2')?.toString() || message.get('OBX.3.2')?.toString() || 'HIVVL';
 
-        if (resultOutcome == 'Titer') {
-          sampleResult.test_unit = singleObx.get('OBX.6.1').toString();
-          sampleResult.results = singleObx.get('OBX.5.1').toString();
-        } else if (resultOutcome == '> Titer max') {
+
+
+        const resultStatusType = that.getHL7ResultStatusType(singleObx);
+
+        if (resultStatusType === 'ERROR') {
+          // Handle error results
           sampleResult.test_unit = '';
-          sampleResult.results = '> 10000000';
-        } else if (
-          resultOutcome == 'Target Not Detected'
-          || resultOutcome == 'Failed'
-          || resultOutcome == 'Invalid'
-          || resultOutcome == 'Not Detected') {
+          sampleResult.results = 'Failed';
+        } else if (resultStatusType === 'INCOMPLETE') {
+          // Handle incomplete results
           sampleResult.test_unit = '';
-          sampleResult.results = resultOutcome;
+          sampleResult.results = 'Incomplete';
         } else {
-          sampleResult.test_unit = singleObx.get('OBX.6.1').toString();
-          sampleResult.results = resultOutcome;
+          if (resultOutcome == 'Titer') {
+            sampleResult.test_unit = singleObx.get('OBX.6.1').toString();
+            sampleResult.results = singleObx.get('OBX.5.1').toString();
+          } else if (resultOutcome == '> Titer max') {
+            sampleResult.test_unit = '';
+            sampleResult.results = '> 10000000';
+          } else if (
+            resultOutcome == 'Target Not Detected'
+            || resultOutcome == 'Failed'
+            || resultOutcome == 'Invalid'
+            || resultOutcome == 'Not Detected') {
+            sampleResult.test_unit = '';
+            sampleResult.results = resultOutcome;
+          } else {
+            sampleResult.test_unit = singleObx.get('OBX.6.1').toString();
+            sampleResult.results = resultOutcome;
+          }
         }
 
         sampleResult.tested_by = singleObx.get('OBX.16').toString();
+
         sampleResult.result_status = 1;
         sampleResult.lims_sync_status = 0;
         sampleResult.analysed_date_time = that.utilitiesService.formatRawDate(singleObx.get('OBX.19').toString());
