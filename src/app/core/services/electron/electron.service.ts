@@ -5,7 +5,27 @@ import { Injectable } from '@angular/core';
 import { ipcRenderer, net, webFrame } from 'electron';
 import * as childProcess from 'child_process';
 import * as fs from 'fs';
-import * as mysql from 'mysql';
+
+interface MySQLConnection {
+  query: (q: string, args: any, cb: (err: any, res?: any) => void) => void;
+  release: () => void;
+}
+
+interface MySQLPool {
+  query: MySQLConnection['query'];
+  getConnection: (cb: (err: any, conn: MySQLConnection) => void) => void;
+  on: (event: string, handler: Function) => void;
+}
+
+interface MySQLClient {
+  createPool: (config: any) => MySQLPool;
+  createConnection: (config: any) => {
+    connect: (cb: (err: any | null) => void) => void;
+    destroy: () => void;
+  };
+}
+
+
 
 
 @Injectable({
@@ -16,7 +36,8 @@ export class ElectronService {
   webFrame: typeof webFrame;
   childProcess: typeof childProcess;
   fs: typeof fs;
-  mysql: typeof mysql;
+  mysql: MySQLClient;
+
   net: typeof net;
 
   constructor() {
@@ -30,7 +51,39 @@ export class ElectronService {
       that.childProcess = window.require('child_process');
       that.fs = window.require('fs');
 
-      that.mysql = window.require('mysql');
+      that.mysql = {
+        createPool: (config) => ({
+          _config: config,
+          on: () => { },
+          query: (q, args, cb) => {
+            this.ipcRenderer.invoke('mysql-query', config, q, args)
+              .then(res => cb(null, res))
+              .catch(err => cb(err));
+          },
+          getConnection: (cb) => {
+            const pool = {
+              query: (q, args, cb2) => {
+                this.ipcRenderer.invoke('mysql-query', config, q, args)
+                  .then(res => cb2(null, res))
+                  .catch(err => cb2(err));
+              },
+              release: () => { }
+            };
+            cb(null, pool);
+          }
+        }),
+        createConnection: (config) => {
+          return {
+            connect: (cb) => {
+              this.ipcRenderer.invoke('mysql-query', config, 'SELECT 1')
+                .then(() => cb(null))
+                .catch(cb);
+            },
+            destroy: () => { }
+          };
+        }
+      };
+
       that.net = window.require('net');
 
       // Notes :

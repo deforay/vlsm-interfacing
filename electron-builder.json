@@ -1,8 +1,5 @@
 {
   "asar": true,
-  "asarUnpack": [
-    "**/*.node"
-  ],
   "directories": {
     "output": "release/"
   },

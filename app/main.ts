@@ -1,6 +1,7 @@
 import { app, BrowserWindow, screen, ipcMain, dialog, Tray, Menu, nativeImage } from 'electron';
 import * as path from 'path';
 import * as fs from 'fs';
+import * as mysql from 'mysql';
 
 import * as log from 'electron-log/main';
 import { setupSqlite } from './sqlite3helper.main';
@@ -145,6 +146,9 @@ try {
     });
   }
 
+  const mysqlPools: Record<string, any> = {}; // simple in-memory cache of pools
+
+
   app.on('ready', () => {
     setupSqlite(store, (db, err) => {
       if (err) {
@@ -207,6 +211,32 @@ try {
         return app.getPath('userData');
       });
 
+      ipcMain.handle('mysql-create-pool', (event, config) => {
+        const key = JSON.stringify(config);
+        if (!mysqlPools[key]) {
+          mysqlPools[key] = mysql.createPool(config);
+        }
+        return { status: 'ok' };
+      });
+
+      ipcMain.handle('mysql-query', (event, config, query: string, values?: any[]) => {
+        const key = JSON.stringify(config);
+        if (!mysqlPools[key]) {
+          mysqlPools[key] = mysql.createPool(config);
+        }
+
+        return new Promise((resolve, reject) => {
+          mysqlPools[key].query(query, values ?? [], (err: any, results: any) => {
+            if (err) {
+              reject({ message: err.message, code: err.code });
+            } else {
+              resolve(results);
+            }
+          });
+        });
+      });
+
+
       ipcMain.handle('import-settings', async (event) => {
         try {
           const { filePaths, canceled } = await dialog.showOpenDialog({
@@ -259,10 +289,10 @@ try {
           if (!sqlite3Obj) {
             throw new Error('Database not initialized');
           }
-          
+
           const stmt = sqlite3Obj.prepare(sql);
           let result;
-          
+
           // Check if it's a SELECT query or other statement type
           if (sql.trim().toLowerCase().startsWith('select')) {
             result = args ? stmt.all(...args) : stmt.all();
@@ -274,12 +304,12 @@ try {
             // UPDATE, DELETE, etc.
             result = args ? stmt.run(...args) : stmt.run();
           }
-          
+
           event.reply(uniqueEvent, result);
         } catch (err) {
           console.error(`SQLite error for query [${sql}]:`, err);
           // Return structured error object
-          event.reply(uniqueEvent, { 
+          event.reply(uniqueEvent, {
             error: err.message,
             code: err.code || 'SQLITE_ERROR',
             sql: sql

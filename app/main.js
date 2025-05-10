@@ -12,6 +12,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 const electron_1 = require("electron");
 const path = require("path");
 const fs = require("fs");
+const mysql = require("mysql");
 const log = require("electron-log/main");
 const sqlite3helper_main_1 = require("./sqlite3helper.main");
 const Store = require('electron-store');
@@ -129,6 +130,7 @@ try {
             }
         });
     }
+    const mysqlPools = {}; // simple in-memory cache of pools
     electron_1.app.on('ready', () => {
         (0, sqlite3helper_main_1.setupSqlite)(store, (db, err) => {
             if (err) {
@@ -183,6 +185,29 @@ try {
             // Register the 'getUserDataPath' handler after window creation
             electron_1.ipcMain.handle('getUserDataPath', () => {
                 return electron_1.app.getPath('userData');
+            });
+            electron_1.ipcMain.handle('mysql-create-pool', (event, config) => {
+                const key = JSON.stringify(config);
+                if (!mysqlPools[key]) {
+                    mysqlPools[key] = mysql.createPool(config);
+                }
+                return { status: 'ok' };
+            });
+            electron_1.ipcMain.handle('mysql-query', (event, config, query, values) => {
+                const key = JSON.stringify(config);
+                if (!mysqlPools[key]) {
+                    mysqlPools[key] = mysql.createPool(config);
+                }
+                return new Promise((resolve, reject) => {
+                    mysqlPools[key].query(query, values !== null && values !== void 0 ? values : [], (err, results) => {
+                        if (err) {
+                            reject({ message: err.message, code: err.code });
+                        }
+                        else {
+                            resolve(results);
+                        }
+                    });
+                });
             });
             electron_1.ipcMain.handle('import-settings', (event) => __awaiter(void 0, void 0, void 0, function* () {
                 try {
