@@ -26,8 +26,6 @@ interface MySQLClient {
 }
 
 
-
-
 @Injectable({
   providedIn: 'root'
 })
@@ -134,15 +132,15 @@ export class ElectronService {
 
 
   logInfo(message: string, instrumentId: string = null) {
-    ipcRenderer.invoke('log-info', message, instrumentId);
+    this.ipcRenderer.invoke('log-info', message, instrumentId);
   }
 
   logError(message: string, instrumentId: string = null) {
-    ipcRenderer.invoke('log-error', message, instrumentId);
+    this.ipcRenderer.invoke('log-error', message, instrumentId);
   }
 
   logWarning(message: string, instrumentId: string = null) {
-    ipcRenderer.invoke('log-warning', message, instrumentId);
+    this.ipcRenderer.invoke('log-warning', message, instrumentId);
   }
 
 }

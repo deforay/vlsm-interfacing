@@ -35,7 +35,7 @@
   "linux": {
     "icon": "dist/assets/icons",
     "target": [
-      "deb"
+      "deb", "AppImage"
     ],
     "category": "Utility"
   }

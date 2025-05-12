@@ -107,7 +107,9 @@ function createWindow(): BrowserWindow {
       pathIndex = '../dist/index.html';
     }
 
-    const url = new URL(path.join('file:', __dirname, pathIndex));
+    //const url = new URL(path.join('file:', __dirname, pathIndex));
+    let joinedPath = path.join(__dirname, pathIndex)
+    const url = new URL(`file:${path.sep}${path.sep}${joinedPath}`);
     win.loadURL(url.href);
   }
 
