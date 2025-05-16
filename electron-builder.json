@@ -1,4 +1,6 @@
 {
+  "productName": "Interfacing Tool",
+  "appId": "com.deforay.vlsm-interfacing",
   "asar": true,
   "directories": {
     "output": "release/"
@@ -16,6 +18,7 @@
       ]
     }
   ],
+  "artifactName": "${productName}-${version}-${os}-${arch}.${ext}",
   "win": {
     "icon": "dist/assets/icons",
     "target": [
@@ -35,8 +38,14 @@
   "linux": {
     "icon": "dist/assets/icons",
     "target": [
-      "deb", "AppImage"
+      "deb",
+      "AppImage"
     ],
-    "category": "Utility"
+    "category": "Utility",
+    "desktop": {
+      "Name": "Interfacing Tool",
+      "GenericName": "Laboratory Machine Interfacing Tool",
+      "Comment": "Connect and receive results from testing instruments"
+    }
   }
 }

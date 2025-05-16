@@ -1,12 +1,14 @@
 {
   "name": "vlsm-interfacing",
-  "version": "2.3.4",
+  "version": "2.3.5",
   "description": "Interfacing Tool By VLSM",
   "homepage": "https://github.com/deforay/vlsm-interfacing",
   "author": {
-    "name": "VLSM Machine Interfacing Tool",
+    "name": "Deforay",
     "email": "support@deforay.com"
   },
+  "productName": "Interfacing Tool",
+  "appId": "com.deforay.interfacing",
   "keywords": [
     "HIV",
     "EID",

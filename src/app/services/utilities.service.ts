@@ -40,6 +40,10 @@ export class UtilitiesService {
     this.dbService.syncLimsStatusToSQLite(success, errorf);
   }
 
+  sqlite3WalCheckpoint() {
+    this.dbService.sqlite3WalCheckpoint();
+  }
+
   sleep(ms) {
     return new Promise(resolve => setTimeout(resolve, ms));
   }

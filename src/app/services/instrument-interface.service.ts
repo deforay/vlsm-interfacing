@@ -116,10 +116,154 @@ export class InstrumentInterfaceService {
     return ack;
   }
 
+  // Common helper functions for HL7 processing - with HL7 in function names
 
+  /**
+   * Finds the most appropriate OBX segment for processing HL7 test results
+   * @param obxArray Array of OBX segments
+   * @param sampleNumber Sample number to match
+   * @returns The most appropriate OBX segment or null if none found
+   */
+  private findAppropriateHL7OBXSegment(obxArray: any[], sampleNumber: number): any {
+    // First try to find an OBX segment that matches this sample number in OBX.4
+    for (let i = 0; i < obxArray.length; i++) {
+      const currentObx = obxArray[i];
+      // Check if OBX.4 exists and matches sample number
+      const obx4Value = currentObx.get('OBX.4')?.toString() || '';
+      if (obx4Value && (obx4Value === sampleNumber.toString() || obx4Value === `${sampleNumber}/2`)) {
+        return currentObx;
+      }
+    }
+
+    // If we didn't find a matching OBX, use the index calculation as a fallback
+    let index = (sampleNumber * 2) - 1;
+    if (index >= obxArray.length) {
+      index = Math.min(obxArray.length - 1, 0); // Ensure we have a valid index or use the first segment
+    }
+
+    return index >= 0 && index < obxArray.length ? obxArray[index] : null;
+  }
+
+  /**
+   * Extracts the technician/tested by information from HL7 segments
+   * @param primaryObx Primary OBX segment to check first
+   * @param allObx All available OBX segments to check as fallback
+   * @param message Full HL7 message to check OBR segment as final fallback
+   * @returns Technician/tested by name or empty string if not found
+   */
+  private extractHL7TesterInfo(primaryObx: any, allObx: any[], message: any): string {
+    // First try the primary OBX segment
+    let testerName = primaryObx.get('OBX.16')?.toString() || '';
+
+    // If not found, look through all OBX segments
+    if (!testerName && allObx.length > 0) {
+      for (let i = 0; i < allObx.length; i++) {
+        const name = allObx[i].get('OBX.16')?.toString() || '';
+        if (name) {
+          testerName = name;
+          break;
+        }
+      }
+    }
+
+    // Last resort: check OBR segment
+    if (!testerName) {
+      testerName = message.get('OBR.34')?.toString() || ''; // OBR.34 sometimes contains technician ID
+    }
+
+    return testerName;
+  }
+
+  /**
+   * Processes HL7 result data and formats it according to result type
+   * @param singleObx OBX segment containing result data
+   * @param resultStatusType Status of the result
+   * @returns Object containing result value and unit
+   */
+  private processHL7ResultValue(singleObx: any, resultStatusType: string): { results: string, test_unit: string } {
+    const resultOutcome = singleObx.get('OBX.5.1')?.toString() || '';
+
+    if (resultStatusType === 'ERROR') {
+      return { results: 'Failed', test_unit: '' };
+    } else if (resultStatusType === 'INCOMPLETE') {
+      return { results: 'Incomplete', test_unit: '' };
+    }
+
+    // Process based on result value
+    if (resultOutcome === 'Titer') {
+      return {
+        results: singleObx.get('OBX.5.1')?.toString() || '',
+        test_unit: singleObx.get('OBX.6.1')?.toString() || ''
+      };
+    } else if (resultOutcome === '<20' || resultOutcome === '< 20' || resultOutcome === 'Target Not Detected') {
+      return { results: 'Target Not Detected', test_unit: '' };
+    } else if (resultOutcome === '> Titer max') {
+      return { results: '> 10000000', test_unit: '' };
+    } else if (
+      resultOutcome === 'Target Not Detected' ||
+      resultOutcome === 'Failed' ||
+      resultOutcome === 'Invalid' ||
+      resultOutcome === 'Not Detected') {
+      return { results: resultOutcome, test_unit: '' };
+    } else {
+      return {
+        results: resultOutcome,
+        test_unit: singleObx.get('OBX.6.1')?.toString() || singleObx.get('OBX.6.2')?.toString() || singleObx.get('OBX.6')?.toString() || ''
+      };
+    }
+  }
+
+  /**
+   * Extracts order and test IDs from HL7 message
+   * @param spm SPM segment
+   * @param message Full HL7 message
+   * @param fieldPosition Field position in SPM segment (2 or 3 depending on instrument)
+   * @returns Object with order_id and test_id
+   */
+  private extractHL7OrderAndTestIDs(spm: any, message: any, fieldPosition: number = 2): { order_id: string, test_id: string } {
+    const idValue = spm.get(`SPM.${fieldPosition}`)?.toString().replace('&ROCHE', '') || '';
+
+    if (idValue) {
+      return { order_id: idValue, test_id: idValue };
+    } else {
+      // Fallback to SAC.3
+      const sacValue = message.get('SAC.3')?.toString() || '';
+      return { order_id: sacValue, test_id: sacValue };
+    }
+  }
+
+  /**
+   * Extracts the test type from the HL7 message
+   * @param message HL7 message
+   * @returns Test type string
+   */
+  private extractHL7TestType(message: any): string {
+    return message.get('OBR.4.2')?.toString() || message.get('OBX.3.2')?.toString() || 'HIVVL';
+  }
+
+  /**
+   * Extracts and formats datetime fields from HL7 message
+   * @param obxSegment OBX segment containing datetime
+   * @returns Object with formatted datetime fields
+   */
+  private extractHL7DateTimeFields(obxSegment: any, utils: any): {
+    analysed_date_time: string,
+    authorised_date_time: string,
+    result_accepted_date_time: string
+  } {
+    const dateTimeValue = obxSegment.get('OBX.19')?.toString() || '';
+    const formattedDateTime = utils.formatRawDate(dateTimeValue);
+
+    return {
+      analysed_date_time: formattedDateTime,
+      authorised_date_time: formattedDateTime,
+      result_accepted_date_time: formattedDateTime
+    };
+  }
+
+  // Updated HL7 processing methods
 
   processHL7DataAlinity(instrumentConnectionData: InstrumentConnectionStack, rawHl7Text: string) {
-
     const that = this;
     const message = that.hl7parser.create(rawHl7Text.trim());
     const msgID = message.get('MSH.10')?.toString() || '';
@@ -128,13 +272,10 @@ export class InstrumentInterfaceService {
     const hl7Version = message.get('MSH.12')?.toString() || '2.5.1';
 
     that.tcpService.socketClient.write(that.hl7ACK(msgID, characterSet, messageProfileIdentifier, hl7Version));
-    // let result = null;
-    //console.log(message.get('OBX'));
 
     const hl7DataArray = rawHl7Text.split('MSH|');
 
     hl7DataArray.forEach(function (rawText: string) {
-
       if (rawText.trim() === '') { return; }
 
       rawText = 'MSH|' + rawText.trim();
@@ -145,77 +286,311 @@ export class InstrumentInterfaceService {
       }
 
       const obx = message.get('OBX').toArray();
-
-      //obx.forEach(function (singleObx) {
-      //  console.log(singleObx);
-      //});
-
       const spm = message.get('SPM');
 
-      //console.log(obx[1]);
       spm.forEach(function (singleSpm) {
-        //sampleNumber = (singleSpm.get(1).toInteger());
-        //const singleObx = obx[(sampleNumber * 2) - 1]; // there are twice as many OBX .. so we take the even number - 1 OBX for each SPM
-        const singleObx = obx[0]; // there are twice as many OBX .. so we take the even number - 1 OBX for each SPM
+        // For Alinity, we typically use the first OBX for each SPM
+        let singleObx = obx[0];
 
-        //console.log(singleObx.get('OBX.19').toString())
-
-        const resultOutcome = singleObx.get('OBX.5.1').toString();
-
-        const sampleResult: any = {};
-        sampleResult.raw_text = rawText;
-        sampleResult.order_id = singleSpm.get('SPM.3').toString().replace('&ROCHE', '');
-        sampleResult.test_id = singleSpm.get('SPM.3').toString().replace('&ROCHE', '');
-
-        if (sampleResult.order_id === "") {
-          // const sac = message.get('SAC').toArray();
-          // const singleSAC = sac[0];
-          //Let us use the Sample Container ID as the Order ID
-          sampleResult.order_id = message.get('SAC.3').toString();
-          sampleResult.test_id = message.get('SAC.3').toString();
+        // Fall back to other OBX segments if needed
+        if (!singleObx && obx.length > 0) {
+          singleObx = obx[0];
         }
 
-        sampleResult.test_type = message.get('OBR.4.2')?.toString() || message.get('OBX.3.2')?.toString() || 'HIVVL';
-
-        if (resultOutcome === 'Titer') {
-          sampleResult.test_unit = singleObx.get('OBX.6.1').toString();
-          sampleResult.results = singleObx.get('OBX.5.1').toString();
-        } else if (resultOutcome === '> Titer max') {
-          sampleResult.test_unit = '';
-          sampleResult.results = '> 10000000';
-        } else if (
-          resultOutcome == 'Target Not Detected'
-          || resultOutcome == 'Failed'
-          || resultOutcome == 'Invalid'
-          || resultOutcome == 'Not Detected') {
-          sampleResult.test_unit = '';
-          sampleResult.results = resultOutcome;
-        } else {
-          sampleResult.test_unit = singleObx.get('OBX.6.1').toString();
-          if (!sampleResult.test_unit) {
-            sampleResult.test_unit = singleObx.get('OBX.6.2').toString();
-          }
-          if (!sampleResult.test_unit) {
-            sampleResult.test_unit = singleObx.get('OBX.6').toString();
-          }
-          sampleResult.results = resultOutcome;
+        // Safety check
+        if (!singleObx) {
+          that.utilitiesService.logger('error', 'No valid OBX segment found for sample in Alinity data', instrumentConnectionData.instrumentId);
+          return;
         }
 
-        sampleResult.tested_by = singleObx.get('OBX.16').toString();
+        // Extract order and test IDs (Alinity uses SPM.3)
+        const ids = that.extractHL7OrderAndTestIDs(singleSpm, message, 3);
+
+        const sampleResult: any = {
+          raw_text: rawText,
+          order_id: ids.order_id,
+          test_id: ids.test_id,
+          test_type: that.extractHL7TestType(message)
+        };
+
+        // Process result value
+        const resultOutcome = singleObx.get('OBX.5.1')?.toString() || '';
+        const resultData = that.processHL7ResultValue(singleObx, that.getHL7ResultStatusType(singleObx));
+        sampleResult.results = resultData.results;
+        sampleResult.test_unit = resultData.test_unit;
+
+        // Extract tester info
+        sampleResult.tested_by = that.extractHL7TesterInfo(singleObx, obx, message);
+
+        // Standard fields
         sampleResult.result_status = 1;
         sampleResult.lims_sync_status = 0;
-        sampleResult.analysed_date_time = that.utilitiesService.formatRawDate(singleObx.get('OBX.19').toString());
-        //sampleResult.specimen_date_time = that.formatRawDate(message.get('OBX').get(0).get('OBX.19').toString());
-        sampleResult.authorised_date_time = that.utilitiesService.formatRawDate(singleObx.get('OBX.19').toString());
-        sampleResult.result_accepted_date_time = that.utilitiesService.formatRawDate(singleObx.get('OBX.19').toString());
+
+        // Extract datetime fields
+        const dateTimeFields = that.extractHL7DateTimeFields(singleObx, that.utilitiesService);
+        sampleResult.analysed_date_time = dateTimeFields.analysed_date_time;
+        sampleResult.authorised_date_time = dateTimeFields.authorised_date_time;
+        sampleResult.result_accepted_date_time = dateTimeFields.result_accepted_date_time;
+
+        // Location information
         sampleResult.test_location = instrumentConnectionData.labName;
         sampleResult.machine_used = instrumentConnectionData.instrumentId;
 
         that.saveResult(sampleResult, instrumentConnectionData);
-
       });
     });
   }
+
+  processHL7Data(instrumentConnectionData: InstrumentConnectionStack, rawHl7Text: string) {
+    const that = this;
+    const message = that.hl7parser.create(rawHl7Text.trim());
+    const msgID = message.get('MSH.10')?.toString() || '';
+    const characterSet = message.get('MSH.18')?.toString() || 'UNICODE UTF-8';
+    const messageProfileIdentifier = message.get('MSH.21')?.toString() || '';
+    const hl7Version = message.get('MSH.12')?.toString() || '2.5.1';
+
+    that.tcpService.socketClient.write(that.hl7ACK(msgID, characterSet, messageProfileIdentifier, hl7Version));
+
+    const hl7DataArray = rawHl7Text.split('MSH|');
+
+    hl7DataArray.forEach(function (rawText: string) {
+      if (rawText.trim() === '') { return; }
+
+      rawText = 'MSH|' + rawText.trim();
+      const message = that.hl7parser.create(rawText);
+
+      if (message === '' || message === null || message.get('SPM') === null || message.get('OBX') === null) {
+        return;
+      }
+
+      const obx = message.get('OBX').toArray();
+      const spm = message.get('SPM');
+
+      spm.forEach(function (singleSpm) {
+        // Get sample number and find appropriate OBX segment
+        let sampleNumber = singleSpm.get(1).toInteger();
+        if (Number.isNaN(sampleNumber)) {
+          sampleNumber = 1;
+        }
+
+        let singleObx = that.findAppropriateHL7OBXSegment(obx, sampleNumber);
+
+        // Safety check
+        if (!singleObx) {
+          that.utilitiesService.logger('error', 'No valid OBX segment found for sample ' + sampleNumber, instrumentConnectionData.instrumentId);
+          return;
+        }
+
+        // Extract order and test IDs
+        const ids = that.extractHL7OrderAndTestIDs(singleSpm, message);
+
+        const sampleResult: any = {
+          raw_text: rawText,
+          order_id: ids.order_id,
+          test_id: ids.test_id,
+          test_type: that.extractHL7TestType(message)
+        };
+
+        // Process result
+        const resultStatusType = that.getHL7ResultStatusType(singleObx);
+        const resultData = that.processHL7ResultValue(singleObx, resultStatusType);
+        sampleResult.results = resultData.results;
+        sampleResult.test_unit = resultData.test_unit;
+
+        // Extract tester info
+        sampleResult.tested_by = that.extractHL7TesterInfo(singleObx, obx, message);
+
+        // Standard fields
+        sampleResult.result_status = 1;
+        sampleResult.lims_sync_status = 0;
+
+        // Extract datetime fields
+        const dateTimeFields = that.extractHL7DateTimeFields(singleObx, that.utilitiesService);
+        sampleResult.analysed_date_time = dateTimeFields.analysed_date_time;
+        sampleResult.authorised_date_time = dateTimeFields.authorised_date_time;
+        sampleResult.result_accepted_date_time = dateTimeFields.result_accepted_date_time;
+
+        // Location information
+        sampleResult.test_location = instrumentConnectionData.labName;
+        sampleResult.machine_used = instrumentConnectionData.instrumentId;
+
+        that.saveResult(sampleResult, instrumentConnectionData);
+      });
+    });
+  }
+
+  processHL7DataRoche5800(instrumentConnectionData: InstrumentConnectionStack, rawHl7Text: string) {
+    const that = this;
+    const message = that.hl7parser.create(rawHl7Text.trim());
+    const msgID = message.get('MSH.10')?.toString() || '';
+    const characterSet = message.get('MSH.18')?.toString() || 'UNICODE UTF-8';
+    const messageProfileIdentifier = message.get('MSH.21')?.toString() || '';
+    const hl7Version = message.get('MSH.12')?.toString() || '2.5.1';
+
+    that.tcpService.socketClient.write(that.hl7ACK(msgID, characterSet, messageProfileIdentifier, hl7Version));
+
+    const hl7DataArray = rawHl7Text.split('MSH|');
+
+    hl7DataArray.forEach(function (rawText: string) {
+      if (rawText.trim() === '') { return; }
+
+      rawText = 'MSH|' + rawText.trim();
+      const message = that.hl7parser.create(rawText);
+
+      if (message === '' || message === null || message.get('SPM') === null || message.get('OBX') === null) {
+        return;
+      }
+
+      const obx = message.get('OBX').toArray();
+      const spm = message.get('SPM');
+
+      spm.forEach(function (singleSpm) {
+        // Get sample number and find appropriate OBX segment
+        let sampleNumber = singleSpm.get(1).toInteger();
+        if (Number.isNaN(sampleNumber)) {
+          sampleNumber = 1;
+        }
+
+        let singleObx = that.findAppropriateHL7OBXSegment(obx, sampleNumber);
+
+        // Safety check
+        if (!singleObx) {
+          that.utilitiesService.logger('error', 'No valid OBX segment found for sample ' + sampleNumber, instrumentConnectionData.instrumentId);
+          return;
+        }
+
+        // Extract order and test IDs
+        const ids = that.extractHL7OrderAndTestIDs(singleSpm, message);
+
+        const sampleResult: any = {
+          raw_text: rawText,
+          order_id: ids.order_id,
+          test_id: ids.test_id,
+          test_type: that.extractHL7TestType(message)
+        };
+
+        // Process result
+        const resultStatusType = that.getHL7ResultStatusType(singleObx);
+        const resultData = that.processHL7ResultValue(singleObx, resultStatusType);
+        sampleResult.results = resultData.results;
+        sampleResult.test_unit = resultData.test_unit;
+
+        // Extract tester info
+        sampleResult.tested_by = that.extractHL7TesterInfo(singleObx, obx, message);
+
+        // Standard fields
+        sampleResult.result_status = 1;
+        sampleResult.lims_sync_status = 0;
+
+        // Extract datetime fields
+        const dateTimeFields = that.extractHL7DateTimeFields(singleObx, that.utilitiesService);
+        sampleResult.analysed_date_time = dateTimeFields.analysed_date_time;
+        sampleResult.authorised_date_time = dateTimeFields.authorised_date_time;
+        sampleResult.result_accepted_date_time = dateTimeFields.result_accepted_date_time;
+
+        // Location information
+        sampleResult.test_location = instrumentConnectionData.labName;
+        sampleResult.machine_used = instrumentConnectionData.instrumentId;
+
+        that.saveResult(sampleResult, instrumentConnectionData);
+      });
+    });
+  }
+
+  processHL7DataRoche68008800(instrumentConnectionData: InstrumentConnectionStack, rawHl7Text: string) {
+    const that = this;
+    const message = that.hl7parser.create(rawHl7Text.trim());
+    const msgID = message.get('MSH.10')?.toString() || '';
+    const characterSet = message.get('MSH.18')?.toString() || 'UNICODE UTF-8';
+    const messageProfileIdentifier = message.get('MSH.21')?.toString() || '';
+    const hl7Version = message.get('MSH.12')?.toString() || '2.5.1';
+
+    that.tcpService.socketClient.write(that.hl7ACK(msgID, characterSet, messageProfileIdentifier, hl7Version));
+
+    const hl7DataArray = rawHl7Text.split('MSH|');
+
+    hl7DataArray.forEach(function (rawText: string) {
+      if (rawText.trim() === '') { return; }
+
+      rawText = 'MSH|' + rawText.trim();
+      const message = that.hl7parser.create(rawText);
+
+      if (message === '' || message === null || message.get('SPM') === null || message.get('OBX') === null) {
+        return;
+      }
+
+      const obxArray = message.get('OBX').toArray();
+      const spm = message.get('SPM');
+
+      spm.forEach(function (singleSpm: any) {
+        // For 6800/8800, look for OBX with OBX.4 = "1/2"
+        let resultOutcome = '';
+        let singleObx = null;
+
+        // This specific logic for 6800/8800 looks for "1/2" in OBX.4
+        obxArray.forEach(function (obx: any) {
+          if (obx.get('OBX.4')?.toString() === '1/2') {
+            resultOutcome = obx.get('OBX.5.1')?.toString() || '';
+            singleObx = obx;
+            if (resultOutcome === 'Titer') {
+              singleObx = obxArray[0];
+              resultOutcome = obx.get('OBX.5.1')?.toString() || '';
+            }
+          }
+        });
+
+        // If no OBX segment with "1/2", fall back to first OBX
+        if (!singleObx && obxArray.length > 0) {
+          singleObx = obxArray[0];
+          resultOutcome = singleObx.get('OBX.5.1')?.toString() || '';
+        }
+
+        // Safety check
+        if (!singleObx) {
+          that.utilitiesService.logger('error', 'No valid OBX segment found for Roche 6800/8800', instrumentConnectionData.instrumentId);
+          return;
+        }
+
+        // Extract order and test IDs
+        const ids = that.extractHL7OrderAndTestIDs(singleSpm, message);
+
+        const sampleResult: any = {
+          raw_text: rawText,
+          order_id: ids.order_id,
+          test_id: ids.test_id,
+          test_type: that.extractHL7TestType(message)
+        };
+
+        // Process result
+        const resultStatusType = that.getHL7ResultStatusType(singleObx);
+        const resultData = that.processHL7ResultValue(singleObx, resultStatusType);
+        sampleResult.results = resultData.results;
+        sampleResult.test_unit = resultData.test_unit;
+
+        // Extract tester info
+        sampleResult.tested_by = that.extractHL7TesterInfo(singleObx, obxArray, message);
+
+        // Standard fields
+        sampleResult.result_status = 1;
+        sampleResult.lims_sync_status = 0;
+
+        // Extract datetime fields
+        const dateTimeFields = that.extractHL7DateTimeFields(singleObx, that.utilitiesService);
+        sampleResult.analysed_date_time = dateTimeFields.analysed_date_time;
+        sampleResult.authorised_date_time = dateTimeFields.authorised_date_time;
+        sampleResult.result_accepted_date_time = dateTimeFields.result_accepted_date_time;
+
+        // Location information
+        sampleResult.test_location = instrumentConnectionData.labName;
+        sampleResult.machine_used = instrumentConnectionData.instrumentId;
+
+        that.saveResult(sampleResult, instrumentConnectionData);
+      });
+    });
+  }
+
+
+
 
   private getHL7ResultStatusType(singleObx: any): string {
     const resultStatus = singleObx.get('OBX.11')?.toString().toUpperCase() || '';
@@ -229,343 +604,6 @@ export class InstrumentInterfaceService {
     }
     return 'FINAL';
   }
-
-  processHL7Data(instrumentConnectionData: InstrumentConnectionStack, rawHl7Text: string) {
-
-    const that = this;
-    const message = that.hl7parser.create(rawHl7Text.trim());
-    const msgID = message.get('MSH.10')?.toString() || '';
-    const characterSet = message.get('MSH.18')?.toString() || 'UNICODE UTF-8';
-    const messageProfileIdentifier = message.get('MSH.21')?.toString() || '';
-    const hl7Version = message.get('MSH.12')?.toString() || '2.5.1'; // Default to 2.5.1 if not provided
-    that.tcpService.socketClient.write(that.hl7ACK(msgID, characterSet, messageProfileIdentifier, hl7Version));
-    // let result = null;
-    //console.log(message.get('OBX'));
-
-    const hl7DataArray = rawHl7Text.split('MSH|');
-
-    hl7DataArray.forEach(function (rawText: string) {
-
-      if (rawText.trim() === '') {
-        return;
-      }
-
-      rawText = 'MSH|' + rawText.trim();
-      const message = that.hl7parser.create(rawText);
-
-      if (message === '' || message === null || message.get('SPM') === null || message.get('OBX') === null) {
-        return;
-      }
-
-      const obx = message.get('OBX').toArray();
-
-      //obx.forEach(function (singleObx) {
-      //  console.log(singleObx);
-      //});
-
-      const spm = message.get('SPM');
-      let sampleNumber = 0;
-
-      //console.log(obx[1]);
-      spm.forEach(function (singleSpm) {
-        sampleNumber = (singleSpm.get(1).toInteger());
-        if (Number.isNaN(sampleNumber)) {
-          sampleNumber = 1;
-        }
-        let singleObx = obx[(sampleNumber * 2) - 1]; // there are twice as many OBX .. so we take the even number - 1 OBX for each SPM
-
-        //console.log(singleObx.get('OBX.19').toString());
-
-        let resultOutcome = singleObx.get('OBX.5.1').toString();
-
-        const sampleResult: any = {};
-        sampleResult.raw_text = rawText;
-        sampleResult.order_id = singleSpm.get('SPM.2').toString().replace("&ROCHE", "");
-        sampleResult.test_id = singleSpm.get('SPM.2').toString().replace("&ROCHE", "");;
-
-        if (sampleResult.order_id === "") {
-          // const sac = message.get('SAC').toArray();
-          // const singleSAC = sac[0];
-          //Let us use the Sample Container ID as the Order ID
-          sampleResult.order_id = message.get('SAC.3').toString();
-          sampleResult.test_id = message.get('SAC.3').toString();
-        }
-
-        sampleResult.test_type = message.get('OBR.4.2')?.toString() || message.get('OBX.3.2')?.toString() || 'HIVVL';
-
-
-        const resultStatusType = that.getHL7ResultStatusType(singleObx);
-
-        if (resultStatusType === 'ERROR') {
-          // Handle error results
-          sampleResult.test_unit = '';
-          sampleResult.results = 'Failed';
-        } else if (resultStatusType === 'INCOMPLETE') {
-          // Handle incomplete results
-          sampleResult.test_unit = '';
-          sampleResult.results = 'Incomplete';
-        } else {
-          if (resultOutcome == 'Titer') {
-            sampleResult.test_unit = singleObx.get('OBX.6.1').toString();
-            sampleResult.results = singleObx.get('OBX.5.1').toString();
-          } else if (resultOutcome == '<20' || resultOutcome == '< 20') {
-            sampleResult.test_unit = '';
-            sampleResult.results = 'Target Not Detected';
-          } else if (resultOutcome == '> Titer max') {
-            sampleResult.test_unit = '';
-            sampleResult.results = '> 10000000';
-          } else if (
-            resultOutcome == 'Target Not Detected'
-            || resultOutcome == 'Failed'
-            || resultOutcome == 'Invalid'
-            || resultOutcome == 'Not Detected') {
-            sampleResult.test_unit = '';
-            sampleResult.results = resultOutcome;
-          } else {
-            sampleResult.test_unit = singleObx.get('OBX.6.1').toString();
-            sampleResult.results = resultOutcome;
-          }
-        }
-
-        sampleResult.tested_by = singleObx.get('OBX.16').toString();
-        sampleResult.result_status = 1;
-        sampleResult.lims_sync_status = 0;
-        sampleResult.analysed_date_time = that.utilitiesService.formatRawDate(singleObx.get('OBX.19').toString());
-        //sampleResult.specimen_date_time = that.formatRawDate(message.get('OBX').get(0).get('OBX.19').toString());
-        sampleResult.authorised_date_time = that.utilitiesService.formatRawDate(singleObx.get('OBX.19').toString());
-        sampleResult.result_accepted_date_time = that.utilitiesService.formatRawDate(singleObx.get('OBX.19').toString());
-        sampleResult.test_location = instrumentConnectionData.labName;
-        sampleResult.machine_used = instrumentConnectionData.instrumentId;
-
-        that.saveResult(sampleResult, instrumentConnectionData);
-
-      });
-    });
-  }
-
-  processHL7DataRoche5800(instrumentConnectionData: InstrumentConnectionStack, rawHl7Text: string) {
-
-    const that = this;
-    const message = that.hl7parser.create(rawHl7Text.trim());
-    const msgID = message.get('MSH.10').toString();
-    const characterSet = message.get('MSH.18').toString();
-    const messageProfileIdentifier = message.get('MSH.21').toString();
-    const hl7Version = message.get('MSH.12') ? message.get('MSH.12').toString() : '2.5.1'; // Default to 2.5.1 if not provided
-    that.tcpService.socketClient.write(that.hl7ACK(msgID, characterSet, messageProfileIdentifier, hl7Version));
-
-    const hl7DataArray = rawHl7Text.split('MSH|');
-
-    hl7DataArray.forEach(function (rawText: string) {
-
-      if (rawText.trim() === '') { return; }
-
-      rawText = 'MSH|' + rawText.trim();
-      const message = that.hl7parser.create(rawText);
-
-      if (message === '' || message === null || message.get('SPM') === null || message.get('OBX') === null) {
-        return;
-      }
-
-      const obx = message.get('OBX').toArray();
-
-      //obx.forEach(function (singleObx) {
-      //  console.log(singleObx);
-      //});
-
-      const spm = message.get('SPM');
-      let sampleNumber = 0;
-
-      //console.log(obx[1]);
-      spm.forEach(function (singleSpm) {
-        sampleNumber = (singleSpm.get(1).toInteger());
-        if (Number.isNaN(sampleNumber)) {
-          sampleNumber = 1;
-        }
-        let index = (sampleNumber * 2) - 1
-
-        // Index access error if:
-        // index == 1 when sampleNumer == 1 and obx.length == 1
-        // Therefore we reduce index by 1
-        if (index >= obx.length) {
-          index -= 1
-        }
-
-        let singleObx = obx[index]; // there are twice as many OBX .. so we take the even number - 1 OBX for each SPM
-
-        //console.log(singleObx.get('OBX.19').toString());
-
-        let resultOutcome = singleObx.get('OBX.5.1').toString();
-
-        const sampleResult: any = {};
-        sampleResult.raw_text = rawText;
-        sampleResult.order_id = singleSpm.get('SPM.2').toString().replace("&ROCHE", "");
-        sampleResult.test_id = singleSpm.get('SPM.2').toString().replace("&ROCHE", "");;
-
-        if (sampleResult.order_id === "") {
-          // const sac = message.get('SAC').toArray();
-          // const singleSAC = sac[0];
-          //Let us use the Sample Container ID as the Order ID
-          sampleResult.order_id = message.get('SAC.3').toString();
-          sampleResult.test_id = message.get('SAC.3').toString();
-        }
-
-        sampleResult.test_type = message.get('OBR.4.2')?.toString() || message.get('OBX.3.2')?.toString() || 'HIVVL';
-
-        const resultStatusType = that.getHL7ResultStatusType(singleObx);
-
-        if (resultStatusType === 'ERROR') {
-          // Handle error results
-          sampleResult.test_unit = '';
-          sampleResult.results = 'Failed';
-        } else if (resultStatusType === 'INCOMPLETE') {
-          // Handle incomplete results
-          sampleResult.test_unit = '';
-          sampleResult.results = 'Incomplete';
-        } else {
-          if (resultOutcome == 'Titer') {
-            sampleResult.test_unit = singleObx.get('OBX.6.1').toString();
-            sampleResult.results = singleObx.get('OBX.5.1').toString();
-          } else if (resultOutcome == '<20' || resultOutcome == '< 20' || resultOutcome == 'Target Not Detected') {
-            sampleResult.test_unit = '';
-            sampleResult.results = 'Target Not Detected';
-          } else if (resultOutcome == '> Titer max') {
-            sampleResult.test_unit = '';
-            sampleResult.results = '> 10000000';
-          } else if (
-            resultOutcome == 'Target Not Detected'
-            || resultOutcome == 'Failed'
-            || resultOutcome == 'Invalid'
-            || resultOutcome == 'Not Detected') {
-            sampleResult.test_unit = '';
-            sampleResult.results = resultOutcome;
-          } else {
-            sampleResult.test_unit = singleObx.get('OBX.6.1').toString();
-            sampleResult.results = resultOutcome;
-          }
-        }
-
-        sampleResult.tested_by = singleObx.get('OBX.16').toString();
-        sampleResult.result_status = 1;
-        sampleResult.lims_sync_status = 0;
-        sampleResult.analysed_date_time = that.utilitiesService.formatRawDate(singleObx.get('OBX.19').toString());
-        //sampleResult.specimen_date_time = that.formatRawDate(message.get('OBX').get(0).get('OBX.19').toString());
-        sampleResult.authorised_date_time = that.utilitiesService.formatRawDate(singleObx.get('OBX.19').toString());
-        sampleResult.result_accepted_date_time = that.utilitiesService.formatRawDate(singleObx.get('OBX.19').toString());
-        sampleResult.test_location = instrumentConnectionData.labName;
-        sampleResult.machine_used = instrumentConnectionData.instrumentId;
-
-        that.saveResult(sampleResult, instrumentConnectionData);
-
-      });
-    });
-  }
-
-  processHL7DataRoche68008800(instrumentConnectionData: InstrumentConnectionStack, rawHl7Text: string) {
-
-    const that = this;
-    const message = that.hl7parser.create(rawHl7Text.trim());
-    const msgID = message.get('MSH.10').toString();
-    const characterSet = message.get('MSH.18').toString();
-    const messageProfileIdentifier = message.get('MSH.21').toString();
-    const hl7Version = message.get('MSH.12') ? message.get('MSH.12').toString() : '2.5.1'; // Default to 2.5.1 if not provided
-    that.tcpService.socketClient.write(that.hl7ACK(msgID, characterSet, messageProfileIdentifier, hl7Version));
-
-    const hl7DataArray = rawHl7Text.split('MSH|');
-
-    hl7DataArray.forEach(function (rawText: string) {
-
-      if (rawText.trim() === '') { return; }
-
-      rawText = 'MSH|' + rawText.trim();
-      const message = that.hl7parser.create(rawText);
-
-      if (message === '' || message === null || message.get('SPM') === null || message.get('OBX') === null) {
-        return;
-      }
-
-      const obxArray = message.get('OBX').toArray();
-      const spm = message.get('SPM');
-
-      //console.log(obx[1]);
-      spm.forEach(function (singleSpm: any) {
-
-        let resultOutcome = '';
-        let singleObx = null;
-        obxArray.forEach(function (obx: any) {
-          if (obx.get('OBX.4').toString() === '1/2') {
-            resultOutcome = obx.get('OBX.5.1').toString();
-            singleObx = obx;
-            if (resultOutcome === 'Titer') {
-              singleObx = obx = obxArray[0];
-              resultOutcome = obx.get('OBX.5.1').toString();
-            }
-          }
-        });
-
-        const sampleResult: any = {};
-        sampleResult.raw_text = rawText;
-        sampleResult.order_id = singleSpm.get('SPM.2').toString().replace("&ROCHE", "");
-        sampleResult.test_id = singleSpm.get('SPM.2').toString().replace("&ROCHE", "");;
-
-        if (sampleResult.order_id === "") {
-          // const sac = message.get('SAC').toArray();
-          // const singleSAC = sac[0];
-          //Let us use the Sample Container ID as the Order ID
-          sampleResult.order_id = message.get('SAC.3').toString();
-          sampleResult.test_id = message.get('SAC.3').toString();
-        }
-
-        sampleResult.test_type = message.get('OBR.4.2')?.toString() || message.get('OBX.3.2')?.toString() || 'HIVVL';
-
-
-
-        const resultStatusType = that.getHL7ResultStatusType(singleObx);
-
-        if (resultStatusType === 'ERROR') {
-          // Handle error results
-          sampleResult.test_unit = '';
-          sampleResult.results = 'Failed';
-        } else if (resultStatusType === 'INCOMPLETE') {
-          // Handle incomplete results
-          sampleResult.test_unit = '';
-          sampleResult.results = 'Incomplete';
-        } else {
-          if (resultOutcome == 'Titer') {
-            sampleResult.test_unit = singleObx.get('OBX.6.1').toString();
-            sampleResult.results = singleObx.get('OBX.5.1').toString();
-          } else if (resultOutcome == '> Titer max') {
-            sampleResult.test_unit = '';
-            sampleResult.results = '> 10000000';
-          } else if (
-            resultOutcome == 'Target Not Detected'
-            || resultOutcome == 'Failed'
-            || resultOutcome == 'Invalid'
-            || resultOutcome == 'Not Detected') {
-            sampleResult.test_unit = '';
-            sampleResult.results = resultOutcome;
-          } else {
-            sampleResult.test_unit = singleObx.get('OBX.6.1').toString();
-            sampleResult.results = resultOutcome;
-          }
-        }
-
-        sampleResult.tested_by = singleObx.get('OBX.16').toString();
-
-        sampleResult.result_status = 1;
-        sampleResult.lims_sync_status = 0;
-        sampleResult.analysed_date_time = that.utilitiesService.formatRawDate(singleObx.get('OBX.19').toString());
-        //sampleResult.specimen_date_time = that.formatRawDate(message.get('OBX').get(0).get('OBX.19').toString());
-        sampleResult.authorised_date_time = that.utilitiesService.formatRawDate(singleObx.get('OBX.19').toString());
-        sampleResult.result_accepted_date_time = that.utilitiesService.formatRawDate(singleObx.get('OBX.19').toString());
-        sampleResult.test_location = instrumentConnectionData.labName;
-        sampleResult.machine_used = instrumentConnectionData.instrumentId;
-
-        that.saveResult(sampleResult, instrumentConnectionData);
-
-      });
-    });
-  }
-
 
   private receiveASTM(astmProtocolType: string, instrumentConnectionData: InstrumentConnectionStack, data: Buffer) {
     let that = this;

@@ -72,6 +72,19 @@ export class DatabaseService {
     }
   }
 
+  public sqlite3WalCheckpoint(): void {
+    const that = this;
+
+    // Run a checkpoint to merge WAL file changes back into the main database file
+    // This helps prevent the WAL file from growing too large
+    that.electronService.execSqliteQuery("PRAGMA wal_checkpoint(PASSIVE)")
+      .then((result) => {
+        console.log('SQLite WAL checkpoint completed successfully:', result);
+      })
+      .catch((error) => {
+        console.error('Error running SQLite WAL checkpoint:', error);
+      });
+  }
   public checkMysqlConnection(
     mysqlParams?: { host?: string, user?: string, password?: string, port?: string },
     successCallback?: Function,
@@ -507,6 +520,7 @@ export class DatabaseService {
         //console.log('MySQL Inserted:', mysqlResults);
       }, (mysqlError) => {
         console.error('Error inserting into MySQL:', mysqlError.message);
+        errorf(mysqlError);
       });
     }, (mysqlError) => {
       //console.error('MySQL connection error:', mysqlError.message);
@@ -535,6 +549,7 @@ export class DatabaseService {
         //console.log('MySQL Inserted:', mysqlResults);
       }, (mysqlError) => {
         console.error('Error inserting into MySQL:', mysqlError);
+        errorf(mysqlError);
       });
     }, (mysqlError) => {
       //console.error('MySQL connection error:', mysqlError);

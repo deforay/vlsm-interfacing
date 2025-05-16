@@ -79,6 +79,17 @@ function setupSqlite(storeInstance: Store, callback: (db: SQLiteDatabase, err?: 
     ensureDirectoryExistence(sqlitePath);
 
     const db: SQLiteDatabase = new Database(sqlitePath);
+
+    // Enable WAL mode
+    db.pragma('journal_mode = WAL');
+
+    // Additional recommended pragmas for performance and reliability
+    db.pragma('synchronous = NORMAL');  // Good balance between performance and durability
+    db.pragma('temp_store = MEMORY');   // Store temporary tables in memory for better performance
+    db.pragma('mmap_size = 30000000');  // Allocate 30MB for memory-mapped I/O
+    db.pragma('cache_size = 10000');    // Increase cache size for better performance
+
+
     storeInstance.set('appPath', sqlitePath);
     storeInstance.set('appVersion', app.getVersion());
     log.info('SQLite database initialized at:', sqlitePath);

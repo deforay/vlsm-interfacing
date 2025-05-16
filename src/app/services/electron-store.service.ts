@@ -59,13 +59,13 @@ export class ElectronStoreService {
     ipcRenderer.invoke('export-settings', settingsJSON)
       .then(response => {
         console.log('Export response:', response);
-      
+
       })
       .catch(err => {
         console.error('Error exporting settings:', err);
       });
   }
-  
+
   removeSensitiveFields(settings: any): void {
     // List of sensitive fields to be removed
     const sensitiveFields = ['mysqlPassword', 'encryptionKey'];
@@ -83,9 +83,5 @@ export class ElectronStoreService {
   showNotification(title: string, message: string): void {
     new Notification(title, { body: message });
   }
-  
 
-
-
-  
 }

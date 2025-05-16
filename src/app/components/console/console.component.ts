@@ -36,6 +36,7 @@ export class ConsoleComponent implements OnInit, OnDestroy {
   public recentResultsInterval: any; // Interval for fetching recent results
   public mysqlCheckInterval: any; // Interval for checking MySQL connection
   public mysqlConnected: boolean = false;  // To store the MySQL connection status
+  public walCheckpointInterval: any; // Interval for performing SQLite WAL checkpoints
   public data: any;
   public lastOrders: any;
   private readonly ipc: IpcRenderer;
@@ -128,6 +129,12 @@ export class ConsoleComponent implements OnInit, OnDestroy {
       that.fetchRecentResults();
       that.resyncTestResultsToMySQL();
     }, 1000 * 60 * 5);
+
+    // SQLite WAL checkpoint every 30 minutes
+    that.walCheckpointInterval = setInterval(() => {
+      that.runSQLiteWalCheckpoint();
+    }, 1000 * 60 * 30); // 30 minutes
+
   }
 
   setupInstruments() {
@@ -661,12 +668,24 @@ export class ConsoleComponent implements OnInit, OnDestroy {
     );
   }
 
+  // Add this method to the ConsoleComponent class
+  runSQLiteWalCheckpoint(): void {
+    const that = this;
+    that.utilitiesService.sqlite3WalCheckpoint();
+
+    // Log to the application console
+    that.utilitiesService.logger('info', 'SQLite WAL checkpoint scheduled and executed', null);
+  }
+
   ngOnDestroy() {
     if (this.recentResultsInterval) {
       clearInterval(this.recentResultsInterval);  // Clear the recent results interval
     }
     if (this.mysqlCheckInterval) {
       clearInterval(this.mysqlCheckInterval);  // Clear the MySQL check interval
+    }
+    if (this.walCheckpointInterval) {
+      clearInterval(this.walCheckpointInterval);  // Clear the WAL checkpoint interval
     }
     if (this.electronStoreSubscription) {
       this.electronStoreSubscription.unsubscribe(); // Unsubscribe to avoid memory leaks
