@@ -2,6 +2,7 @@ import { app, BrowserWindow, screen, ipcMain, dialog, Tray, Menu, nativeImage } 
 import * as path from 'path';
 import * as fs from 'fs';
 import * as mysql from 'mysql';
+import * as sqlite3 from '@vscode/sqlite3';
 
 import * as log from 'electron-log/main';
 import { setupSqlite } from './sqlite3helper.main';
@@ -9,7 +10,7 @@ import { setupSqlite } from './sqlite3helper.main';
 const Store = require('electron-store');
 let win: BrowserWindow = null;
 let store = new Store();
-let sqlite3Obj: any = null;
+let sqlite3Obj: sqlite3.Database = null;
 let sqliteDbName: string = 'interface.db';
 const args = process.argv.slice(1),
   serve = args.some(val => val === '--serve');
@@ -20,21 +21,16 @@ function copyMigrationFiles() {
   const migrationSourceDir = path.join(__dirname, 'mysql-migrations');
   const migrationTargetDir = path.join(app.getPath('userData'), 'mysql-migrations');
 
-  // Log the source directory for debugging
-  //console.log(`Source Directory: ${migrationSourceDir}`);
-
   if (!fs.existsSync(migrationSourceDir)) {
     console.error(`Migration source directory not found: ${migrationSourceDir}`);
     return;
   }
 
   const sourceFiles = fs.readdirSync(migrationSourceDir);
-  //console.log('Files in source directory:', sourceFiles);
 
   // Create the target directory if it doesn't exist
   if (!fs.existsSync(migrationTargetDir)) {
     fs.mkdirSync(migrationTargetDir, { recursive: true });
-    //console.log(`Created target directory: ${migrationTargetDir}`);
   }
 
   // Check each file in the source directory
@@ -44,7 +40,6 @@ function copyMigrationFiles() {
 
     if (!fs.existsSync(targetFile)) {
       // If the target file doesn't exist, copy it
-      //console.log(`Copying new file ${file} to ${migrationTargetDir}`);
       fs.copyFileSync(sourceFile, targetFile);
     } else {
       // Check if the source file is newer than the target file
@@ -52,14 +47,10 @@ function copyMigrationFiles() {
       const targetStat = fs.statSync(targetFile);
 
       if (sourceStat.mtime > targetStat.mtime) {
-        //console.log(`Updating file ${file} in ${migrationTargetDir}`);
         fs.copyFileSync(sourceFile, targetFile);
-      } else {
-        //console.log(`File ${file} is already up to date.`);
       }
     }
   });
-  //console.log('Migration files synchronization completed.');
 }
 
 
@@ -107,7 +98,6 @@ function createWindow(): BrowserWindow {
       pathIndex = '../dist/index.html';
     }
 
-    //const url = new URL(path.join('file:', __dirname, pathIndex));
     let joinedPath = path.join(__dirname, pathIndex)
     const url = new URL(`file:${path.sep}${path.sep}${joinedPath}`);
     win.loadURL(url.href);
@@ -274,51 +264,120 @@ try {
         return dialog[method](params);
       });
 
-      // ipcMain.on('sqlite3-query', (event, sql, args) => {
-      //   if (args === null || args === undefined) {
-      //     sqlite3Obj.all(sql, (err: { message: any; }, rows: any) => {
-      //       event.reply('sqlite3-reply', err?.message || rows);
-      //     });
-      //   } else {
-      //     sqlite3Obj.all(sql, args, (err: { message: any; }, rows: any) => {
-      //       event.reply('sqlite3-reply', err?.message || rows);
-      //     });
-      //   }
-      // });
-
       ipcMain.on('sqlite3-query', (event, sql, args, uniqueEvent) => {
         try {
           if (!sqlite3Obj) {
             throw new Error('Database not initialized');
           }
 
-          const stmt = sqlite3Obj.prepare(sql);
-          let result;
+          const isSelect = sql.trim().toLowerCase().startsWith('select');
+          const isInsert = sql.trim().toLowerCase().startsWith('insert');
 
-          // Check if it's a SELECT query or other statement type
-          if (sql.trim().toLowerCase().startsWith('select')) {
-            result = args ? stmt.all(...args) : stmt.all();
-          } else if (sql.trim().toLowerCase().startsWith('insert')) {
-            result = args ? stmt.run(...args) : stmt.run();
-            // For better debugging of inserts, log the changes
-            console.log(`Insert operation completed. Changes: ${result.changes}, Last ID: ${result.lastInsertRowid}`);
+          if (isSelect) {
+            // For SELECT queries, use db.all() to get all results
+            if (args === null || args === undefined) {
+              sqlite3Obj.all(sql, (err, rows) => {
+                if (err) {
+                  console.error(`SQLite error for query [${sql}]:`, err);
+                  event.reply(uniqueEvent, {
+                    error: err.message,
+                    code: (err as any).code || 'SQLITE_ERROR',
+                    sql: sql
+                  });
+                } else {
+                  event.reply(uniqueEvent, rows);
+                }
+              });
+            } else {
+              sqlite3Obj.all(sql, args, (err, rows) => {
+                if (err) {
+                  console.error(`SQLite error for query [${sql}]:`, err);
+                  event.reply(uniqueEvent, {
+                    error: err.message,
+                    code: (err as any).code || 'SQLITE_ERROR',
+                    sql: sql
+                  });
+                } else {
+                  event.reply(uniqueEvent, rows);
+                }
+              });
+            }
+          } else if (isInsert) {
+            // For INSERT queries, use db.run() and return the lastID
+            if (args === null || args === undefined) {
+              sqlite3Obj.run(sql, function(err) {
+                if (err) {
+                  console.error(`SQLite error for query [${sql}]:`, err);
+                  event.reply(uniqueEvent, {
+                    error: err.message,
+                    code: (err as any).code || 'SQLITE_ERROR',
+                    sql: sql
+                  });
+                } else {
+                  event.reply(uniqueEvent, {
+                    changes: this.changes,
+                    lastInsertRowid: this.lastID
+                  });
+                  console.log(`Insert operation completed. Changes: ${this.changes}, Last ID: ${this.lastID}`);
+                }
+              });
+            } else {
+              sqlite3Obj.run(sql, args, function(err) {
+                if (err) {
+                  console.error(`SQLite error for query [${sql}]:`, err);
+                  event.reply(uniqueEvent, {
+                    error: err.message,
+                    code: (err as any).code || 'SQLITE_ERROR',
+                    sql: sql
+                  });
+                } else {
+                  event.reply(uniqueEvent, {
+                    changes: this.changes,
+                    lastInsertRowid: this.lastID
+                  });
+                  console.log(`Insert operation completed. Changes: ${this.changes}, Last ID: ${this.lastID}`);
+                }
+              });
+            }
           } else {
-            // UPDATE, DELETE, etc.
-            result = args ? stmt.run(...args) : stmt.run();
+            // For UPDATE, DELETE, etc., use db.run()
+            if (args === null || args === undefined) {
+              sqlite3Obj.run(sql, function(err) {
+                if (err) {
+                  console.error(`SQLite error for query [${sql}]:`, err);
+                  event.reply(uniqueEvent, {
+                    error: err.message,
+                    code: (err as any).code || 'SQLITE_ERROR',
+                    sql: sql
+                  });
+                } else {
+                  event.reply(uniqueEvent, { changes: this.changes });
+                }
+              });
+            } else {
+              sqlite3Obj.run(sql, args, function(err) {
+                if (err) {
+                  console.error(`SQLite error for query [${sql}]:`, err);
+                  event.reply(uniqueEvent, {
+                    error: err.message,
+                    code: (err as any).code || 'SQLITE_ERROR',
+                    sql: sql
+                  });
+                } else {
+                  event.reply(uniqueEvent, { changes: this.changes });
+                }
+              });
+            }
           }
-
-          event.reply(uniqueEvent, result);
         } catch (err) {
-          console.error(`SQLite error for query [${sql}]:`, err);
-          // Return structured error object
+          console.error(`SQLite general error:`, err);
           event.reply(uniqueEvent, {
             error: err.message,
-            code: err.code || 'SQLITE_ERROR',
+            code: 'SQLITE_ERROR',
             sql: sql
           });
         }
       });
-
 
       ipcMain.handle('log-info', (event, message, instrumentId = null) => {
         let appLog = log.scope('app');
@@ -342,6 +401,26 @@ try {
           appLog = log.scope(instrumentId);
         }
         appLog.error(message);
+      });
+
+      // Add WAL checkpoint handler for sqlite3
+      ipcMain.handle('sqlite3-wal-checkpoint', () => {
+        return new Promise((resolve, reject) => {
+          if (!sqlite3Obj) {
+            reject(new Error('Database not initialized'));
+            return;
+          }
+
+          sqlite3Obj.run("PRAGMA wal_checkpoint(PASSIVE)", function(err) {
+            if (err) {
+              console.error('Error running WAL checkpoint:', err);
+              reject(err);
+            } else {
+              console.log('WAL checkpoint completed successfully');
+              resolve({ success: true });
+            }
+          });
+        });
       });
     });
   });

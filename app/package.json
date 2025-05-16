@@ -33,6 +33,6 @@
     "hl7parser": "^1.0.1",
     "moment": "^2.30.1",
     "mysql": "2.18.1",
-    "better-sqlite3": "^11.0.0"
+    "@vscode/sqlite3": "^5.1.8-vscode"
   }
 }

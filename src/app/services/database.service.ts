@@ -77,7 +77,7 @@ export class DatabaseService {
 
     // Run a checkpoint to merge WAL file changes back into the main database file
     // This helps prevent the WAL file from growing too large
-    that.electronService.execSqliteQuery("PRAGMA wal_checkpoint(PASSIVE)")
+    that.electronService.executeSqliteWalCheckpoint()
       .then((result) => {
         console.log('SQLite WAL checkpoint completed successfully:', result);
       })
@@ -85,6 +85,7 @@ export class DatabaseService {
         console.error('Error running SQLite WAL checkpoint:', error);
       });
   }
+
   public checkMysqlConnection(
     mysqlParams?: { host?: string, user?: string, password?: string, port?: string },
     successCallback?: Function,

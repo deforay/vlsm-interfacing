@@ -4,7 +4,7 @@
 if ! command -v nvm &>/dev/null; then
     echo "NVM not found. Installing NVM..."
     curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.7/install.sh | bash
-    
+
     # Source NVM to make it available in the current shell
     export NVM_DIR="$HOME/.nvm"
     [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
@@ -36,7 +36,7 @@ rm -rf node_modules/ app/node_modules/ package-lock.json app/package-lock.json
 
 # Install dependencies and rebuild native modules
 echo "Installing dependencies..."
-npm i && npm run postinstall && npx electron-rebuild -w better-sqlite3
+npm i && npm run postinstall
 
 # Build electron application
 echo "Building electron application..."

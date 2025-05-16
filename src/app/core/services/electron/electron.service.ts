@@ -112,14 +112,6 @@ export class ElectronService {
     this.ipcRenderer.invoke('dialog', method, config);
   }
 
-  // execSqliteQuery(sql: any, args?: any): any {
-  //   return new Promise((resolve) => {
-  //     this.ipcRenderer.once('sqlite3-reply', (_, arg) => {
-  //       resolve(arg)
-  //     });
-  //     this.ipcRenderer.send('sqlite3-query', sql, args);
-  //   });
-  // }
   execSqliteQuery(sql: any, args?: any): any {
     return new Promise((resolve) => {
       const uniqueEvent = `sqlite3-reply-${Date.now()}-${Math.random()}`; // Unique event name
@@ -130,6 +122,9 @@ export class ElectronService {
     });
   }
 
+  executeSqliteWalCheckpoint(): Promise<any> {
+    return this.ipcRenderer.invoke('sqlite3-wal-checkpoint');
+  }
 
   logInfo(message: string, instrumentId: string = null) {
     this.ipcRenderer.invoke('log-info', message, instrumentId);
