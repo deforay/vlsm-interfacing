@@ -126,10 +126,9 @@ export class InstrumentInterfaceService {
    */
   private findAppropriateHL7OBXSegment(obxArray: any[], sampleNumber: number): any {
     // First try to find an OBX segment that matches this sample number in OBX.4
-    for (let i = 0; i < obxArray.length; i++) {
-      const currentObx = obxArray[i];
+    for (const currentObx of obxArray) {
       // Check if OBX.4 exists and matches sample number
-      const obx4Value = currentObx.get('OBX.4')?.toString() || '';
+      const obx4Value = currentObx.get('OBX.4')?.toString() ?? '';
       if (obx4Value && (obx4Value === sampleNumber.toString() || obx4Value === `${sampleNumber}/2`)) {
         return currentObx;
       }
@@ -153,12 +152,12 @@ export class InstrumentInterfaceService {
    */
   private extractHL7TesterInfo(primaryObx: any, allObx: any[], message: any): string {
     // First try the primary OBX segment
-    let testerName = primaryObx.get('OBX.16')?.toString() || '';
+    let testerName = primaryObx.get('OBX.16')?.toString() ?? '';
 
     // If not found, look through all OBX segments
     if (!testerName && allObx.length > 0) {
-      for (let i = 0; i < allObx.length; i++) {
-        const name = allObx[i].get('OBX.16')?.toString() || '';
+      for (const obx of allObx) {
+        const name = obx.get('OBX.16')?.toString() ?? '';
         if (name) {
           testerName = name;
           break;
@@ -168,7 +167,7 @@ export class InstrumentInterfaceService {
 
     // Last resort: check OBR segment
     if (!testerName) {
-      testerName = message.get('OBR.34')?.toString() || ''; // OBR.34 sometimes contains technician ID
+      testerName = message.get('OBR.34')?.toString() ?? ''; // OBR.34 sometimes contains technician ID
     }
 
     return testerName;
@@ -181,7 +180,7 @@ export class InstrumentInterfaceService {
    * @returns Object containing result value and unit
    */
   private processHL7ResultValue(singleObx: any, resultStatusType: string): { results: string, test_unit: string } {
-    const resultOutcome = singleObx.get('OBX.5.1')?.toString() || '';
+    const resultOutcome = singleObx.get('OBX.5.1')?.toString() ?? '';
 
     if (resultStatusType === 'ERROR') {
       return { results: 'Failed', test_unit: '' };
@@ -192,8 +191,8 @@ export class InstrumentInterfaceService {
     // Process based on result value
     if (resultOutcome === 'Titer') {
       return {
-        results: singleObx.get('OBX.5.1')?.toString() || '',
-        test_unit: singleObx.get('OBX.6.1')?.toString() || ''
+        results: singleObx.get('OBX.5.1')?.toString() ?? '',
+        test_unit: singleObx.get('OBX.6.1')?.toString() ?? ''
       };
     } else if (resultOutcome === '<20' || resultOutcome === '< 20' || resultOutcome === 'Target Not Detected') {
       return { results: 'Target Not Detected', test_unit: '' };
@@ -208,7 +207,7 @@ export class InstrumentInterfaceService {
     } else {
       return {
         results: resultOutcome,
-        test_unit: singleObx.get('OBX.6.1')?.toString() || singleObx.get('OBX.6.2')?.toString() || singleObx.get('OBX.6')?.toString() || ''
+        test_unit: singleObx.get('OBX.6.1')?.toString() ?? singleObx.get('OBX.6.2')?.toString() ?? singleObx.get('OBX.6')?.toString() ?? ''
       };
     }
   }
@@ -221,13 +220,13 @@ export class InstrumentInterfaceService {
    * @returns Object with order_id and test_id
    */
   private extractHL7OrderAndTestIDs(spm: any, message: any, fieldPosition: number = 2): { order_id: string, test_id: string } {
-    const idValue = spm.get(`SPM.${fieldPosition}`)?.toString().replace('&ROCHE', '') || '';
+    const idValue = spm.get(`SPM.${fieldPosition}`)?.toString().replace('&ROCHE', '') ?? '';
 
     if (idValue) {
       return { order_id: idValue, test_id: idValue };
     } else {
       // Fallback to SAC.3
-      const sacValue = message.get('SAC.3')?.toString() || '';
+      const sacValue = message.get('SAC.3')?.toString() ?? '';
       return { order_id: sacValue, test_id: sacValue };
     }
   }
@@ -238,7 +237,7 @@ export class InstrumentInterfaceService {
    * @returns Test type string
    */
   private extractHL7TestType(message: any): string {
-    return message.get('OBR.4.2')?.toString() || message.get('OBX.3.2')?.toString() || 'HIVVL';
+    return message.get('OBR.4.2')?.toString() ?? message.get('OBX.3.2')?.toString() ?? 'HIVVL';
   }
 
   /**
@@ -251,7 +250,7 @@ export class InstrumentInterfaceService {
     authorised_date_time: string,
     result_accepted_date_time: string
   } {
-    const dateTimeValue = obxSegment.get('OBX.19')?.toString() || '';
+    const dateTimeValue = obxSegment.get('OBX.19')?.toString() ?? '';
     const formattedDateTime = utils.formatRawDate(dateTimeValue);
 
     return {
@@ -314,7 +313,7 @@ export class InstrumentInterfaceService {
         };
 
         // Process result value
-        const resultOutcome = singleObx.get('OBX.5.1')?.toString() || '';
+        //const resultOutcome = singleObx.get('OBX.5.1')?.toString() || '';
         const resultData = that.processHL7ResultValue(singleObx, that.getHL7ResultStatusType(singleObx));
         sampleResult.results = resultData.results;
         sampleResult.test_unit = resultData.test_unit;
@@ -589,12 +588,9 @@ export class InstrumentInterfaceService {
     });
   }
 
-
-
-
   private getHL7ResultStatusType(singleObx: any): string {
-    const resultStatus = singleObx.get('OBX.11')?.toString().toUpperCase() || '';
-    const resultValue = singleObx.get('OBX.5.1')?.toString().toLowerCase() || '';
+    const resultStatus = singleObx.get('OBX.11')?.toString().toUpperCase() ?? '';
+    const resultValue = singleObx.get('OBX.5.1')?.toString().toLowerCase() ?? '';
     const badValues = ['failed', 'invalid'];
     if (resultStatus === 'X' || badValues.includes(resultValue)) {
       return 'ERROR';
