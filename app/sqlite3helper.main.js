@@ -69,6 +69,13 @@ function setupSqlite(storeInstance, callback) {
         sqlitePath = path.join(electron_1.app.getPath('userData'), sqliteDbName);
         ensureDirectoryExistence(sqlitePath);
         const db = new Database(sqlitePath);
+        // Enable WAL mode
+        db.pragma('journal_mode = WAL');
+        // Additional recommended pragmas for performance and reliability
+        db.pragma('synchronous = NORMAL'); // Good balance between performance and durability
+        db.pragma('temp_store = MEMORY'); // Store temporary tables in memory for better performance
+        db.pragma('mmap_size = 30000000'); // Allocate 30MB for memory-mapped I/O
+        db.pragma('cache_size = 10000'); // Increase cache size for better performance
         storeInstance.set('appPath', sqlitePath);
         storeInstance.set('appVersion', electron_1.app.getVersion());
         log.info('SQLite database initialized at:', sqlitePath);

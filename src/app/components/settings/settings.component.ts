@@ -44,7 +44,15 @@ export class SettingsComponent implements OnInit {
         // api_url:[''],
         // api_auth:[''],
         mysqlHost: [''],
-        mysqlPort: [''],
+        mysqlPort: ['', [
+          Validators.pattern('^[0-9]+$'),
+          (control) => {
+            const value = control.value;
+            if (!value) return null; // Allow empty value since MySQL is optional
+            const portNum = parseInt(value);
+            return (isNaN(portNum) || portNum < 1 || portNum > 65535) ? { pattern: true } : null;
+          }
+        ]],
         mysqlDb: [''],
         mysqlUser: [''],
         mysqlPassword: [''],
@@ -140,7 +148,16 @@ export class SettingsComponent implements OnInit {
       interfaceCommunicationProtocol: ['', Validators.required],
       analyzerMachineName: ['', Validators.required],
       analyzerMachineHost: ['', Validators.required],
-      analyzerMachinePort: ['', Validators.required],
+      analyzerMachinePort: ['', [
+        Validators.required,
+        Validators.pattern('^[0-9]+$'),
+        (control) => {
+          const value = control.value;
+          if (!value) return null;
+          const portNum = parseInt(value);
+          return (isNaN(portNum) || portNum < 1 || portNum > 65535) ? { pattern: true } : null;
+        }
+      ]],
       interfaceConnectionMode: ['', Validators.required],
       displayorder: ['']
     });
@@ -174,7 +191,7 @@ export class SettingsComponent implements OnInit {
 
   confirmRemoval(index: number, analyzerMachineName: string, event: Event): void {
     event.preventDefault();
-    const confirmed = window.confirm(`Are you sure you want to remove Instrument ${analyzerMachineName}?`);
+    const confirmed = window.confirm(`Are you sure you want to remove ${analyzerMachineName}?`);
     if (confirmed) {
       this.removeInstrument(index);
     }
@@ -264,7 +281,81 @@ export class SettingsComponent implements OnInit {
       }
     );
   }
+  cleanPortNumber(event: any, index: any): void {
+    const input = event.target;
+    const originalValue = input.value;
 
+    // Remove non-numeric characters
+    const numericValue = originalValue.replace(/[^0-9]/g, '');
+
+    // If the value changed (non-numeric characters were found)
+    if (originalValue !== numericValue) {
+      // Get current cursor position
+      const start = input.selectionStart;
+
+      // Update the form control value based on whether this is an instrument port or MySQL port
+      if (index === 'mysqlPort') {
+        this.settingsForm.get('commonSettings.mysqlPort').setValue(numericValue);
+      } else {
+        this.instrumentsSettings.at(index).get('analyzerMachinePort').setValue(numericValue);
+      }
+
+      // After Angular updates the DOM, restore cursor position
+      setTimeout(() => {
+        // Adjust cursor position based on how many characters were removed
+        const newPosition = Math.max(0, start - (originalValue.length - numericValue.length));
+        input.setSelectionRange(newPosition, newPosition);
+      }, 0);
+    }
+
+    // Validate range (1-65535)
+    if (numericValue) {
+      const portNum = parseInt(numericValue);
+      if (portNum < 1 || portNum > 65535) {
+        if (index === 'mysqlPort') {
+          this.settingsForm.get('commonSettings.mysqlPort').setErrors({ pattern: true });
+        } else {
+          this.instrumentsSettings.at(index).get('analyzerMachinePort').setErrors({ pattern: true });
+        }
+      }
+    }
+  }
+
+  // Add to your SettingsComponent class
+  copyToClipboard(text: string): void {
+    navigator.clipboard.writeText(text)
+      .then(() => {
+        // Optional: show a small notification that copying was successful
+        const notification = document.createElement('div');
+        notification.textContent = 'Copied to clipboard!';
+        notification.style.position = 'fixed';
+        notification.style.bottom = '20px';
+        notification.style.left = '50%';
+        notification.style.transform = 'translateX(-50%)';
+        notification.style.padding = '8px 16px';
+        notification.style.backgroundColor = 'rgba(0,0,0,0.7)';
+        notification.style.color = 'white';
+        notification.style.borderRadius = '4px';
+        notification.style.zIndex = '1000';
+
+        document.body.appendChild(notification);
+
+        setTimeout(() => {
+          document.body.removeChild(notification);
+        }, 2000);
+      })
+      .catch(err => {
+        console.error('Could not copy text: ', err);
+      });
+  }
+
+  // Password visibility toggle
+  togglePasswordVisibility(): void {
+    const passwordField = document.querySelector('[name=mysqlPassword]') as HTMLInputElement;
+    if (passwordField) {
+      passwordField.type = passwordField.type === 'password' ? 'text' : 'password';
+    }
+  }
 
   exportSettings() {
     this.electronStoreService.exportSettings();
