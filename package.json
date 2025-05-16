@@ -2,11 +2,6 @@
   "main": "app/main.js",
   "version": "2.3.5",
   "private": true,
-  "build": {
-    "appId": "com.deforay.vlsm-interfacing",
-    "productName": "VLSM Interfacing Tool",
-    "artifactName": "${productName}-${version}-${os}-${arch}.${ext}"
-  },
   "scripts": {
     "postinstall": "electron-builder install-app-deps",
     "ng": "ng",
