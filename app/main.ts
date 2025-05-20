@@ -281,7 +281,7 @@ try {
                   console.error(`SQLite error for query [${sql}]:`, err);
                   event.reply(uniqueEvent, {
                     error: err.message,
-                    code: (err as any).code || 'SQLITE_ERROR',
+                    code: (err as any).code ?? 'SQLITE_ERROR',
                     sql: sql
                   });
                 } else {
@@ -294,7 +294,7 @@ try {
                   console.error(`SQLite error for query [${sql}]:`, err);
                   event.reply(uniqueEvent, {
                     error: err.message,
-                    code: (err as any).code || 'SQLITE_ERROR',
+                    code: (err as any).code ?? 'SQLITE_ERROR',
                     sql: sql
                   });
                 } else {
@@ -310,7 +310,7 @@ try {
                   console.error(`SQLite error for query [${sql}]:`, err);
                   event.reply(uniqueEvent, {
                     error: err.message,
-                    code: (err as any).code || 'SQLITE_ERROR',
+                    code: (err as any).code ?? 'SQLITE_ERROR',
                     sql: sql
                   });
                 } else {
@@ -327,7 +327,7 @@ try {
                   console.error(`SQLite error for query [${sql}]:`, err);
                   event.reply(uniqueEvent, {
                     error: err.message,
-                    code: (err as any).code || 'SQLITE_ERROR',
+                    code: (err as any).code ?? 'SQLITE_ERROR',
                     sql: sql
                   });
                 } else {
@@ -347,7 +347,7 @@ try {
                   console.error(`SQLite error for query [${sql}]:`, err);
                   event.reply(uniqueEvent, {
                     error: err.message,
-                    code: (err as any).code || 'SQLITE_ERROR',
+                    code: (err as any).code ?? 'SQLITE_ERROR',
                     sql: sql
                   });
                 } else {
@@ -360,7 +360,7 @@ try {
                   console.error(`SQLite error for query [${sql}]:`, err);
                   event.reply(uniqueEvent, {
                     error: err.message,
-                    code: (err as any).code || 'SQLITE_ERROR',
+                    code: (err as any).code ?? 'SQLITE_ERROR',
                     sql: sql
                   });
                 } else {

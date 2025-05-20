@@ -241,11 +241,12 @@ try {
                         // For SELECT queries, use db.all() to get all results
                         if (args === null || args === undefined) {
                             sqlite3Obj.all(sql, (err, rows) => {
+                                var _a;
                                 if (err) {
                                     console.error(`SQLite error for query [${sql}]:`, err);
                                     event.reply(uniqueEvent, {
                                         error: err.message,
-                                        code: err.code || 'SQLITE_ERROR',
+                                        code: (_a = err.code) !== null && _a !== void 0 ? _a : 'SQLITE_ERROR',
                                         sql: sql
                                     });
                                 }
@@ -256,11 +257,12 @@ try {
                         }
                         else {
                             sqlite3Obj.all(sql, args, (err, rows) => {
+                                var _a;
                                 if (err) {
                                     console.error(`SQLite error for query [${sql}]:`, err);
                                     event.reply(uniqueEvent, {
                                         error: err.message,
-                                        code: err.code || 'SQLITE_ERROR',
+                                        code: (_a = err.code) !== null && _a !== void 0 ? _a : 'SQLITE_ERROR',
                                         sql: sql
                                     });
                                 }
@@ -274,11 +276,12 @@ try {
                         // For INSERT queries, use db.run() and return the lastID
                         if (args === null || args === undefined) {
                             sqlite3Obj.run(sql, function (err) {
+                                var _a;
                                 if (err) {
                                     console.error(`SQLite error for query [${sql}]:`, err);
                                     event.reply(uniqueEvent, {
                                         error: err.message,
-                                        code: err.code || 'SQLITE_ERROR',
+                                        code: (_a = err.code) !== null && _a !== void 0 ? _a : 'SQLITE_ERROR',
                                         sql: sql
                                     });
                                 }
@@ -293,11 +296,12 @@ try {
                         }
                         else {
                             sqlite3Obj.run(sql, args, function (err) {
+                                var _a;
                                 if (err) {
                                     console.error(`SQLite error for query [${sql}]:`, err);
                                     event.reply(uniqueEvent, {
                                         error: err.message,
-                                        code: err.code || 'SQLITE_ERROR',
+                                        code: (_a = err.code) !== null && _a !== void 0 ? _a : 'SQLITE_ERROR',
                                         sql: sql
                                     });
                                 }
@@ -315,11 +319,12 @@ try {
                         // For UPDATE, DELETE, etc., use db.run()
                         if (args === null || args === undefined) {
                             sqlite3Obj.run(sql, function (err) {
+                                var _a;
                                 if (err) {
                                     console.error(`SQLite error for query [${sql}]:`, err);
                                     event.reply(uniqueEvent, {
                                         error: err.message,
-                                        code: err.code || 'SQLITE_ERROR',
+                                        code: (_a = err.code) !== null && _a !== void 0 ? _a : 'SQLITE_ERROR',
                                         sql: sql
                                     });
                                 }
@@ -330,11 +335,12 @@ try {
                         }
                         else {
                             sqlite3Obj.run(sql, args, function (err) {
+                                var _a;
                                 if (err) {
                                     console.error(`SQLite error for query [${sql}]:`, err);
                                     event.reply(uniqueEvent, {
                                         error: err.message,
-                                        code: err.code || 'SQLITE_ERROR',
+                                        code: (_a = err.code) !== null && _a !== void 0 ? _a : 'SQLITE_ERROR',
                                         sql: sql
                                     });
                                 }

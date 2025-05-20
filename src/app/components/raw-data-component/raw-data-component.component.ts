@@ -1,3 +1,4 @@
+// raw-data-component.component.ts
 import { Component, OnInit } from '@angular/core';
 import { Router } from '@angular/router';
 import { UtilitiesService } from '../../services/utilities.service';
@@ -12,7 +13,7 @@ import { ViewChild } from '@angular/core';
   templateUrl: './raw-data-component.component.html',
   styleUrl: './raw-data-component.component.scss'
 })
-export class RawDataComponentComponent  {
+export class RawDataComponentComponent {
   public lastrawData: any;
   public data: any;
   public displayedColumns: string[] = [
@@ -26,14 +27,14 @@ export class RawDataComponentComponent  {
 
   constructor(
     private utilitiesService: UtilitiesService,
-    private router: Router){}
+    private router: Router) { }
 
-  ngOnInit(){
+  ngOnInit() {
     this.fetchrawData('')
-    
+
   }
 
-  click(){
+  click() {
     this.router.navigate(['/console']);
   }
 
@@ -41,56 +42,37 @@ export class RawDataComponentComponent  {
   //   this.dataSource.filter = $event.target.value;
   // }
 
-    
+
   filterData($event: any) {
     const searchTerm = $event.target.value;
     if (searchTerm.length >= 2) {
-      this.fetchrawData(searchTerm); 
+      this.fetchrawData(searchTerm);
     } else {
-      
-      this.fetchrawData(''); 
+
+      this.fetchrawData('');
     }
   }
 
   toggleRow(row: any) {
     row.expanded = !row.expanded;
-}
+  }
 
-fetchrawData(searchTerm: string) {
-  const that = this;
-  that.utilitiesService.fetchrawData(searchTerm);
+  fetchrawData(searchTerm: string) {
+    const that = this;
+    that.utilitiesService.fetchrawData(searchTerm);
 
-  that.utilitiesService.lastrawData.subscribe({
-    next: lastFewrawData => {
-      that.lastrawData = lastFewrawData[0];
-          console.log(that.lastrawData)
-          that.data = lastFewrawData[0];
-          this.dataSource.data = that.lastrawData;
-          this.dataSource.paginator = this.paginator;
-          this.dataSource.sort = this.sort;
+    that.utilitiesService.lastrawData.subscribe({
+      next: lastFewrawData => {
+        that.lastrawData = lastFewrawData[0];
+        console.log(that.lastrawData)
+        that.data = lastFewrawData[0];
+        this.dataSource.data = that.lastrawData;
+        this.dataSource.paginator = this.paginator;
+        this.dataSource.sort = this.sort;
       },
-    error: error => {
-      console.error('Error fetching last orders:', error);
-    }
-  });
-}
-
-  // fetchrawData() {
-  //   const that = this;
-  //   that.utilitiesService.fetchrawData();
-  //   that.utilitiesService.lastrawData.subscribe({
-  //     next: lastFewrawData => {
-  //         that.lastrawData = lastFewrawData[0];
-  //         console.log(that.lastrawData)
-  //         that.data = lastFewrawData[0];
-  //         this.dataSource.data = that.lastrawData;
-  //         this.dataSource.paginator = this.paginator;
-  //         this.dataSource.sort = this.sort;
-  //     },
-  //     error: error => {
-  //       console.error('Error fetching last orders:', error);
-  //     }
-  //   });
-
-  // }
+      error: error => {
+        console.error('Error fetching last orders:', error);
+      }
+    });
+  }
 }
