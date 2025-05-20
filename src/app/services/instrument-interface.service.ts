@@ -537,6 +537,13 @@ export class InstrumentInterfaceService {
   handleTCPResponse(connectionIdentifierKey: string, data: Buffer) {
     const that = this;
     const instrumentConnectionData = that.tcpService.connectionStack.get(connectionIdentifierKey);
+    // First ensure the instrument is marked as connected
+    if (instrumentConnectionData) {
+      // Explicitly mark as connected whenever we receive data
+      instrumentConnectionData.statusSubject.next(true);
+    }
+
+    // Then process the data based on protocol
     if (instrumentConnectionData.connectionProtocol === 'hl7') {
       that.receiveHL7(instrumentConnectionData, data);
     } else if (instrumentConnectionData.connectionProtocol === 'astm-nonchecksum') {
@@ -549,7 +556,7 @@ export class InstrumentInterfaceService {
   private saveResult(sampleResult: any, instrumentConnectionData: InstrumentConnectionStack) {
     const that = this;
     if (sampleResult) {
-      const data = { ...sampleResult, instrument_id: instrumentConnectionData.instrumentId }; // Add instrument_id here
+      const data = { ...sampleResult, instrument_id: instrumentConnectionData.instrumentId };
       that.dbService.recordTestResults(data,
         (res) => {
           that.utilitiesService.logger('success', 'Successfully saved result : ' + sampleResult.test_id + '|' + sampleResult.order_id, instrumentConnectionData.instrumentId);

@@ -564,3 +564,21 @@ $status-disconnected: #e53935;
     background-color: #F44336;
   }
 }
+
+/* Add to your console.component.scss */
+.connection-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+
+.connection-buttons .btn {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.connection-buttons .btn .fa {
+  font-size: 1rem;
+}

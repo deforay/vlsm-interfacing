@@ -36,7 +36,7 @@ export class DatabaseService {
     // Fetch the userData path from Electron
     const userDataPath = await that.electronService.getUserDataPath();
     that.migrationDir = path.join(userDataPath, 'mysql-migrations');
-    console.log('User Data Path:', userDataPath);
+    //console.log('User Data Path:', userDataPath);
 
     // Ensure mysqlPool and dbConfig are not initialized multiple times
     if (!that.mysqlPool && that.commonSettings?.mysqlHost && that.commonSettings?.mysqlUser && that.commonSettings?.mysqlDb) {
@@ -68,7 +68,7 @@ export class DatabaseService {
         that.checkAndRunMigrations(connection);
       });
     } else {
-      console.warn('MySQL Pool or configuration is already initialized or incomplete.');
+      //console.warn('MySQL Pool or configuration is already initialized or incomplete.');
     }
   }
 
@@ -415,7 +415,7 @@ export class DatabaseService {
     that.electronService.execSqliteQuery(sqliteMaxQuery, [])
       .then((sqliteResult: any) => {
         const maxSyncDate = sqliteResult[0]?.maxSyncDate || '0000-00-00 00:00:00'; // Default to the earliest date
-        console.log('SQLite max lims_sync_date_time:', maxSyncDate);
+        //console.log('SQLite max lims_sync_date_time:', maxSyncDate);
 
         // Step 2: Query MySQL for records with `lims_sync_date_time` greater than `maxSyncDate`
         const mysqlQuery = `
@@ -429,7 +429,7 @@ export class DatabaseService {
           that.execQuery(mysqlQuery, [maxSyncDate],
             (mysqlResults: any[]) => {
               if (mysqlResults.length === 0) {
-                console.log('No new updates to sync from MySQL to SQLite.');
+                //console.log('No new updates to sync from MySQL to SQLite.');
                 success('No updates to sync.');
                 return;
               }

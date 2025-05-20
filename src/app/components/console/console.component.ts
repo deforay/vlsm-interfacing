@@ -1,5 +1,4 @@
 // src/app/components/console/console.component.ts
-// Modify the existing ConsoleComponent to use ConnectionManagerService
 
 import { Component, OnInit, NgZone, OnDestroy, ChangeDetectorRef, ViewChild } from '@angular/core';
 import { DomSanitizer } from '@angular/platform-browser';
@@ -15,11 +14,9 @@ import { MatTableDataSource } from '@angular/material/table';
 import { MatSort } from '@angular/material/sort';
 import { SelectionModel } from "@angular/cdk/collections";
 import { MatCheckboxChange } from '@angular/material/checkbox';
-import { distinctUntilChanged } from 'rxjs/operators';
 import { Subscription } from 'rxjs';
 import { IpcRenderer } from 'electron';
 import { MatDialog } from '@angular/material/dialog';
-import { DashboardComponent } from '../dashboard/dashboard.component';
 
 export enum SelectType {
   single,
@@ -51,6 +48,19 @@ export class ConsoleComponent implements OnInit, OnDestroy {
   public selectedTabIndex = 0;
   private electronStoreSubscription: Subscription;
   private instrumentsSubscription: Subscription;
+
+  private checkConnectionsAfterInactivity() {
+    console.log('Checking connection status after inactivity');
+
+    // Check each instrument
+    this.availableInstruments.forEach(instrument => {
+      if (instrument.isConnected) {
+        // For any instrument that thinks it's connected, verify the connection
+        // This will trigger the heartbeat system to check
+        this.tcpService.verifyConnection(instrument.connectionParams);
+      }
+    });
+  }
 
   public displayedColumns: string[] = [
     'select',
@@ -119,10 +129,19 @@ export class ConsoleComponent implements OnInit, OnDestroy {
     // Scroll to the top of the page when the component initializes
     window.scrollTo(0, 0);
 
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'visible') {
+        this.checkConnectionsAfterInactivity();
+      }
+    });
+
     // Subscribe to available instruments from the connection manager
     that.instrumentsSubscription = that.connectionManagerService.getActiveInstruments().subscribe(instruments => {
       that._ngZone.run(() => {
         that.availableInstruments = instruments;
+
+        // Check if we should auto-reconnect instruments
+        that.checkForAutoReconnect();
 
         // Initialize the logs for each instrument
         that.availableInstruments.forEach(instrument => {
@@ -161,6 +180,63 @@ export class ConsoleComponent implements OnInit, OnDestroy {
     that.walCheckpointInterval = setInterval(() => {
       that.runSQLiteWalCheckpoint();
     }, 1000 * 60 * 30); // 30 minutes
+  }
+
+  private checkForAutoReconnect() {
+    //console.log('Checking for auto-reconnect condition');
+
+    // Check multiple sources for the returnFromSettings flag
+    const navigation = this.router.getCurrentNavigation();
+    const navigationState = navigation?.extras?.state?.returnFromSettings;
+    const localStorageFlag = localStorage.getItem('returnFromSettings') === 'true';
+    const sessionStorageFlag = sessionStorage.getItem('returnFromSettings') === 'true';
+    const windowFlag = (window as any).returnFromSettings === true;
+
+    // // Log all sources for debugging
+    // console.log('Navigation state returnFromSettings:', navigationState);
+    // console.log('localStorage returnFromSettings:', localStorageFlag);
+    // console.log('sessionStorage returnFromSettings:', sessionStorageFlag);
+    // console.log('window returnFromSettings:', windowFlag);
+
+    // Use any of the sources
+    const returnFromSettings = navigationState || localStorageFlag || sessionStorageFlag || windowFlag;
+
+    // Clear all flags
+    localStorage.removeItem('returnFromSettings');
+    sessionStorage.removeItem('returnFromSettings');
+    (window as any).returnFromSettings = false;
+
+    if (returnFromSettings) {
+      //console.log('Returning from settings, checking auto-connect instruments');
+
+      // Add a slight delay to ensure component is fully loaded
+      setTimeout(() => {
+        // Use the service to reconnect all applicable instruments
+        const reconnectedCount = this.connectionManagerService.reconnectAllAutoConnectInstruments();
+
+        console.log(`Auto-reconnecting ${reconnectedCount} instrument(s)`);
+
+        if (reconnectedCount > 0) {
+          // Show a notification that reconnection is happening
+          const notification = document.createElement('div');
+          notification.textContent = `Auto-reconnecting ${reconnectedCount} instrument(s)...`;
+          notification.style.position = 'fixed';
+          notification.style.top = '20px';
+          notification.style.left = '50%';
+          notification.style.transform = 'translateX(-50%)';
+          notification.style.padding = '8px 16px';
+          notification.style.backgroundColor = 'rgba(0,0,0,0.7)';
+          notification.style.color = 'white';
+          notification.style.borderRadius = '4px';
+          notification.style.zIndex = '1000';
+          document.body.appendChild(notification);
+
+          setTimeout(() => {
+            document.body.removeChild(notification);
+          }, 3000);
+        }
+      }, 1000); // Wait 1 second after component initialization
+    }
   }
 
   loadSettings() {
@@ -224,7 +300,6 @@ export class ConsoleComponent implements OnInit, OnDestroy {
   }
 
   openModal() {
-    console.log("Open a modal");
     this.ipc.send("openModal");
   }
 
@@ -282,6 +357,18 @@ export class ConsoleComponent implements OnInit, OnDestroy {
 
   selectTab(index: number): void {
     this.selectedTabIndex = index;
+    // Force status refresh when selecting a tab
+    if (this.availableInstruments && this.availableInstruments.length > 0) {
+      const instrument = this.availableInstruments[index];
+      if (instrument) {
+        this.syncConnectionStatus(instrument);
+      }
+    }
+  }
+
+  syncConnectionStatus(instrument: any) {
+    //console.log(`Manually syncing status for ${instrument.connectionParams.instrumentId}`);
+    this.connectionManagerService.refreshConnectionStatus(instrument);
   }
 
   filterInstrumentLogs(instrument: any) {
@@ -389,6 +476,14 @@ export class ConsoleComponent implements OnInit, OnDestroy {
     const that = this;
     that.utilitiesService.sqlite3WalCheckpoint();
     that.utilitiesService.logger('info', 'SQLite WAL checkpoint scheduled and executed', null);
+  }
+
+  cancelConnection(instrument: any) {
+    this.connectionManagerService.cancelConnection(instrument);
+  }
+
+  forceRestartConnection(instrument: any) {
+    this.connectionManagerService.forceRestartConnection(instrument);
   }
 
   ngOnDestroy() {

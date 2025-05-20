@@ -1,7 +1,5 @@
 // src/app/components/dashboard/dashboard.component.ts
 import { Component, OnInit } from '@angular/core';
-import { CommonModule } from '@angular/common';
-import { FormsModule } from '@angular/forms';
 import { Router, ActivatedRoute } from '@angular/router';
 import { ConnectionManagerService } from '../../services/connection-manager.service';
 import { UtilitiesService } from '../../services/utilities.service';

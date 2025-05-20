@@ -22,7 +22,7 @@ $pre-bg-color: #f6f8fa;
   background-color: #fff;
   border-radius: 0.5rem;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
-  padding: 1.5rem;
+  padding: 0 1.5rem;
   max-width: 1600px;
   margin: 2rem auto;
 }
@@ -326,7 +326,6 @@ $pre-bg-color: #f6f8fa;
   margin-bottom: 1rem;
 }
 
-
 .instrument-status-bar {
   display: flex;
   flex-wrap: wrap;
@@ -341,7 +340,7 @@ $pre-bg-color: #f6f8fa;
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 5px 10px;
+  padding: 8px 12px;
   background-color: white;
   border-radius: 4px;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
@@ -351,10 +350,39 @@ $pre-bg-color: #f6f8fa;
   width: 12px;
   height: 12px;
   border-radius: 50%;
-  &.connected {
-    background-color: #4CAF50;
-  }
-  &.disconnected {
-    background-color: #F44336;
-  }
+  flex-shrink: 0;
+}
+
+.instrument-id {
+  font-weight: bold;
+  min-width: 80px;
+}
+
+.status-text {
+  flex-grow: 1;
+  padding: 0 10px;
+  font-size: 0.9em;
+}
+
+.connected {
+  background-color: #4CAF50;
+}
+
+.disconnected {
+  background-color: #F44336;
+}
+
+.connected-text {
+  color: #4CAF50;
+  font-weight: 500;
+}
+
+.disconnected-text {
+  color: #F44336;
+  font-weight: 500;
+}
+
+.action-buttons {
+  display: flex;
+  gap: 5px;
 }

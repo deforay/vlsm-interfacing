@@ -52,7 +52,7 @@
           <div *ngIf="instrument.isConnected; else notConnected" class="connection-status-area">
             <h5 class="status-title connected">
               <i class="fa fa-check-circle"></i>
-              <span>{{instrument.connectionParams.instrumentId}}</span> Connected
+              <span>{{instrument.connectionParams.instrumentId}}</span>&nbsp;Connected
             </h5>
             <button (click)="disconnect(instrument)" class="btn btn-danger">
               <i class="fa fa-plug"></i>
@@ -66,15 +66,29 @@
                 <i class="fa fa-times-circle"></i>
                 <span>{{instrument.connectionParams.instrumentId}}</span>&nbsp;Not Connected
               </h5>
+
               <div class="connection-buttons">
                 <button (click)="reconnect(instrument)" class="btn btn-primary"
                   [disabled]="instrument.connectionInProcess">
                   <i class="fa fa-plug"></i>
                   <span>{{instrument.instrumentButtonText}}</span>
                 </button>
-                <button *ngIf="instrument.connectionInProcess" (click)="disconnect(instrument)" class="btn btn-danger">
-                  <i class="fa fa-times"></i>
+
+                <!-- Cancel button: only show when connection is in process -->
+                <button *ngIf="instrument.connectionInProcess" class="btn btn-danger btn-sm"
+                  (click)="cancelConnection(instrument)">
+                  <i class="fa fa-ban"></i>
                   <span>Cancel</span>
+                </button>
+
+                <!-- Force Restart button: only show when there are connection issues -->
+                <button *ngIf="!instrument.isConnected &&
+           (instrument.statusText.includes('Error') ||
+            instrument.statusText.includes('EADDRINUSE') ||
+            (instrument.statusText.includes('Listening') && instrument.connectionInProcess))"
+                  class="btn btn-warning btn-sm" (click)="forceRestartConnection(instrument)">
+                  <i class="fa fa-bolt"></i>
+                  <span>Force Restart</span>
                 </button>
               </div>
             </div>
@@ -94,6 +108,12 @@
           </div>
           <div class="info-pill">
             <span>{{instrument.connectionParams.connectionProtocol | uppercase }}</span>
+          </div>
+          <div *ngIf="instrument.lastConnectTime" class="connection-timing">
+            <small>Connected: {{ instrument.lastConnectTime }}</small>
+          </div>
+          <div *ngIf="instrument.lastDisconnectTime" class="connection-timing">
+            <small>Disconnected: {{ instrument.lastDisconnectTime }}</small>
           </div>
         </div>
 

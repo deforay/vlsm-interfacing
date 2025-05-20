@@ -16,7 +16,7 @@ import { AppComponent } from './app.component';
 import { SettingsComponent } from './components/settings/settings.component';
 import { ConsoleComponent } from './components/console/console.component';
 import { RawDataComponent } from './components/raw-data/raw-data.component';
-import { DashboardComponent } from './components/dashboard/dashboard.component'; // <-- Import DashboardComponent here
+import { DashboardComponent } from './components/dashboard/dashboard.component';
 
 import { DatabaseService } from './services/database.service';
 import { TcpConnectionService } from './services/tcp-connection.service';

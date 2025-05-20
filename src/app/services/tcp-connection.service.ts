@@ -12,6 +12,9 @@ import { UtilitiesService } from './utilities.service';
 export class TcpConnectionService {
 
   public connectionParams: ConnectionParams = null;
+  private heartbeatIntervals: Map<string, any> = new Map();
+  private readonly heartbeatInterval = 30000; // 30 seconds
+  private readonly heartbeatTimeout = 10000;  // 10 seconds
   protected handleTCPCallback: (connectionIdentifierKey: string, data: any) => void;
   public socketClient = null;
   public server = null;
@@ -111,6 +114,13 @@ export class TcpConnectionService {
         });
 
         socket.on('data', function (data: any) {
+          // When we receive data, we should ensure the connection is marked as active
+          instrumentConnectionData.statusSubject.next(true);
+
+          // Reset any reconnect attempts since we're clearly connected
+          instrumentConnectionData.reconnectAttempts = 0;
+
+
           that.handleTCPCallback(connectionIdentifierKey, data);
           // Reset the timeout to 5 minutes after a successful data transmission
           that.connectionTimeout = 300000; // 5 minutes
@@ -142,7 +152,27 @@ export class TcpConnectionService {
 
       instrumentConnectionData.connectionServer.on('error', function (e) {
         instrumentConnectionData.errorOccurred = true;
-        that._handleClientConnectionIssue(instrumentConnectionData, connectionParams, 'Error while connecting ' + e.code, true);
+        if (e.code === 'EADDRINUSE') {
+          that.utilitiesService.logger('error', `Error: Port ${connectionParams.port} is already in use. Disconnecting to attempt again later.`, instrumentConnectionData.instrumentId);
+
+          // Force port release attempt - this doesn't always work but is worth trying
+          const tempSocket = new that.net.Socket();
+          tempSocket.on('error', function () {
+            // If this errors, it's ok - we tried
+            tempSocket.destroy();
+          });
+
+          // Try connecting to the port to force it to reset
+          tempSocket.connect(connectionParams.port, connectionParams.host, function () {
+            that.utilitiesService.logger('info', `Found process using port ${connectionParams.port}, sending reset signal`, instrumentConnectionData.instrumentId);
+            tempSocket.end();
+          });
+
+          // Set a flag to indicate EADDRINUSE occurred
+          //instrumentConnectionData.hadAddressInUse = true;
+        } else {
+          that.utilitiesService.logger('error', 'Error while connecting ' + e.code, instrumentConnectionData.instrumentId);
+        }
       });
 
     } else if (connectionParams.connectionMode === 'tcpclient') {
@@ -188,7 +218,13 @@ export class TcpConnectionService {
       });
 
       instrumentConnectionData.connectionSocket.on('data', function (data) {
+        // Ensure connection status is updated
         instrumentConnectionData.statusSubject.next(true);
+
+        // Reset reconnect attempts
+        instrumentConnectionData.reconnectAttempts = 0;
+
+        // Handle incoming data
         that.handleTCPCallback(connectionIdentifierKey, data);
       });
 
@@ -212,6 +248,161 @@ export class TcpConnectionService {
       // handle other connection modes if any
     }
 
+    // After connection setup, start the heartbeat
+    if (connectionParams.connectionMode === 'tcpclient') {
+      // For TCP client, we can start the heartbeat immediately
+      this.startHeartbeat(connectionParams);
+    } else if (connectionParams.connectionMode === 'tcpserver') {
+      // For TCP server, we need to wait for a client connection
+      const connectionIdentifierKey = this._generateConnectionIdentifierKey(connectionParams);
+      const instrumentConnectionData = this.connectionStack.get(connectionIdentifierKey);
+
+      if (instrumentConnectionData && instrumentConnectionData.connectionServer) {
+        // When a client connects, start the heartbeat
+        instrumentConnectionData.connectionServer.on('connection', () => {
+          this.startHeartbeat(connectionParams);
+        });
+      }
+    }
+  }
+
+  private startHeartbeat(connectionParams: ConnectionParams) {
+    const key = this._generateConnectionIdentifierKey(connectionParams);
+    const instrumentConnectionData = this.connectionStack.get(key);
+
+    if (!instrumentConnectionData) return;
+
+    // Clear any existing heartbeat interval
+    this.stopHeartbeat(connectionParams);
+
+    //console.log(`Starting heartbeat for ${connectionParams.instrumentId}`);
+
+    // Create a new heartbeat interval
+    const interval = setInterval(() => {
+      // Only send heartbeats if we think we're connected
+      if (instrumentConnectionData.statusSubject.getValue()) {
+        this.sendHeartbeat(connectionParams);
+      } else {
+        // If we think we're disconnected, stop the heartbeat
+        this.stopHeartbeat(connectionParams);
+      }
+    }, this.heartbeatInterval);
+
+    this.heartbeatIntervals.set(key, interval);
+  }
+
+  // Method to stop the heartbeat
+  private stopHeartbeat(connectionParams: ConnectionParams) {
+    const key = this._generateConnectionIdentifierKey(connectionParams);
+    if (this.heartbeatIntervals.has(key)) {
+      clearInterval(this.heartbeatIntervals.get(key));
+      this.heartbeatIntervals.delete(key);
+      //console.log(`Stopped heartbeat for ${connectionParams.instrumentId}`);
+    }
+  }
+
+  // Method to send a heartbeat and check for response
+  private sendHeartbeat(connectionParams: ConnectionParams) {
+    const key = this._generateConnectionIdentifierKey(connectionParams);
+    const instrumentConnectionData = this.connectionStack.get(key);
+
+    if (!instrumentConnectionData || !instrumentConnectionData.connectionSocket) return;
+
+    //console.log(`Sending heartbeat to ${connectionParams.instrumentId}`);
+
+    // Set a flag to track if we've received a response
+    let heartbeatAcknowledged = false;
+
+    // For TCP server mode, we can't easily send a heartbeat to the client
+    // So we'll use a different approach - we'll check if the socket is writable
+    if (connectionParams.connectionMode === 'tcpserver') {
+      if (instrumentConnectionData.connectionSocket) {
+        // Check if the socket is still writable
+        try {
+          // For server mode, we'll just check if the socket is writable
+          const isWritable = instrumentConnectionData.connectionSocket.writable;
+
+          if (!isWritable) {
+            console.warn(`Server socket for ${connectionParams.instrumentId} is no longer writable`);
+            this._handleDisconnection(connectionParams, 'Socket no longer writable');
+          } else {
+            // Socket is still writable, all good
+            heartbeatAcknowledged = true;
+            //console.log(`Server socket for ${connectionParams.instrumentId} is still writable`);
+          }
+        } catch (error) {
+          console.error(`Error checking server socket for ${connectionParams.instrumentId}:`, error);
+          this._handleDisconnection(connectionParams, 'Socket error');
+        }
+      }
+    } else {
+      // For TCP client mode, we can try to write something to the socket
+      try {
+        // Create a one-time data handler to detect response
+        const onDataHandler = (data: Buffer) => {
+          heartbeatAcknowledged = true;
+
+          // Remove the handler after getting a response
+          instrumentConnectionData.connectionSocket.removeListener('data', onDataHandler);
+        };
+
+        // Listen for any data as a response (will be removed by timeout or when data received)
+        instrumentConnectionData.connectionSocket.once('data', onDataHandler);
+
+        // Send a zero-byte heartbeat or a non-intrusive character depending on the protocol
+        if (connectionParams.connectionProtocol.includes('astm')) {
+          // For ASTM, we can use ENQ as a heartbeat
+          instrumentConnectionData.connectionSocket.write(String.fromCharCode(5));
+        } else if (connectionParams.connectionProtocol.includes('hl7')) {
+          // For HL7, we can use a minimal message
+          instrumentConnectionData.connectionSocket.write('\x0B' + 'MSH|^~\\&|||||20250520010203||ACK^A01|1|P|2.5.1\r' + '\x1C' + '\x0D');
+        } else {
+          // Default - just try to write an empty buffer
+          instrumentConnectionData.connectionSocket.write(Buffer.from([]));
+        }
+
+        // Set a timeout to check if we got a response
+        setTimeout(() => {
+          // Remove the data handler if still present
+          instrumentConnectionData.connectionSocket.removeListener('data', onDataHandler);
+
+          // If no response received, consider the connection dead
+          if (!heartbeatAcknowledged) {
+            console.warn(`No heartbeat response from ${connectionParams.instrumentId}`);
+            this._handleDisconnection(connectionParams, 'Heartbeat timeout');
+          }
+        }, this.heartbeatTimeout);
+      } catch (error) {
+        console.error(`Error sending heartbeat to ${connectionParams.instrumentId}:`, error);
+        this._handleDisconnection(connectionParams, 'Heartbeat error');
+      }
+    }
+  }
+
+  // Helper method to handle disconnection
+  private _handleDisconnection(connectionParams: ConnectionParams, reason: string) {
+    console.warn(`Disconnecting ${connectionParams.instrumentId} due to: ${reason}`);
+
+    // Update the connection status
+    const key = this._generateConnectionIdentifierKey(connectionParams);
+    const instrumentConnectionData = this.connectionStack.get(key);
+
+    if (instrumentConnectionData) {
+      // Update status before disconnecting
+      instrumentConnectionData.statusSubject.next(false);
+      instrumentConnectionData.errorOccurred = true;
+
+      // Log the disconnection
+      this.utilitiesService.logger('warning', `Connection lost: ${reason}`, connectionParams.instrumentId);
+
+      // Disconnect
+      this.disconnect(connectionParams);
+
+      // If auto-reconnect is enabled, trigger reconnection
+      if (connectionParams.interfaceAutoConnect === 'yes') {
+        this._handleClientConnectionIssue(instrumentConnectionData, connectionParams, `Connection lost: ${reason}`, true);
+      }
+    }
   }
 
   private _handleClientConnectionIssue(instrumentConnectionData, connectionParams, message, isError) {
@@ -246,59 +437,102 @@ export class TcpConnectionService {
   }
 
   disconnect(connectionParams: ConnectionParams) {
+    // Stop the heartbeat first
+    this.stopHeartbeat(connectionParams);
     const that = this;
     const connectionIdentifierKey = that._generateConnectionIdentifierKey(connectionParams);
 
     const instrumentConnectionData = that.connectionStack.get(connectionIdentifierKey);
     if (instrumentConnectionData) {
       try {
+        console.log(`Disconnecting ${connectionParams.instrumentId} (${connectionParams.host}:${connectionParams.port})`);
+
+        // Update status subjects first
         instrumentConnectionData.statusSubject.next(false);
         instrumentConnectionData.connectionAttemptStatusSubject.next(false);
+        instrumentConnectionData.transmissionStatusSubject.next(false);
 
+        // Handle server disconnection first (most important for EADDRINUSE)
+        if (instrumentConnectionData.connectionServer) {
+          try {
+            // Remove all listeners before closing server
+            instrumentConnectionData.connectionServer.removeAllListeners();
+
+            // Close the server with a callback
+            instrumentConnectionData.connectionServer.close(() => {
+              console.log(`Server for ${connectionParams.instrumentId} closed`);
+              instrumentConnectionData.connectionServer = null;
+            });
+
+            // Force close any connections to this server
+            instrumentConnectionData.connectionServer.unref();
+
+            // Add a timeout to force handle unclosed server
+            setTimeout(() => {
+              if (instrumentConnectionData.connectionServer) {
+                console.warn(`Server for ${connectionParams.instrumentId} didn't close properly, forcing termination`);
+                // Force reference removal
+                instrumentConnectionData.connectionServer = null;
+              }
+            }, 1000);
+          } catch (serverError) {
+            console.error(`Error closing server for ${connectionParams.instrumentId}:`, serverError);
+            instrumentConnectionData.connectionServer = null;
+          }
+        }
+
+        // Handle socket disconnection
         if (instrumentConnectionData.connectionSocket) {
-          // Remove all event listeners
-          instrumentConnectionData.connectionSocket.removeAllListeners();
+          try {
+            // Remove all listeners before destroying socket
+            instrumentConnectionData.connectionSocket.removeAllListeners();
 
-          // Register the 'close' event listener before ending the socket
-          instrumentConnectionData.connectionSocket.on('close', () => {
-            // Check if the socket is not null before destroying
+            // Set socket to unref to allow the process to exit
+            instrumentConnectionData.connectionSocket.unref();
+
+            // End the socket connection with a callback
+            instrumentConnectionData.connectionSocket.end(() => {
+              console.log(`Socket for ${connectionParams.instrumentId} ended`);
+
+              // Destroy the socket after end completes
+              if (instrumentConnectionData.connectionSocket) {
+                instrumentConnectionData.connectionSocket.destroy();
+                instrumentConnectionData.connectionSocket = null;
+                console.log(`Socket for ${connectionParams.instrumentId} destroyed`);
+              }
+            });
+
+            // Add a timeout to force destroy if end doesn't complete
+            setTimeout(() => {
+              if (instrumentConnectionData.connectionSocket) {
+                instrumentConnectionData.connectionSocket.destroy();
+                instrumentConnectionData.connectionSocket = null;
+                console.log(`Socket for ${connectionParams.instrumentId} force destroyed after timeout`);
+              }
+            }, 1000);
+          } catch (socketError) {
+            console.error(`Error closing socket for ${connectionParams.instrumentId}:`, socketError);
+            // Force destroy as a last resort
             if (instrumentConnectionData.connectionSocket) {
               instrumentConnectionData.connectionSocket.destroy();
+              instrumentConnectionData.connectionSocket = null;
             }
-          });
-
-
-          // Register an 'error' event listener
-          instrumentConnectionData.connectionSocket.on('error', (error) => {
-            that.utilitiesService.logger('error', `Socket error: ${error}`, instrumentConnectionData.instrumentId);
-          });
-
-          // End the socket connection
-          instrumentConnectionData.connectionSocket.end();
-
-          //that.utilitiesService.logger('info', 'Client Disconnected', instrumentConnectionData.instrumentId);
+          }
         }
 
-        if (instrumentConnectionData.connectionServer) {
+        // IMPORTANT: Remove from connection stack to ensure a clean reconnect
+        that.connectionStack.delete(connectionIdentifierKey);
 
-          // Remove all listeners for the server to avoid any leaks or potential issues
-          instrumentConnectionData.connectionServer.removeAllListeners();
+        // Log success
+        that.utilitiesService.logger('info', 'Disconnection complete', connectionParams.instrumentId);
 
-          instrumentConnectionData.connectionServer.close(() => {
-            that.utilitiesService.logger('info', 'Server Stopped', instrumentConnectionData.instrumentId);
-          });
-
-          // Handle errors during close
-          instrumentConnectionData.connectionServer.on('error', (error) => {
-            that.utilitiesService.logger('error', `Error while closing server: ${error.message}`, instrumentConnectionData.instrumentId);
-          });
-        }
       } catch (error) {
-        that.utilitiesService.logger('error', `Error during disconnection: ${error}`, instrumentConnectionData.instrumentId);
-      } finally {
-        // Clean up resources
+        that.utilitiesService.logger('error', `Error during disconnection: ${error}`, connectionParams.instrumentId);
+        // Clean up resources even if there was an error
         instrumentConnectionData.connectionSocket = null;
         instrumentConnectionData.connectionServer = null;
+        // IMPORTANT: Remove from connection stack in all cases
+        that.connectionStack.delete(connectionIdentifierKey);
       }
     }
   }
@@ -324,6 +558,17 @@ export class TcpConnectionService {
     }
   }
 
+  verifyConnection(connectionParams: ConnectionParams): void {
+    const key = this._generateConnectionIdentifierKey(connectionParams);
+    const instrumentConnectionData = this.connectionStack.get(key);
+
+    if (!instrumentConnectionData) return;
+
+    console.log(`Verifying connection for ${connectionParams.instrumentId}`);
+
+    // Trigger immediate heartbeat check
+    this.sendHeartbeat(connectionParams);
+  }
 
   private _generateConnectionIdentifierKey(connectionParams: ConnectionParams): string {
     return `${connectionParams.host}:${connectionParams.port}:${connectionParams.connectionMode}:${connectionParams.connectionProtocol}`;
@@ -345,5 +590,43 @@ export class TcpConnectionService {
     const connectionIdentifierKey = this._generateConnectionIdentifierKey(connectionParams);
     const instrumentConnectionData = this.connectionStack.get(connectionIdentifierKey);
     return instrumentConnectionData.transmissionStatusSubject.asObservable();
+  }
+
+
+  // Method to check if a connection is actually active at the socket level
+  isActuallyConnected(connectionParams: ConnectionParams): boolean {
+    const key = this._generateConnectionIdentifierKey(connectionParams);
+    const instrumentConnectionData = this.connectionStack.get(key);
+
+    if (!instrumentConnectionData) return false;
+
+    // For server mode, check if we have a socket and it's writable
+    if (connectionParams.connectionMode === 'tcpserver') {
+      if (instrumentConnectionData.connectionSocket) {
+        try {
+          return instrumentConnectionData.connectionSocket.writable &&
+            !instrumentConnectionData.connectionSocket.destroyed;
+        } catch (e) {
+          return false;
+        }
+      }
+      return false;
+    }
+
+    // For client mode, check if the socket exists and is connected
+    if (connectionParams.connectionMode === 'tcpclient') {
+      if (instrumentConnectionData.connectionSocket) {
+        try {
+          return instrumentConnectionData.connectionSocket.writable &&
+            !instrumentConnectionData.connectionSocket.destroyed &&
+            instrumentConnectionData.connectionSocket.connecting !== true;
+        } catch (e) {
+          return false;
+        }
+      }
+      return false;
+    }
+
+    return false;
   }
 }

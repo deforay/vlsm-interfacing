@@ -9,6 +9,7 @@ import { UtilitiesService } from '../../services/utilities.service';
 import { CryptoService } from '../../services/crypto.service';
 import { v4 as uuidv4 } from 'uuid';
 import { ConnectionManagerService } from '../../services/connection-manager.service';
+import { Subscription } from 'rxjs';
 
 @Component({
   selector: 'app-settings',
@@ -20,6 +21,8 @@ export class SettingsComponent implements OnInit {
   public appPath: string = "";
   public appVersion: string = null;
   public machineIps: string[] = [];
+  public availableInstruments = [];
+  private instrumentsSubscription: Subscription;
 
   constructor(
     private readonly formBuilder: FormBuilder,
@@ -84,7 +87,13 @@ export class SettingsComponent implements OnInit {
   }
 
 
-  ngOnInit(): void { }
+  ngOnInit(): void {
+    // Subscribe to instrument status
+    this.instrumentsSubscription = this.connectionManagerService.getActiveInstruments()
+      .subscribe(instruments => {
+        this.availableInstruments = instruments;
+      });
+  }
 
   uniqueInstrumentNameValidator(): ValidatorFn {
     return (control: AbstractControl): { [key: string]: any } | null => {
@@ -222,7 +231,8 @@ export class SettingsComponent implements OnInit {
   updateSettings(): void {
     const that = this;
     if (that.settingsForm.valid) {
-      const updatedSettings = that.settingsForm.value;
+      // Store the form values before disconnecting instruments
+      const updatedSettings = JSON.parse(JSON.stringify(that.settingsForm.value));
 
       // Encrypt the MySQL password before saving
       updatedSettings.commonSettings.mysqlPassword = this.cryptoService.encrypt(updatedSettings.commonSettings.mysqlPassword);
@@ -241,19 +251,125 @@ export class SettingsComponent implements OnInit {
         return { ...defaultInstrument, ...instrument };
       });
 
+      // Show save in progress notification
+      const savingNotification = document.createElement('div');
+      savingNotification.textContent = 'Saving settings...';
+      savingNotification.style.position = 'fixed';
+      savingNotification.style.top = '20px';
+      savingNotification.style.left = '50%';
+      savingNotification.style.transform = 'translateX(-50%)';
+      savingNotification.style.padding = '8px 16px';
+      savingNotification.style.backgroundColor = 'rgba(0,0,0,0.7)';
+      savingNotification.style.color = 'white';
+      savingNotification.style.borderRadius = '4px';
+      savingNotification.style.zIndex = '1000';
+      document.body.appendChild(savingNotification);
 
-      that.electronStoreService.set('commonConfig', updatedSettings.commonSettings);
-      that.electronStoreService.set('instrumentsConfig', updatedSettings.instrumentsSettings);
-      console.log('Updated Instruments Settings:', updatedSettings.instrumentsSettings);
+      // First, disconnect all instruments if settings are being updated
+      // This ensures clean connection state when settings change
+      const activeInstruments = Array.from(this.availableInstruments);
+      const disconnectPromises = activeInstruments
+        .filter(instrument => instrument.isConnected)
+        .map(instrument => {
+          return new Promise<void>(resolve => {
+            this.connectionManagerService.disconnect(instrument);
+            // Resolve after a short delay to ensure disconnect has time to process
+            setTimeout(() => resolve(), 100);
+          });
+        });
 
-      new window.Notification('Success', {
-        body: 'Updated Interface Tool settings'
+      // Wait for all disconnections to complete
+      Promise.all(disconnectPromises).then(() => {
+        // Save settings to electron store
+        that.electronStoreService.set('commonConfig', updatedSettings.commonSettings);
+        that.electronStoreService.set('instrumentsConfig', updatedSettings.instrumentsSettings);
+
+        // Remove the saving notification
+        document.body.removeChild(savingNotification);
+
+        // Show success notification
+        new window.Notification('Success', {
+          body: 'Updated Interface Tool settings'
+        });
+
+        // IMPORTANT: Set a flag in localStorage to indicate we're returning from settings
+        localStorage.setItem('returnFromSettings', 'true');
+
+        // IMPORTANT: Also set a session storage key as a backup (sometimes localStorage survives refreshes)
+        sessionStorage.setItem('returnFromSettings', 'true');
+
+        // Set a global variable as a backup (window level)
+        (window as any).returnFromSettings = true;
+
+        // Navigate back to console after a brief delay to allow settings to take effect
+        setTimeout(() => {
+          that.router.navigate(['/console'], {
+            state: { returnFromSettings: true }
+          });
+        }, 500);
       });
-      that.resetInstrumentVariables();
-      that.router.navigate(['/console']);
     } else {
-      console.error('Form is not valid');
+      console.error('Unable to update settings.');
+
+      // Show validation errors
+      const controlsWithErrors = this.findInvalidControls(this.settingsForm);
+      console.log('Fields with validation errors:', controlsWithErrors);
+
+      // Highlight invalid fields (optional)
+      this.markInvalidControlsAsTouched(this.settingsForm);
+
+      // Show error notification
+      const errorNotification = document.createElement('div');
+      errorNotification.textContent = 'Please fix the validation errors before saving';
+      errorNotification.style.position = 'fixed';
+      errorNotification.style.top = '20px';
+      errorNotification.style.left = '50%';
+      errorNotification.style.transform = 'translateX(-50%)';
+      errorNotification.style.padding = '8px 16px';
+      errorNotification.style.backgroundColor = 'rgba(220,53,69,0.9)';
+      errorNotification.style.color = 'white';
+      errorNotification.style.borderRadius = '4px';
+      errorNotification.style.zIndex = '1000';
+      document.body.appendChild(errorNotification);
+
+      setTimeout(() => {
+        document.body.removeChild(errorNotification);
+      }, 5000);
     }
+  }
+
+  // Helper method to find invalid controls
+  findInvalidControls(formGroup: FormGroup | FormArray): string[] {
+    const invalid = [];
+    const controls = formGroup.controls;
+
+    for (const name in controls) {
+      if (controls[name].invalid) {
+        if (controls[name] instanceof FormGroup || controls[name] instanceof FormArray) {
+          const childInvalid = this.findInvalidControls(controls[name] as FormGroup | FormArray);
+          if (childInvalid.length > 0) {
+            invalid.push(`${name} (${childInvalid.join(', ')})`);
+          }
+        } else {
+          invalid.push(name);
+        }
+      }
+    }
+
+    return invalid;
+  }
+
+  // Helper method to mark all controls as touched to show validation errors
+  markInvalidControlsAsTouched(formGroup: FormGroup | FormArray) {
+    Object.keys(formGroup.controls).forEach(key => {
+      const control = formGroup.get(key);
+
+      if (control instanceof FormGroup || control instanceof FormArray) {
+        this.markInvalidControlsAsTouched(control);
+      } else if (control.invalid) {
+        control.markAsTouched();
+      }
+    });
   }
 
   checkMysqlConnection() {

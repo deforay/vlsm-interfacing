@@ -1,4 +1,21 @@
 <br>
+<!-- Instrument status bar -->
+    <div class="instrument-status-bar">
+      <div class="instrument-status" *ngFor="let instrument of availableInstruments">
+        <!-- Status indicator dot -->
+        <div class="status-indicator"
+          [ngClass]="{'connected': instrument.isConnected, 'disconnected': !instrument.isConnected}"></div>
+
+        <!-- Instrument ID -->
+        <span class="instrument-id">{{ instrument.connectionParams.instrumentId }}</span>
+
+        <!-- Status text from the service -->
+        <span class="status-text"
+          [ngClass]="{'connected-text': instrument.isConnected, 'disconnected-text': !instrument.isConnected}">
+          {{ instrument.statusText }}
+        </span>
+      </div>
+    </div>
 <main role="main" class="container">
   <div style="display: flex; justify-content: flex-end;">
   </div><br>

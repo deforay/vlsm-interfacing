@@ -19,7 +19,8 @@ const routes: Routes = [
   },
   {
     path: 'console',
-    component: ConsoleComponent
+    component: ConsoleComponent,
+    data: { reloadInstruments: true }
   },
   {
     path: 'settings',
