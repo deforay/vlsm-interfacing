@@ -1,6 +1,29 @@
-<main role="main" class="container-lg">
+<!-- src/app/components/dashboard/dashboard.component.html -->
+<div class="app-container">
   <br><br>
   <div class="card">
+    <!-- Add instrument status bar -->
+    <div class="instrument-status-bar">
+      <div class="instrument-status" *ngFor="let instrument of availableInstruments">
+        <div class="status-indicator" [ngClass]="{'connected': instrument.isConnected, 'disconnected': !instrument.isConnected}"></div>
+        <span>{{ instrument.connectionParams.instrumentId }}</span>
+        <button
+          mat-raised-button
+          color="primary"
+          [disabled]="instrument.isConnected || instrument.connectionInProcess"
+          (click)="connect(instrument)">
+          {{ instrument.instrumentButtonText }}
+        </button>
+        <button
+          mat-raised-button
+          color="warn"
+          [disabled]="!instrument.isConnected || instrument.connectionInProcess"
+          (click)="disconnect(instrument)">
+          Disconnect
+        </button>
+      </div>
+    </div>
+
     <div style="display: flex; justify-content: flex-end; margin-right: 2%;">
       <button (click)="click()" routerLink="/console" class="btn btn-primary">
         <i class="fa fa-dashboard"></i>
@@ -125,4 +148,4 @@
       </div>
     </div>
   </div>
-</main>
+</div>

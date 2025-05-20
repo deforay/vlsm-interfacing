@@ -1,3 +1,6 @@
+// src/app/components/console/console.component.ts
+// Modify the existing ConsoleComponent to use ConnectionManagerService
+
 import { Component, OnInit, NgZone, OnDestroy, ChangeDetectorRef, ViewChild } from '@angular/core';
 import { DomSanitizer } from '@angular/platform-browser';
 import { Router } from '@angular/router';
@@ -5,6 +8,7 @@ import { ElectronStoreService } from '../../services/electron-store.service';
 import { InstrumentInterfaceService } from '../../services/instrument-interface.service';
 import { UtilitiesService } from '../../services/utilities.service';
 import { TcpConnectionService } from '../../services/tcp-connection.service';
+import { ConnectionManagerService } from '../../services/connection-manager.service';
 import { ConnectionParams } from '../../interfaces/connection-params.interface';
 import { MatPaginator } from '@angular/material/paginator';
 import { MatTableDataSource } from '@angular/material/table';
@@ -12,7 +16,7 @@ import { MatSort } from '@angular/material/sort';
 import { SelectionModel } from "@angular/cdk/collections";
 import { MatCheckboxChange } from '@angular/material/checkbox';
 import { distinctUntilChanged } from 'rxjs/operators';
-import { v4 as uuidv4 } from 'uuid';
+import { Subscription } from 'rxjs';
 import { IpcRenderer } from 'electron';
 import { MatDialog } from '@angular/material/dialog';
 import { DashboardComponent } from '../dashboard/dashboard.component';
@@ -21,6 +25,7 @@ export enum SelectType {
   single,
   multiple
 }
+
 @Component({
   selector: 'app-console',
   templateUrl: './console.component.html',
@@ -44,7 +49,9 @@ export class ConsoleComponent implements OnInit, OnDestroy {
   public instrumentLogs = [];
   public connectionParams: ConnectionParams = null;
   public selectedTabIndex = 0;
-  private electronStoreSubscription: any;
+  private electronStoreSubscription: Subscription;
+  private instrumentsSubscription: Subscription;
+
   public displayedColumns: string[] = [
     'select',
     'machine_used',
@@ -75,6 +82,7 @@ export class ConsoleComponent implements OnInit, OnDestroy {
     private readonly store: ElectronStoreService,
     private readonly _ngZone: NgZone,
     private readonly instrumentInterfaceService: InstrumentInterfaceService,
+    private readonly connectionManagerService: ConnectionManagerService,
     private readonly tcpService: TcpConnectionService,
     private readonly utilitiesService: UtilitiesService,
     private readonly router: Router) {
@@ -84,6 +92,7 @@ export class ConsoleComponent implements OnInit, OnDestroy {
       console.warn('App not running inside Electron!');
     }
   }
+
   selectHandler(row: any, event: MatCheckboxChange) {
     const that = this;
     if (row === null) {
@@ -110,6 +119,27 @@ export class ConsoleComponent implements OnInit, OnDestroy {
     // Scroll to the top of the page when the component initializes
     window.scrollTo(0, 0);
 
+    // Subscribe to available instruments from the connection manager
+    that.instrumentsSubscription = that.connectionManagerService.getActiveInstruments().subscribe(instruments => {
+      that._ngZone.run(() => {
+        that.availableInstruments = instruments;
+
+        // Initialize the logs for each instrument
+        that.availableInstruments.forEach(instrument => {
+          that.utilitiesService.getInstrumentLogSubject(instrument.connectionParams.instrumentId)
+            .subscribe(logs => {
+              that._ngZone.run(() => {
+                that.updateLogsForInstrument(instrument.connectionParams.instrumentId, logs);
+                that.filterInstrumentLogs(instrument);
+                that.cdRef.detectChanges();
+              });
+            });
+        });
+
+        that.cdRef.detectChanges();
+      });
+    });
+
     // Fetch last few orders and logs on load
     setTimeout(() => {
       that.fetchRecentResults();
@@ -122,9 +152,6 @@ export class ConsoleComponent implements OnInit, OnDestroy {
     }, 1000 * 7);
 
     // Refresh last orders every 5 minutes
-    that.recentResultsInterval = setInterval(() => { that.fetchRecentResults(''); }, 1000 * 60 * 5);
-
-    // Refresh last orders every 5 minutes
     that.recentResultsInterval = setInterval(() => {
       that.fetchRecentResults();
       that.resyncTestResultsToMySQL();
@@ -134,102 +161,19 @@ export class ConsoleComponent implements OnInit, OnDestroy {
     that.walCheckpointInterval = setInterval(() => {
       that.runSQLiteWalCheckpoint();
     }, 1000 * 60 * 30); // 30 minutes
-
-  }
-
-  setupInstruments() {
-    const that = this;
-    that.availableInstruments = [];
-
-    that.instrumentsSettings.forEach((instrumentSetting: { interfaceCommunicationProtocol: string; interfaceConnectionMode: any; analyzerMachineHost: any; analyzerMachinePort: any; analyzerMachineName: any; analyzerMachineType: any; displayorder: any; }, index: any) => {
-      let instrument: any = {};
-      if (instrumentSetting.interfaceCommunicationProtocol == 'astm-elecsys') {
-        instrumentSetting.interfaceCommunicationProtocol = 'astm-nonchecksum';
-      } else if (instrumentSetting.interfaceCommunicationProtocol == 'astm-concatenated') {
-        instrumentSetting.interfaceCommunicationProtocol = 'astm-checksum';
-      }
-      instrument.connectionParams = {
-        instrumentIndex: index,
-        connectionMode: instrumentSetting.interfaceConnectionMode,
-        connectionProtocol: instrumentSetting.interfaceCommunicationProtocol,
-        host: instrumentSetting.analyzerMachineHost ?? '127.0.0.1',
-        port: instrumentSetting.analyzerMachinePort,
-        instrumentId: instrumentSetting.analyzerMachineName,
-        machineType: instrumentSetting.analyzerMachineType,
-        labName: that.commonSettings.labName,
-        displayorder: instrumentSetting.displayorder,
-        interfaceAutoConnect: that.commonSettings.interfaceAutoConnect
-      };
-
-      instrument.isConnected = false;
-      const isTcpServer = instrument.connectionParams.connectionMode === 'tcpserver';
-      instrument.instrumentButtonText = isTcpServer ? 'Start Server' : 'Connect';
-
-      if (!that.commonSettings || !instrument.connectionParams.port || (instrument.connectionParams.connectionProtocol === 'tcpclient' && !instrument.connectionParams.host)) {
-        that.router.navigate(['/settings']);
-        return;
-      }
-
-      if (instrument.connectionParams.interfaceAutoConnect === 'yes') {
-        setTimeout(() => {
-          that.reconnect(instrument);
-        }, 1000);
-      }
-
-      that.utilitiesService.getInstrumentLogSubject(instrument.connectionParams.instrumentId)
-        .subscribe(logs => {
-          that._ngZone.run(() => {
-            that.updateLogsForInstrument(instrument.connectionParams.instrumentId, logs);
-            that.filterInstrumentLogs(instrument);
-            that.cdRef.detectChanges();
-          });
-        });
-
-      that.availableInstruments.push(instrument);
-    });
-
-    that.availableInstruments.sort((a, b) => {
-      // Sort by displayorder if available, otherwise by instrumentId
-      if (a.connectionParams.displayorder != null && b.connectionParams.displayorder != null) {
-        return a.connectionParams.displayorder - b.connectionParams.displayorder;
-      } else if (a.connectionParams.displayorder == null && b.connectionParams.displayorder != null) {
-        return 1;
-      } else if (a.connectionParams.displayorder != null && b.connectionParams.displayorder == null) {
-        return -1;
-      } else {
-        return a.connectionParams.instrumentId.localeCompare(b.connectionParams.instrumentId);
-      }
-    });
-
   }
 
   loadSettings() {
     const that = this;
-    const initialSettings = that.store.getAll();
-
-    if (!initialSettings.commonConfig || !initialSettings.instrumentsConfig) {
-      const initialCommonSettings = that.store.get('commonConfig');
-      const initialInstrumentsSettings = that.store.get('instrumentsConfig');
-
-      if (!initialCommonSettings || !initialInstrumentsSettings) {
-        console.warn('Settings not found, redirecting to settings page');
-        that.router.navigate(['/settings']);
-        return;
-      }
-    }
-
     that.electronStoreSubscription = that.store.electronStoreObservable().subscribe(electronStoreObject => {
       that._ngZone.run(() => {
         that.commonSettings = electronStoreObject.commonConfig;
         that.instrumentsSettings = electronStoreObject.instrumentsConfig;
         that.appVersion = electronStoreObject.appVersion;
-
-        that.setupInstruments();
         that.cdRef.detectChanges();
       });
     });
   }
-
 
   reSyncSelectedRecords() {
     const that = this;
@@ -269,7 +213,6 @@ export class ConsoleComponent implements OnInit, OnDestroy {
           that.lastOrders = lastFewOrders[0];
           that.data = lastFewOrders[0];
           that.dataSource.data = that.lastOrders;
-          //console.log(that.dataSource.data);
           that.dataSource.paginator = that.paginator;
           that.dataSource.sort = that.sort;
         });
@@ -280,35 +223,13 @@ export class ConsoleComponent implements OnInit, OnDestroy {
     });
   }
 
-
   openModal() {
     console.log("Open a modal");
     this.ipc.send("openModal");
   }
 
-
   goToDashboard() {
-    const that = this;
-    let dataArray = [];
-    if (that.data) {
-      dataArray = that.data.map((item: { added_on: any; machine_used: any; order_id: any; lims_sync_status: any; lims_sync_date_time: any; }) => ({
-        added_on: item.added_on,
-        machine_used: item.machine_used,
-        order_id: item.order_id,
-        lims_sync_status: item.lims_sync_status,
-        lims_sync_date_time: item.lims_sync_date_time
-      }));
-    }
-
-    const dialogRef = that.dialog.open(DashboardComponent, {
-      maxWidth: '90vw',
-      maxHeight: '90vh',
-      data: { dashboardData: dataArray }
-    });
-
-    dialogRef.afterClosed().subscribe(result => {
-
-    });
+    this.router.navigate(['/dashboard']);
   }
 
   filterData($event: any) {
@@ -316,15 +237,12 @@ export class ConsoleComponent implements OnInit, OnDestroy {
     if (searchTerm.length >= 2) {
       this.fetchRecentResults(searchTerm);
     } else {
-
       this.fetchRecentResults('');
     }
   }
 
-
   updateLogsForInstrument(instrumentId: string, newLogs: any) {
     if (!this.instrumentLogs[instrumentId]) {
-
       this.instrumentLogs[instrumentId] = {
         logs: [],
         filteredLogs: []
@@ -335,223 +253,31 @@ export class ConsoleComponent implements OnInit, OnDestroy {
     this.instrumentLogs[instrumentId].filteredLogs = newLogs;
   }
 
-
   fetchRecentLogs() {
     const that = this;
     that.availableInstruments.forEach(instrument => {
       let logs = that.utilitiesService.fetchRecentLogs(instrument.connectionParams.instrumentId);
-      //instrument.logs = logs; // Initially, filteredLogs are the same as logs
       that.updateLogsForInstrument(instrument.connectionParams.instrumentId, logs);
-
     });
 
     that.cdRef.detectChanges(); // Trigger change detection
   }
 
-  // connect(instrument: any) {
-  //   const that = this;
-  //   if (instrument && instrument.connectionParams && instrument.connectionParams.host && instrument.connectionParams.port) {
-  //     that.instrumentInterfaceService.connect(instrument);
-  //     that.updateInstrumentStatusSubscription(instrument);
-  //   }
-  // }
-
-
-
+  // Use connection manager service for connect/disconnect functions
   connect(instrument: any) {
-    const that = this;
-
-    if (instrument && instrument.connectionParams && instrument.connectionParams.host && instrument.connectionParams.port) {
-      // Generate a unique session ID
-      const sessionId = uuidv4();
-      const connectionMode = instrument.connectionParams.instrumentId;
-      const startTime = that.getFormattedDateTime();
-
-      // Get existing data from localStorage or initialize new data
-      let storedData = JSON.parse(localStorage.getItem('sessionDatas') || '{}');
-
-      // Initialize the connectionMode key if not already present
-      if (!storedData[connectionMode]) {
-        storedData[connectionMode] = [];
-      }
-
-      // Add new session data to the array
-      storedData[connectionMode].push({
-        sessionId,
-        startTime
-      });
-
-      // Store updated data back to localStorage
-      localStorage.setItem('sessionDatas', JSON.stringify(storedData));
-
-      // Log or use the session ID and startTime as needed
-      console.log(`Session ID for ${connectionMode}: ${sessionId}`);
-      console.log(`Start Time for ${connectionMode}: ${startTime}`);
-
-      // Connect to the instrument
-      that.instrumentInterfaceService.connect(instrument);
-      that.updateInstrumentStatusSubscription(instrument);
-    }
+    this.connectionManagerService.connect(instrument);
   }
-
-  // reconnect(instrument: any) {
-  //   const that = this;
-  //   if (instrument && instrument.connectionParams && instrument.connectionParams.host && instrument.connectionParams.port) {
-  //     that.instrumentInterfaceService.reconnect(instrument);
-  //     that.updateInstrumentStatusSubscription(instrument);
-  //   }
-  // }
-
 
   reconnect(instrument: any) {
-    const that = this;
-
-    if (instrument && instrument.connectionParams && instrument.connectionParams.host && instrument.connectionParams.port) {
-      const connectionMode = instrument.connectionParams.instrumentId;
-
-      // Retrieve existing session data from localStorage or initialize if not present
-      let sessionData = JSON.parse(localStorage.getItem('sessionDatas') || '{}');
-
-      if (!sessionData[connectionMode]) {
-        // Generate a new session ID and start time if no data exists for this connectionMode
-        sessionData[connectionMode] = {
-          sessionId: uuidv4(),
-          startTime: that.getFormattedDateTime()
-        };
-      } else {
-        // Update the start time if session ID already exists
-        sessionData[connectionMode].startTime = that.getFormattedDateTime();
-      }
-
-      // Save the updated session data back to localStorage
-      localStorage.setItem('sessionDatas', JSON.stringify(sessionData));
-
-      // Log session details
-      console.log(`Session ID for ${connectionMode}: ${sessionData[connectionMode].sessionId}`);
-      console.log(`Connection started at: ${sessionData[connectionMode].startTime}`);
-
-      // Proceed with reconnection
-      that.instrumentInterfaceService.reconnect(instrument);
-      that.updateInstrumentStatusSubscription(instrument);
-    }
+    this.connectionManagerService.reconnect(instrument);
   }
-
-  // disconnect(instrument: any) {
-  //   const that = this;
-  //   if (instrument && instrument.connectionParams && instrument.connectionParams.host && instrument.connectionParams.port) {
-  //     that.instrumentInterfaceService.disconnect(instrument);
-  //     that.updateInstrumentStatusSubscription(instrument);
-  //   }
-  // }
-
-
 
   disconnect(instrument: any) {
-    const that = this;
-
-    if (instrument && instrument.connectionParams && instrument.connectionParams.host && instrument.connectionParams.port) {
-      const connectionMode = instrument.connectionParams.instrumentId;
-
-      // Retrieve the session data from localStorage
-      const sessionData = JSON.parse(localStorage.getItem('sessionDatas') || '{}');
-
-      if (sessionData[connectionMode]) {
-        const sessionId = sessionData[connectionMode].sessionId;
-
-        if (sessionId) {
-          // Store the disconnection time in the session data
-          const endTime = that.getFormattedDateTime();
-          sessionData[connectionMode].endTime = endTime;
-
-          // Save updated session data back to localStorage
-          localStorage.setItem('sessionDatas', JSON.stringify(sessionData));
-
-          // Log session details
-          console.log(`Session ID for ${connectionMode}: ${sessionId}`);
-          console.log(`Disconnection ended at: ${endTime}`);
-        }
-      }
-
-      // Proceed with disconnection
-      that.instrumentInterfaceService.disconnect(instrument);
-      that.updateInstrumentStatusSubscription(instrument);
-    }
+    this.connectionManagerService.disconnect(instrument);
   }
-
-
-  getFormattedDateTime(): string {
-    const now = new Date();
-    const year = String(now.getFullYear()).padStart(4, '0');
-    const month = String(now.getMonth() + 1).padStart(2, '0');
-    const day = String(now.getDate()).padStart(2, '0');
-    const hours = String(now.getHours()).padStart(2, '0');
-    const minutes = String(now.getMinutes()).padStart(2, '0');
-    const seconds = String(now.getSeconds()).padStart(2, '0'); // Add seconds
-    return `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`; // Include seconds in the return value
-  }
-
-
 
   sendASTMOrders(instrument: any) {
-    const that = this;
-    if (instrument && instrument.connectionParams && instrument.connectionParams.host && instrument.connectionParams.port) {
-      that.instrumentInterfaceService.fetchAndSendASTMOrders(instrument);
-    }
-  }
-
-  updateInstrumentStatusSubscription(instrument: any) {
-    const that = this;
-    that.tcpService.getStatusObservable(instrument.connectionParams).subscribe(status => {
-      that._ngZone.run(() => {
-        // Update the availableInstruments array
-        that.availableInstruments = that.availableInstruments.map(inst => {
-          if (inst.connectionParams.instrumentId === instrument.connectionParams.instrumentId) {
-            return { ...inst, isConnected: status };
-          }
-          return inst;
-        });
-        that.cdRef.detectChanges();
-      });
-    });
-
-    that.tcpService.getConnectionAttemptObservable(instrument.connectionParams)
-      .subscribe(status => {
-        that._ngZone.run(() => {
-          // Update the availableInstruments array
-          that.availableInstruments = that.availableInstruments.map(inst => {
-            if (inst.connectionParams.instrumentId === instrument.connectionParams.instrumentId) {
-              const isTcpServer = inst.connectionParams.connectionMode === 'tcpserver';
-              const statusText = isTcpServer ? 'Wating for client..' : 'Please wait..';
-              const defaultText = isTcpServer ? 'Start Server' : 'Connect';
-              return {
-                ...inst,
-                connectionInProcess: status,
-                instrumentButtonText: status ? statusText : defaultText
-              };
-            }
-            return inst;
-          });
-          that.cdRef.detectChanges();
-        });
-      });
-
-    that.tcpService.getTransmissionStatusObservable(instrument.connectionParams)
-      .pipe(distinctUntilChanged())
-      .subscribe(status => {
-        that._ngZone.run(() => {
-          // Update the availableInstruments array
-          that.availableInstruments = that.availableInstruments.map(inst => {
-            if (inst.connectionParams.instrumentId === instrument.connectionParams.instrumentId) {
-              return {
-                ...inst,
-                transmissionInProgress: status
-              };
-            }
-            return inst;
-          });
-          that.cdRef.detectChanges();
-        });
-      });
+    this.connectionManagerService.sendASTMOrders(instrument);
   }
 
   selectTab(index: number): void {
@@ -563,8 +289,8 @@ export class ConsoleComponent implements OnInit, OnDestroy {
     if (!that.instrumentLogs[instrument.connectionParams.instrumentId]) {
       // Initialize the logs structure for the instrument if not already done
       that.instrumentLogs[instrument.connectionParams.instrumentId] = {
-        logs: [...instrument.logs],
-        filteredLogs: [...instrument.logs]
+        logs: [],
+        filteredLogs: []
       };
     }
 
@@ -581,8 +307,6 @@ export class ConsoleComponent implements OnInit, OnDestroy {
     that.cdRef.detectChanges(); // Trigger change detection if needed
   }
 
-
-
   copyLog(instrument: { connectionParams: { instrumentId: string | number; }; }) {
     if (this.instrumentLogs[instrument.connectionParams.instrumentId]) {
       // Join the filtered logs with a newline character
@@ -592,7 +316,6 @@ export class ConsoleComponent implements OnInit, OnDestroy {
       console.error('No logs found for instrument:', instrument.connectionParams.instrumentId);
     }
   }
-
 
   clearLiveLog(instrument: any) {
     const that = this;
@@ -606,9 +329,7 @@ export class ConsoleComponent implements OnInit, OnDestroy {
     that.cdRef.detectChanges(); // Trigger change detection if needed
   }
 
-
   resyncTestResultsToMySQL() {
-
     if (this.mysqlConnected) {
       this.utilitiesService.resyncTestResultsToMySQL(
         (message: any) => {
@@ -656,40 +377,38 @@ export class ConsoleComponent implements OnInit, OnDestroy {
       () => {
         that.mysqlConnected = true;
         that.cdRef.detectChanges();
-        // console.error(that.mysqlConnected);
-        // console.log('MySQL is connected');
       },
       (err) => {
         that.mysqlConnected = false;
         that.cdRef.detectChanges();
-        // console.error(that.mysqlConnected);
-        // console.error('MySQL connection lost:', err);
       }
     );
   }
 
-  // Add this method to the ConsoleComponent class
   runSQLiteWalCheckpoint(): void {
     const that = this;
     that.utilitiesService.sqlite3WalCheckpoint();
-
-    // Log to the application console
     that.utilitiesService.logger('info', 'SQLite WAL checkpoint scheduled and executed', null);
   }
 
   ngOnDestroy() {
+    // Clear intervals
     if (this.recentResultsInterval) {
-      clearInterval(this.recentResultsInterval);  // Clear the recent results interval
+      clearInterval(this.recentResultsInterval);
     }
     if (this.mysqlCheckInterval) {
-      clearInterval(this.mysqlCheckInterval);  // Clear the MySQL check interval
+      clearInterval(this.mysqlCheckInterval);
     }
     if (this.walCheckpointInterval) {
-      clearInterval(this.walCheckpointInterval);  // Clear the WAL checkpoint interval
+      clearInterval(this.walCheckpointInterval);
     }
+
+    // Unsubscribe from observables
     if (this.electronStoreSubscription) {
-      this.electronStoreSubscription.unsubscribe(); // Unsubscribe to avoid memory leaks
+      this.electronStoreSubscription.unsubscribe();
+    }
+    if (this.instrumentsSubscription) {
+      this.instrumentsSubscription.unsubscribe();
     }
   }
-
 }

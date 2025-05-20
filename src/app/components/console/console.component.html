@@ -24,10 +24,8 @@
   <div class="instrument-container">
     <div class="instrument-tabs">
       <ul class="tabs-list">
-        <li *ngFor="let instrument of availableInstruments; let i = index"
-            class="tab-item"
-            [class.active]="selectedTabIndex === i"
-            (click)="selectTab(i)">
+        <li *ngFor="let instrument of availableInstruments; let i = index" class="tab-item"
+          [class.active]="selectedTabIndex === i" (click)="selectTab(i)">
           <div class="tab-content">
             <i [ngClass]="{
                 'fa': true,
@@ -47,7 +45,7 @@
     <!-- Instrument Content Area -->
     <div class="instrument-details">
       <div class="tab-content" *ngFor="let instrument of availableInstruments; let i = index"
-           [class.active]="selectedTabIndex === i">
+        [class.active]="selectedTabIndex === i">
 
         <!-- Connection Status and Controls -->
         <div class="connection-controls">
@@ -69,7 +67,8 @@
                 <span>{{instrument.connectionParams.instrumentId}}</span>&nbsp;Not Connected
               </h5>
               <div class="connection-buttons">
-                <button (click)="reconnect(instrument)" class="btn btn-primary" [disabled]="instrument.connectionInProcess">
+                <button (click)="reconnect(instrument)" class="btn btn-primary"
+                  [disabled]="instrument.connectionInProcess">
                   <i class="fa fa-plug"></i>
                   <span>{{instrument.instrumentButtonText}}</span>
                 </button>
@@ -102,9 +101,8 @@
         <div class="log-controls">
           <div class="search-area">
             <i class="fa fa-search search-icon"></i>
-            <input type="text" [(ngModel)]="instrument.searchText"
-                  (input)="filterInstrumentLogs(instrument)"
-                  placeholder="Search {{ instrument.connectionParams.instrumentId }} logs...">
+            <input type="text" [(ngModel)]="instrument.searchText" (input)="filterInstrumentLogs(instrument)"
+              placeholder="Search {{ instrument.connectionParams.instrumentId }} logs...">
           </div>
           <div class="log-actions">
             <button (click)="copyLog(instrument)" class="btn btn-outline-primary">
@@ -122,7 +120,8 @@
         <div class="log-viewer">
           <div class="log-entries">
             <ng-container *ngIf="instrumentLogs[instrument.connectionParams.instrumentId]">
-              <ng-container *ngFor="let logEntry of instrumentLogs[instrument.connectionParams.instrumentId].filteredLogs">
+              <ng-container
+                *ngFor="let logEntry of instrumentLogs[instrument.connectionParams.instrumentId].filteredLogs">
                 <div class="log-entry" [innerHTML]="getSafeHtml(logEntry)"></div>
               </ng-container>
             </ng-container>
@@ -152,7 +151,7 @@
       <h4>Received Results</h4>
       <div class="results-actions">
         <button (click)="reSyncSelectedRecords();" class="btn btn-success"
-                [class.hidden]="selection.selected.length === 0">
+          [class.hidden]="selection.selected.length === 0">
           <i class="fa fa-sync"></i>
           <span>Re-sync Selected Records</span>
         </button>
@@ -166,8 +165,8 @@
     <!-- Search Bar -->
     <div class="search-container">
       <i class="fa fa-search search-icon"></i>
-      <input type="text" (keyup)="filterData($event)" placeholder="Search Results..."
-            [(ngModel)]="searchTerm" class="search-input">
+      <input type="text" (keyup)="filterData($event)" placeholder="Search Results..." [(ngModel)]="searchTerm"
+        class="search-input">
     </div>
 
     <!-- Results Table -->
@@ -176,15 +175,13 @@
         <!-- Checkbox Column -->
         <ng-container matColumnDef="select">
           <mat-header-cell *matHeaderCellDef>
-            <mat-checkbox (click)="$event.stopPropagation()"
-                         (change)="selectHandler(null, $event)"
-                         [checked]="this.selection.selected.length === dataSource.data.length">
+            <mat-checkbox (click)="$event.stopPropagation()" (change)="selectHandler(null, $event)"
+              [checked]="this.selection.selected.length === dataSource.data.length">
             </mat-checkbox>
           </mat-header-cell>
           <mat-cell *matCellDef="let row">
-            <mat-checkbox (click)="$event.stopPropagation()"
-                         (change)="selectHandler(row, $event)"
-                         [checked]="selection.isSelected(row)">
+            <mat-checkbox (click)="$event.stopPropagation()" (change)="selectHandler(row, $event)"
+              [checked]="selection.isSelected(row)">
             </mat-checkbox>
           </mat-cell>
         </ng-container>
@@ -251,20 +248,18 @@
 
         <mat-header-row *matHeaderRowDef="displayedColumns"></mat-header-row>
         <mat-row *matRowDef="let row; columns: displayedColumns;"
-                [ngClass]="{'unsynced-row': row.mysql_inserted === 0}"></mat-row>
+          [ngClass]="{'unsynced-row': row.mysql_inserted === 0}"></mat-row>
       </mat-table>
     </div>
 
     <!-- Pagination -->
-    <mat-paginator [pageSizeOptions]="[50, 100, 250, 500]"
-                  [pageSize]="50"
-                  showFirstLastButtons
-                  aria-label="Select Page"></mat-paginator>
+    <mat-paginator [pageSizeOptions]="[50, 100, 250, 500]" [pageSize]="50" showFirstLastButtons
+      aria-label="Select Page"></mat-paginator>
   </div>
 
   <!-- Footer -->
   <div class="app-footer">
-    <button routerLink="/raw-data-component" class="btn btn-dark">
+    <button routerLink="/raw-data" class="btn btn-dark">
       <i class="fa fa-database"></i>
       <span>View Raw Data</span>
     </button>

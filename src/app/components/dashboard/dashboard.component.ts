@@ -1,8 +1,11 @@
-import { Component, NgModule, OnInit, Inject } from '@angular/core';
+// src/app/components/dashboard/dashboard.component.ts
+import { Component, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { Router, ActivatedRoute } from '@angular/router';
-import { MAT_DIALOG_DATA, MatDialogRef } from '@angular/material/dialog';
+import { ConnectionManagerService } from '../../services/connection-manager.service';
+import { UtilitiesService } from '../../services/utilities.service';
+import { Subscription } from 'rxjs';
 
 interface ResultData {
   added_on: string;
@@ -29,37 +32,77 @@ export class DashboardComponent implements OnInit {
   latestResult?: ResultData;
   selectedInstrument: string = '';
   instruments: string[] = [];
-
+  public availableInstruments = [];
+  private instrumentsSubscription: Subscription;
 
   totalResults: number = 0;
   syncedResults: number = 0;
   notYetSyncedResults: number = 0;
   failedtosync: number = 0;
 
-
   sessionDatasArray: { mode: string; sessionId: string; startTime: string; endTime?: string }[] = [];
   filteredSessionDatasArray: { mode: string; sessionId: string; startTime: string; endTime?: string }[] = [];
 
   constructor(
-    private dialogRef: MatDialogRef<DashboardComponent>,
     private router: Router,
     private route: ActivatedRoute,
-    @Inject(MAT_DIALOG_DATA) public dialogData: { dashboardData: ResultData[] }
+    private utilitiesService: UtilitiesService,
+    private connectionManagerService: ConnectionManagerService
   ) { }
 
   ngOnInit() {
-    this.data = this.dialogData.dashboardData;
-    //console.log('Dialog Data:', this.data);
+    // Subscribe to instrument status
+    this.instrumentsSubscription = this.connectionManagerService.getActiveInstruments()
+      .subscribe(instruments => {
+        this.availableInstruments = instruments;
+      });
 
-    this.filteredData = this.data;
-    this.instruments = [...new Set(this.data.map(item => item.machine_used))];
+    // Fetch recent results to get dashboard data
+    this.fetchDashboardData();
 
-    this.updateCounts(this.data);
+    // Load instrument names for the dropdown
+    this.loadInstrumentNames();
+
+    // Load session data
     this.loadSessionData();
     this.retrieveSessionData();
     this.filterSessionData();
+  }
 
-    //console.log('Data initialized:', this.data);
+  private fetchDashboardData() {
+    this.utilitiesService.fetchRecentResults('');
+    this.utilitiesService.lastOrders.subscribe({
+      next: lastFewOrders => {
+        if (lastFewOrders && lastFewOrders.length > 0) {
+          this.data = lastFewOrders[0].map((item: any) => ({
+            added_on: item.added_on,
+            machine_used: item.machine_used,
+            order_id: item.order_id,
+            lims_sync_status: item.lims_sync_status,
+            lims_sync_date_time: item.lims_sync_date_time
+          }));
+
+          this.filteredData = this.data;
+          this.updateCounts(this.data);
+        }
+      },
+      error: error => {
+        console.error('Error fetching orders for dashboard:', error);
+      }
+    });
+  }
+
+  private loadInstrumentNames() {
+    // Get instrument names from the data for the dropdown
+    if (this.data && this.data.length > 0) {
+      this.instruments = [...new Set(this.data.map(item => item.machine_used))];
+    }
+    // Also add instruments from the connection manager
+    this.availableInstruments.forEach(instrument => {
+      if (!this.instruments.includes(instrument.connectionParams.instrumentId)) {
+        this.instruments.push(instrument.connectionParams.instrumentId);
+      }
+    });
   }
 
   private updateCounts(data: ResultData[]) {
@@ -69,7 +112,6 @@ export class DashboardComponent implements OnInit {
     this.failedtosync = data.filter(item => item.lims_sync_status === 2).length;
 
     this.latestResult = this.getLatestResult(data);
-    console.log('Latest result:', this.latestResult);
   }
 
   private getLatestResult(data: ResultData[]): ResultData | undefined {
@@ -82,23 +124,16 @@ export class DashboardComponent implements OnInit {
   }
 
   filterByInstrument() {
-    console.log('Selected Instrument:', this.selectedInstrument);
-
     this.filteredData = this.selectedInstrument
       ? this.data.filter(item => item.machine_used === this.selectedInstrument)
       : this.data;
 
     this.updateCounts(this.filteredData);
     this.filterSessionData();
-
-    console.log('Filtered Data:', this.filteredData);
-    console.log('RESULTS RECEIVED:', this.totalResults);
-    console.log('RESULTS SYNCED TO LIS:', this.syncedResults);
   }
 
   filterData(event: Event) {
     const query = (event.target as HTMLInputElement).value.toLowerCase();
-    console.log('Filter query:', query);
 
     this.filteredData = this.data.filter(item =>
       item.machine_used.toLowerCase().includes(query) ||
@@ -106,31 +141,26 @@ export class DashboardComponent implements OnInit {
       item.lims_sync_date_time.toLowerCase().includes(query)
     );
     this.updateCounts(this.filteredData);
-    console.log('Filtered data:', this.filteredData);
   }
 
   click() {
-    this.dialogRef.close();
+    this.router.navigate(['/console']);
   }
 
   private retrieveSessionData() {
     const storedSessionData = JSON.parse(localStorage.getItem('sessionDatas') || '{}');
 
-
     if (typeof storedSessionData === 'object' && storedSessionData !== null) {
       this.sessionDatasArray = Object.entries(storedSessionData).map(([mode, session]) => ({
         mode,
-        sessionId: (session as SessionData).sessionId,
-        startTime: (session as SessionData).startTime,
-        endTime: (session as SessionData).endTime || 'N/A'
+        sessionId: (session as any).sessionId,
+        startTime: (session as any).startTime,
+        endTime: (session as any).endTime || 'N/A'
       }));
-
-      console.log('Session Data retrieved:', this.sessionDatasArray);
     } else {
       console.error('No valid session data found in local storage.');
     }
   }
-
 
   private loadSessionData() {
     const sessionId = localStorage.getItem('sessionId');
@@ -153,5 +183,23 @@ export class DashboardComponent implements OnInit {
       ? this.sessionDatasArray.filter(session => session.mode === this.selectedInstrument)
       : this.sessionDatasArray;
   }
-}
 
+  // Add connection methods for use in the template
+  connect(instrument: any) {
+    this.connectionManagerService.connect(instrument);
+  }
+
+  reconnect(instrument: any) {
+    this.connectionManagerService.reconnect(instrument);
+  }
+
+  disconnect(instrument: any) {
+    this.connectionManagerService.disconnect(instrument);
+  }
+
+  ngOnDestroy() {
+    if (this.instrumentsSubscription) {
+      this.instrumentsSubscription.unsubscribe();
+    }
+  }
+}

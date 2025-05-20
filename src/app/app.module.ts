@@ -15,7 +15,7 @@ import { HomeModule } from './home/home.module';
 import { AppComponent } from './app.component';
 import { SettingsComponent } from './components/settings/settings.component';
 import { ConsoleComponent } from './components/console/console.component';
-import { RawDataComponentComponent } from './components/raw-data-component/raw-data-component.component';
+import { RawDataComponent } from './components/raw-data/raw-data.component';
 import { DashboardComponent } from './components/dashboard/dashboard.component'; // <-- Import DashboardComponent here
 
 import { DatabaseService } from './services/database.service';
@@ -23,6 +23,9 @@ import { TcpConnectionService } from './services/tcp-connection.service';
 import { ElectronService } from './core/services';
 import { InstrumentInterfaceService } from './services/instrument-interface.service';
 import { ElectronStoreService } from './services/electron-store.service';
+import { ConnectionManagerService } from './services/connection-manager.service';
+
+
 import { NgxPaginationModule } from 'ngx-pagination';
 import { MatPaginatorModule } from '@angular/material/paginator';
 import { MatSortModule } from '@angular/material/sort';
@@ -43,8 +46,8 @@ export function httpLoaderFactory(http: HttpClient) {
     AppComponent,
     SettingsComponent,
     ConsoleComponent,
-    RawDataComponentComponent,
-    DashboardComponent // <-- Declare DashboardComponent here
+    RawDataComponent,
+    DashboardComponent
   ],
   imports: [
     BrowserModule,
@@ -77,6 +80,7 @@ export function httpLoaderFactory(http: HttpClient) {
     TcpConnectionService,
     InstrumentInterfaceService,
     ElectronStoreService,
+    ConnectionManagerService,
     { provide: MAT_FORM_FIELD_DEFAULT_OPTIONS, useValue: { appearance: 'fill' } },
   ],
   bootstrap: [AppComponent]

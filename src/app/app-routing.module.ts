@@ -4,7 +4,7 @@ import { PageNotFoundComponent } from './shared/components';
 import { DashboardComponent } from './components/dashboard/dashboard.component';
 import { HomeRoutingModule } from './home/home-routing.module';
 import { ConsoleComponent } from './components/console/console.component';
-import { RawDataComponentComponent } from './components/raw-data-component/raw-data-component.component';
+import { RawDataComponent } from './components/raw-data/raw-data.component';
 import { SettingsComponent } from './components/settings/settings.component';
 
 const routes: Routes = [
@@ -26,8 +26,8 @@ const routes: Routes = [
     component: SettingsComponent
   },
   {
-    path: 'raw-data-component',
-    component: RawDataComponentComponent
+    path: 'raw-data',
+    component: RawDataComponent
   },
   {
     path: '**',

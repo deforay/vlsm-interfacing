@@ -1,19 +1,20 @@
-// raw-data-component.component.ts
-import { Component, OnInit } from '@angular/core';
+// src/app/components/raw-data/raw-data.component.ts
+import { Component, OnInit, OnDestroy } from '@angular/core';
 import { Router } from '@angular/router';
 import { UtilitiesService } from '../../services/utilities.service';
+import { ConnectionManagerService } from '../../services/connection-manager.service';
 import { MatPaginator } from '@angular/material/paginator';
 import { MatTableDataSource } from '@angular/material/table';
 import { MatSort } from '@angular/material/sort';
 import { ViewChild } from '@angular/core';
+import { Subscription } from 'rxjs';
 
 @Component({
-  selector: 'app-raw-data-component',
-
-  templateUrl: './raw-data-component.component.html',
-  styleUrl: './raw-data-component.component.scss'
+  selector: 'app-raw-data',
+  templateUrl: './raw-data.component.html',
+  styleUrl: './raw-data.component.scss'
 })
-export class RawDataComponentComponent {
+export class RawDataComponent implements OnInit, OnDestroy {
   public lastrawData: any;
   public data: any;
   public displayedColumns: string[] = [
@@ -21,34 +22,37 @@ export class RawDataComponentComponent {
     'added_on',
     'data',
   ];
+  public availableInstruments = [];
+  private instrumentsSubscription: Subscription;
+
   dataSource = new MatTableDataSource<any>();
   @ViewChild(MatPaginator, { static: true }) paginator: MatPaginator;
   @ViewChild(MatSort, { static: true }) sort: MatSort;
 
   constructor(
     private utilitiesService: UtilitiesService,
+    private connectionManagerService: ConnectionManagerService,
     private router: Router) { }
 
   ngOnInit() {
-    this.fetchrawData('')
+    this.fetchrawData('');
 
+    // Subscribe to instrument status
+    this.instrumentsSubscription = this.connectionManagerService.getActiveInstruments()
+      .subscribe(instruments => {
+        this.availableInstruments = instruments;
+      });
   }
 
   click() {
     this.router.navigate(['/console']);
   }
 
-  // filterData($event:any){
-  //   this.dataSource.filter = $event.target.value;
-  // }
-
-
   filterData($event: any) {
     const searchTerm = $event.target.value;
     if (searchTerm.length >= 2) {
       this.fetchrawData(searchTerm);
     } else {
-
       this.fetchrawData('');
     }
   }
@@ -64,7 +68,6 @@ export class RawDataComponentComponent {
     that.utilitiesService.lastrawData.subscribe({
       next: lastFewrawData => {
         that.lastrawData = lastFewrawData[0];
-        console.log(that.lastrawData)
         that.data = lastFewrawData[0];
         this.dataSource.data = that.lastrawData;
         this.dataSource.paginator = this.paginator;
@@ -74,5 +77,24 @@ export class RawDataComponentComponent {
         console.error('Error fetching last orders:', error);
       }
     });
+  }
+
+  // Add connection methods for use in the template
+  connect(instrument: any) {
+    this.connectionManagerService.connect(instrument);
+  }
+
+  reconnect(instrument: any) {
+    this.connectionManagerService.reconnect(instrument);
+  }
+
+  disconnect(instrument: any) {
+    this.connectionManagerService.disconnect(instrument);
+  }
+
+  ngOnDestroy() {
+    if (this.instrumentsSubscription) {
+      this.instrumentsSubscription.unsubscribe();
+    }
   }
 }

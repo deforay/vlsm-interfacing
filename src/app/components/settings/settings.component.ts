@@ -8,6 +8,7 @@ import { ipcRenderer } from 'electron';
 import { UtilitiesService } from '../../services/utilities.service';
 import { CryptoService } from '../../services/crypto.service';
 import { v4 as uuidv4 } from 'uuid';
+import { ConnectionManagerService } from '../../services/connection-manager.service';
 
 @Component({
   selector: 'app-settings',
@@ -26,7 +27,8 @@ export class SettingsComponent implements OnInit {
     private readonly router: Router,
     private readonly electronStoreService: ElectronStoreService,
     private readonly utilitiesService: UtilitiesService,
-    private readonly cryptoService: CryptoService
+    private readonly cryptoService: CryptoService,
+    private connectionManagerService: ConnectionManagerService
   ) {
 
     const commonSettingsStore = this.electronStoreService.get('commonConfig');

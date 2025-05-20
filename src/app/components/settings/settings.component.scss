@@ -4,3 +4,36 @@
 .instrument-card:hover {
   box-shadow: 0 0 8px rgba(0,0,0,0.1);
 }
+
+
+.instrument-status-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  padding: 10px;
+  background-color: #f5f5f5;
+  margin-bottom: 15px;
+  border-radius: 4px;
+}
+
+.instrument-status {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 10px;
+  background-color: white;
+  border-radius: 4px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+.status-indicator {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  &.connected {
+    background-color: #4CAF50;
+  }
+  &.disconnected {
+    background-color: #F44336;
+  }
+}

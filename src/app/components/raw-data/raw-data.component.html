@@ -1,11 +1,26 @@
-<!-- raw-data-component.component.html - Modern Design -->
+<!-- raw-data.component.html - Modern Design -->
+<div class="instrument-status-bar">
+  <div class="instrument-status" *ngFor="let instrument of availableInstruments">
+    <div class="status-indicator"
+      [ngClass]="{'connected': instrument.isConnected, 'disconnected': !instrument.isConnected}"></div>
+    <span>{{ instrument.connectionParams.instrumentId }}</span>
+    <button mat-raised-button color="primary" [disabled]="instrument.isConnected || instrument.connectionInProcess"
+      (click)="connect(instrument)">
+      {{ instrument.instrumentButtonText }}
+    </button>
+    <button mat-raised-button color="warn" [disabled]="!instrument.isConnected || instrument.connectionInProcess"
+      (click)="disconnect(instrument)">
+      Disconnect
+    </button>
+  </div>
+</div>
 <div class="raw-data-container">
   <!-- Header Section -->
   <div class="header-section">
     <h2 class="page-title">Raw Data</h2>
     <button (click)="click()" class="btn btn-primary">
       <i class="fa fa-tachometer-alt"></i>
-      <span>Console</span>
+      <span>Back to Console</span>
     </button>
   </div>
 
@@ -13,12 +28,7 @@
   <div class="search-section">
     <div class="search-container">
       <i class="fa fa-search search-icon"></i>
-      <input
-        type="text"
-        (keyup)="filterData($event)"
-        placeholder="Search raw data records..."
-        class="search-input"
-      >
+      <input type="text" (keyup)="filterData($event)" placeholder="Search raw data records..." class="search-input">
     </div>
   </div>
 
@@ -63,11 +73,8 @@
 
       <!-- Header and Row Definitions -->
       <mat-header-row *matHeaderRowDef="displayedColumns"></mat-header-row>
-      <mat-row
-        *matRowDef="let row; columns: displayedColumns;"
-        [ngClass]="{'expanded-row': row.expanded}"
-        (click)="row.expanded = !row.expanded"
-      ></mat-row>
+      <mat-row *matRowDef="let row; columns: displayedColumns;" [ngClass]="{'expanded-row': row.expanded}"
+        (click)="row.expanded = !row.expanded"></mat-row>
     </mat-table>
 
     <!-- Empty State -->
@@ -78,10 +85,7 @@
     </div>
 
     <!-- Pagination -->
-    <mat-paginator
-      [pageSizeOptions]="[50, 100, 250, 500]"
-      [pageSize]="100"
-      showFirstLastButtons
+    <mat-paginator [pageSizeOptions]="[50, 100, 250, 500]" [pageSize]="100" showFirstLastButtons
       aria-label="Select Page">
     </mat-paginator>
   </div>

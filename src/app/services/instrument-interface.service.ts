@@ -6,6 +6,7 @@ import { UtilitiesService } from './utilities.service';
 import { TcpConnectionService } from './tcp-connection.service';
 import { HL7HelperService } from './hl7-helper.service';
 import { ASTMHelperService } from './astm-helper.service';
+import { BehaviorSubject, Observable } from 'rxjs';
 
 
 @Injectable({
@@ -15,6 +16,7 @@ import { ASTMHelperService } from './astm-helper.service';
 export class InstrumentInterfaceService {
 
   protected strData = '';
+  private connectedInstruments = new Map<string, BehaviorSubject<boolean>>();
 
   constructor(public dbService: DatabaseService,
     public tcpService: TcpConnectionService,
@@ -32,6 +34,12 @@ export class InstrumentInterfaceService {
       // Bind 'this' explicitly to handleTCPResponse
       const boundHandleTCPResponse = that.handleTCPResponse.bind(that);
       that.tcpService.connect(instrument.connectionParams, boundHandleTCPResponse);
+
+      // Update instrument status based on TCP connection status
+      that.tcpService.getStatusObservable(instrument.connectionParams)
+        .subscribe(status => {
+          that.updateInstrumentStatus(instrument.connectionParams.instrumentId, status);
+        });
     }
   }
 
@@ -41,6 +49,12 @@ export class InstrumentInterfaceService {
       // Bind 'this' explicitly to handleTCPResponse
       const boundHandleTCPResponse = that.handleTCPResponse.bind(that);
       that.tcpService.reconnect(instrument.connectionParams, boundHandleTCPResponse);
+
+      // Update instrument status based on TCP connection status
+      that.tcpService.getStatusObservable(instrument.connectionParams)
+        .subscribe(status => {
+          that.updateInstrumentStatus(instrument.connectionParams.instrumentId, status);
+        });
     }
   }
 
@@ -48,7 +62,24 @@ export class InstrumentInterfaceService {
     const that = this;
     if (instrument && instrument.connectionParams && instrument.connectionParams.host && instrument.connectionParams.port) {
       that.tcpService.disconnect(instrument.connectionParams);
+      that.updateInstrumentStatus(instrument.connectionParams.instrumentId, false);
     }
+  }
+
+  // Method used to get connection status for an instrument
+  getInstrumentStatus(instrumentId: string): Observable<boolean> {
+    if (!this.connectedInstruments.has(instrumentId)) {
+      this.connectedInstruments.set(instrumentId, new BehaviorSubject<boolean>(false));
+    }
+    return this.connectedInstruments.get(instrumentId).asObservable();
+  }
+
+  // Method used to update connection status for an instrument
+  private updateInstrumentStatus(instrumentId: string, isConnected: boolean): void {
+    if (!this.connectedInstruments.has(instrumentId)) {
+      this.connectedInstruments.set(instrumentId, new BehaviorSubject<boolean>(false));
+    }
+    this.connectedInstruments.get(instrumentId).next(isConnected);
   }
 
   // HL7 processing methods
