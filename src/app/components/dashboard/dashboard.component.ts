@@ -181,18 +181,12 @@ export class DashboardComponent implements OnInit {
       ? this.sessionDatasArray.filter(session => session.mode === this.selectedInstrument)
       : this.sessionDatasArray;
   }
-
-  // Add connection methods for use in the template
-  connect(instrument: any) {
-    this.connectionManagerService.connect(instrument);
-  }
-
-  reconnect(instrument: any) {
-    this.connectionManagerService.reconnect(instrument);
-  }
-
-  disconnect(instrument: any) {
-    this.connectionManagerService.disconnect(instrument);
+  // Add this method to your DashboardComponent class
+  isInstrumentCurrentlyAvailable(instrumentMode: string): boolean {
+    // Check if the instrument mode/id exists in the current available instruments
+    return this.availableInstruments.some(
+      instrument => instrument.connectionParams.instrumentId === instrumentMode
+    );
   }
 
   ngOnDestroy() {

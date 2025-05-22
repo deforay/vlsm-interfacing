@@ -7,6 +7,7 @@ $secondary-color: #6c757d;
 $success-color: #4caf50;
 $danger-color: #f44336;
 $warning-color: #ff9800;
+$info-color: #2196f3;
 $dark-color: #263238;
 $light-color: #f8f9fa;
 $border-color: #e0e0e0;
@@ -15,17 +16,73 @@ $text-color: #455a64;
 $text-light: #78909c;
 $status-connected: #43a047;
 $status-disconnected: #e53935;
+$background-color: #f9fafb;
 
 // Base styles
 .app-container {
   font-family: "Roboto", "Segoe UI", Arial, sans-serif;
   color: $text-color;
-  background-color: #f9fafb;
-  padding: 1.5rem;
-  border-radius: 0.5rem;
-  max-width: 1600px;
-  margin: 0 auto;
-  box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+  background-color: $background-color;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+// Header
+.app-header {
+  background: white;
+  border-bottom: 1px solid $border-color;
+  padding: 1rem 1.5rem;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+  position: sticky;
+  top: 0;
+  z-index: 100;
+
+  .header-left {
+    display: flex;
+    align-items: center;
+    gap: 1.5rem;
+
+    .page-title {
+      margin: 0;
+      font-size: 1.5rem;
+      font-weight: 600;
+      color: $dark-color;
+    }
+  }
+
+  .header-actions {
+    display: flex;
+    gap: 0.75rem;
+  }
+}
+
+// Status pill
+.status-pill {
+  display: flex;
+  align-items: center;
+  padding: 0.375rem 0.875rem;
+  border-radius: 2rem;
+  font-size: 0.8125rem;
+  font-weight: 500;
+  gap: 0.5rem;
+
+  i {
+    font-size: 0.875rem;
+  }
+
+  &.connected {
+    background-color: rgba($status-connected, 0.1);
+    color: $status-connected;
+  }
+
+  &.disconnected {
+    background-color: rgba($status-disconnected, 0.1);
+    color: $status-disconnected;
+  }
 }
 
 // Button styles
@@ -40,438 +97,743 @@ $status-disconnected: #e53935;
   border: none;
   cursor: pointer;
   transition: all 0.2s ease;
-  box-shadow: 0 1px 2px rgba(0,0,0,0.05);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
   gap: 0.5rem;
-  height: 2.5rem;
+  white-space: nowrap;
+
+  &:hover:not(:disabled) {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+  }
 
   &:focus {
     outline: none;
-    box-shadow: 0 0 0 3px rgba(25, 118, 210, 0.25);
+    box-shadow: 0 0 0 3px rgba($primary-color, 0.25);
   }
 
   &:disabled {
-    opacity: 0.65;
+    opacity: 0.5;
     cursor: not-allowed;
+    transform: none;
   }
 
   i {
-    font-size: 1rem;
-  }
-}
-
-.btn-primary {
-  background-color: $primary-color;
-  color: white;
-
-  &:hover {
-    background-color: darken($primary-color, 10%);
-  }
-}
-
-.btn-secondary {
-  background-color: $secondary-color;
-  color: white;
-
-  &:hover {
-    background-color: darken($secondary-color, 10%);
-  }
-}
-
-.btn-success {
-  background-color: $success-color;
-  color: white;
-
-  &:hover {
-    background-color: darken($success-color, 10%);
-  }
-}
-
-.btn-danger {
-  background-color: $danger-color;
-  color: white;
-
-  &:hover {
-    background-color: darken($danger-color, 10%);
-  }
-}
-
-.btn-dark {
-  background-color: $dark-color;
-  color: white;
-
-  &:hover {
-    background-color: darken($dark-color, 10%);
-  }
-}
-
-.btn-outline-primary {
-  background-color: transparent;
-  color: $primary-color;
-  border: 1px solid $primary-color;
-
-  &:hover {
-    background-color: rgba($primary-color, 0.05);
-  }
-}
-
-.btn-outline-danger {
-  background-color: transparent;
-  color: $danger-color;
-  border: 1px solid $danger-color;
-
-  &:hover {
-    background-color: rgba($danger-color, 0.05);
-  }
-}
-
-// Header section
-.app-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 1.5rem;
-  padding: 0.75rem 0;
-}
-
-.connection-status {
-  display: flex;
-  align-items: center;
-}
-
-.status-pill {
-  display: flex;
-  align-items: center;
-  padding: 0.5rem 1rem;
-  border-radius: 2rem;
-  font-size: 0.875rem;
-  font-weight: 500;
-
-  i {
-    margin-right: 0.5rem;
+    font-size: 0.875rem;
   }
 
-  &.connected {
-    background-color: rgba($status-connected, 0.1);
-    color: $status-connected;
+  &.btn-primary {
+    background-color: $primary-color;
+    color: white;
+
+    &:hover:not(:disabled) {
+      background-color: darken($primary-color, 8%);
+    }
   }
 
-  &.disconnected {
-    background-color: rgba($status-disconnected, 0.1);
-    color: $status-disconnected;
+  &.btn-secondary {
+    background-color: $secondary-color;
+    color: white;
+
+    &:hover:not(:disabled) {
+      background-color: darken($secondary-color, 8%);
+    }
   }
-}
 
-.header-actions {
-  display: flex;
-  gap: 0.75rem;
-}
+  &.btn-success {
+    background-color: $success-color;
+    color: white;
 
-// Instrument tabs
-.instrument-container {
-  background-color: white;
-  border-radius: 0.5rem;
-  box-shadow: 0 1px 3px rgba(0,0,0,0.05);
-  overflow: hidden;
-  margin-bottom: 1.5rem;
-}
+    &:hover:not(:disabled) {
+      background-color: darken($success-color, 8%);
+    }
+  }
 
-.instrument-tabs {
-  border-bottom: 1px solid $border-color;
-}
+  &.btn-danger {
+    background-color: $danger-color;
+    color: white;
 
-.tabs-list {
-  display: flex;
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  overflow-x: auto;
-}
+    &:hover:not(:disabled) {
+      background-color: darken($danger-color, 8%);
+    }
+  }
 
-.tab-item {
-  padding: 0;
-  cursor: pointer;
+  &.btn-warning {
+    background-color: $warning-color;
+    color: white;
 
-  &.active {
-    border-bottom: 2px solid $primary-color;
+    &:hover:not(:disabled) {
+      background-color: darken($warning-color, 8%);
+    }
+  }
 
-    .tab-content {
+  &.btn-outline-primary {
+    background-color: transparent;
+    color: $primary-color;
+    border: 1px solid $primary-color;
+
+    &:hover:not(:disabled) {
       background-color: rgba($primary-color, 0.05);
     }
   }
 
-  .tab-content {
+  &.btn-outline-danger {
+    background-color: transparent;
+    color: $danger-color;
+    border: 1px solid $danger-color;
+
+    &:hover:not(:disabled) {
+      background-color: rgba($danger-color, 0.05);
+    }
+  }
+
+  &.btn-outline-warning {
+    background-color: transparent;
+    color: $warning-color;
+    border: 1px solid $warning-color;
+
+    &:hover:not(:disabled) {
+      background-color: rgba($warning-color, 0.05);
+    }
+  }
+
+  &.btn-outline-dark {
+    background-color: transparent;
+    color: $dark-color;
+    border: 1px solid $dark-color;
+
+    &:hover:not(:disabled) {
+      background-color: rgba($dark-color, 0.05);
+    }
+  }
+
+  &.btn-sm {
+    padding: 0.375rem 0.75rem;
+    font-size: 0.8125rem;
+  }
+}
+
+// Instrument container
+.instrument-container {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  padding: 1.5rem;
+  max-width: 1600px;
+  width: 100%;
+  margin: 0 auto;
+}
+
+// Instrument tabs
+.instrument-tabs {
+  margin-bottom: 1.5rem;
+
+  .tabs-wrapper {
+    background: white;
+    border-radius: 0.5rem;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+    overflow-x: auto;
+  }
+
+  .tabs-list {
     display: flex;
-    align-items: center;
-    padding: 0.75rem 1.25rem;
-    gap: 0.5rem;
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    min-height: 4rem;
+  }
 
-    i {
-      font-size: 1rem;
+  .tab-item {
+    flex: 1;
+    min-width: 200px;
+    max-width: 250px;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    position: relative;
 
-      &.connected {
-        color: $status-connected;
+    &::after {
+      content: '';
+      position: absolute;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      height: 3px;
+      background: transparent;
+      transition: background 0.3s ease;
+    }
+
+    &.active {
+      background: rgba($primary-color, 0.05);
+
+      &::after {
+        background: $primary-color;
       }
 
-      &.disconnected {
-        color: $status-disconnected;
+      .tab-name {
+        color: $primary-color;
+        font-weight: 600;
       }
     }
+
+    &:hover:not(.active) {
+      background: $hover-color;
+    }
+
+    .tab-content {
+      display: flex;
+      align-items: center;
+      padding: 1rem 1.5rem;
+      gap: 1rem;
+
+      .tab-icon {
+        font-size: 1.25rem;
+
+        .connected {
+          color: $status-connected;
+        }
+
+        .disconnected {
+          color: $status-disconnected;
+        }
+      }
+
+      .tab-info {
+        display: flex;
+        flex-direction: column;
+        gap: 0.25rem;
+
+        .tab-name {
+          font-size: 0.875rem;
+          font-weight: 500;
+          color: $text-color;
+        }
+
+        .tab-status {
+          font-size: 0.75rem;
+
+          &.status-connected {
+            color: $status-connected;
+          }
+
+          &.status-disconnected {
+            color: $status-disconnected;
+          }
+        }
+      }
+    }
+  }
+}
+
+// Empty state
+.empty-state {
+  background: white;
+  border-radius: 0.5rem;
+  padding: 4rem 2rem;
+  text-align: center;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+
+  i {
+    font-size: 4rem;
+    color: lighten($text-light, 20%);
+    margin-bottom: 1.5rem;
+  }
+
+  h3 {
+    margin: 0 0 0.5rem;
+    font-size: 1.25rem;
+    font-weight: 600;
+    color: $text-color;
+  }
+
+  p {
+    margin: 0 0 1.5rem;
+    color: $text-light;
   }
 }
 
 // Instrument details
 .instrument-details {
+  flex: 1;
+
+  .tab-panel {
+    display: none;
+
+    &.active {
+      display: block;
+      animation: fadeIn 0.3s ease;
+    }
+  }
+}
+
+// Connection card
+.connection-card {
+  background: white;
+  border-radius: 0.5rem;
   padding: 1.5rem;
-}
+  margin-bottom: 1.5rem;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
 
-.tab-content {
-  display: none;
-
-  &.active {
-    display: block;
-  }
-}
-
-.connection-controls {
-  margin-bottom: 1.25rem;
-}
-
-.connection-status-area {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-
-  .status-title {
+  .connection-header {
     display: flex;
+    justify-content: space-between;
     align-items: center;
-    font-size: 1.125rem;
-    font-weight: 500;
-    margin: 0;
+    margin-bottom: 1.5rem;
+    padding-bottom: 1.5rem;
+    border-bottom: 1px solid $border-color;
 
-    i {
-      margin-right: 0.5rem;
-    }
-
-    &.connected {
-      color: $status-connected;
-    }
-
-    &.disconnected {
-      color: $status-disconnected;
-    }
-  }
-
-  .connection-buttons {
-    display: flex;
-    gap: 0.75rem;
-  }
-}
-
-.instrument-info {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.5rem;
-  margin-bottom: 1.25rem;
-
-  .info-pill {
-    background-color: $light-color;
-    padding: 0.375rem 0.75rem;
-    border-radius: 0.25rem;
-    font-size: 0.75rem;
-    font-weight: 500;
-    color: $text-light;
-  }
-}
-
-// Log controls and viewer
-.log-controls {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 0.75rem;
-
-  .search-area {
-    position: relative;
-    flex-grow: 1;
-    margin-right: 1rem;
-
-    .search-icon {
-      position: absolute;
-      left: 0.75rem;
-      top: 50%;
-      transform: translateY(-50%);
-      color: $text-light;
-    }
-
-    input {
-      width: 100%;
-      padding: 0.5rem 0.5rem 0.5rem 2.25rem;
-      border: 1px solid $border-color;
+    .connection-status-badge {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      padding: 0.5rem 1rem;
       border-radius: 0.375rem;
-      font-size: 0.875rem;
+      font-weight: 500;
 
-      &:focus {
-        outline: none;
-        border-color: $primary-color;
-        box-shadow: 0 0 0 3px rgba($primary-color, 0.1);
+      &.connected {
+        background: rgba($status-connected, 0.1);
+        color: $status-connected;
+      }
+
+      &.disconnected {
+        background: rgba($status-disconnected, 0.1);
+        color: $status-disconnected;
+      }
+
+      i {
+        font-size: 1rem;
+      }
+    }
+
+    .connection-actions {
+      display: flex;
+      gap: 0.5rem;
+      flex-wrap: wrap;
+    }
+  }
+
+  .instrument-details-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 1.5rem;
+    margin-bottom: 1rem;
+
+    .detail-item {
+      label {
+        display: block;
+        font-size: 0.75rem;
+        color: $text-light;
+        margin-bottom: 0.25rem;
+        text-transform: uppercase;
+        letter-spacing: 0.025em;
+      }
+
+      span {
+        font-size: 0.875rem;
+        font-weight: 500;
+        color: $text-color;
       }
     }
   }
 
-  .log-actions {
+  .connection-timestamps {
     display: flex;
-    gap: 0.5rem;
+    gap: 1.5rem;
+    padding-top: 1rem;
+    border-top: 1px solid $border-color;
+
+    small {
+      color: $text-light;
+      font-size: 0.75rem;
+
+      i {
+        margin-right: 0.25rem;
+      }
+    }
   }
 }
 
-.log-viewer {
-  background-color: #1e293b;
-  border-radius: 0.375rem;
+// Log card
+.log-card {
+  background: white;
+  border-radius: 0.5rem;
   overflow: hidden;
-  margin-bottom: 1.5rem;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
 
-  .log-entries {
-    max-height: 250px;
-    overflow-y: auto;
-    padding: 1rem;
-    font-family: "Consolas", "Monaco", monospace;
-    font-size: 0.8125rem;
-    line-height: 1.5;
-    color: #e2e8f0;
+  .log-header {
+    padding: 1rem 1.5rem;
+    background: linear-gradient(135deg, lighten($dark-color, 75%), lighten($dark-color, 73%));
+    border-bottom: 1px solid $border-color;
     display: flex;
-    flex-direction: column-reverse;
-  }
-
-  .log-entry {
-    margin-bottom: 0.25rem;
-    white-space: pre-wrap;
-    word-break: break-all;
-  }
-}
-
-// System status bar
-.system-status-bar {
-  display: flex;
-  justify-content: space-between;
-  padding: 0.75rem 1rem;
-  background-color: white;
-  border-radius: 0.375rem;
-  margin-bottom: 1.5rem;
-  box-shadow: 0 1px 3px rgba(0,0,0,0.05);
-
-  .status-item {
-    display: flex;
+    justify-content: space-between;
     align-items: center;
-    font-size: 0.875rem;
 
-    .status-label {
-      font-weight: 500;
-      margin-right: 0.5rem;
+    h3 {
+      margin: 0;
+      font-size: 1rem;
+      font-weight: 600;
+      color: $dark-color;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+
+      i {
+        color: $primary-color;
+      }
     }
 
-    .status-value {
-      color: $text-light;
+    .log-controls {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+
+      .search-box {
+        position: relative;
+
+        i {
+          position: absolute;
+          left: 0.75rem;
+          top: 50%;
+          transform: translateY(-50%);
+          color: $text-light;
+          pointer-events: none;
+        }
+
+        input {
+          padding: 0.375rem 0.75rem 0.375rem 2.25rem;
+          border: 1px solid $border-color;
+          border-radius: 0.25rem;
+          font-size: 0.8125rem;
+          width: 200px;
+          transition: all 0.2s ease;
+
+          &:focus {
+            outline: none;
+            border-color: $primary-color;
+            box-shadow: 0 0 0 3px rgba($primary-color, 0.1);
+          }
+        }
+      }
+    }
+  }
+
+  .log-viewer {
+    background-color: #1e293b;
+
+    .log-entries {
+      height: 300px;
+      overflow-y: auto;
+      padding: 1rem;
+      font-family: "Consolas", "Monaco", monospace;
+      font-size: 0.8125rem;
+      line-height: 1.6;
+      color: #e2e8f0;
+      display: flex;
+      flex-direction: column-reverse;
+
+      .log-entry {
+        margin-bottom: 0.5rem;
+        padding: 0.25rem 0;
+        white-space: pre-wrap;
+        word-break: break-all;
+
+        .text-info {
+          color: #4fc3f7 !important;
+        }
+
+        .text-danger {
+          color: #ff5252 !important;
+        }
+
+        .text-success {
+          color: #4caf50 !important;
+        }
+      }
+
+      .log-empty {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 0.5rem;
+        color: #64748b;
+        font-style: italic;
+        padding: 2rem;
+
+        i {
+          font-size: 1.25rem;
+        }
+      }
+    }
+  }
+}
+
+// Quick stats bar
+.quick-stats {
+  display: flex;
+  gap: 1rem;
+  margin: 1.5rem;
+  padding: 0;
+  max-width: 1600px;
+  width: calc(100% - 3rem);
+  margin-left: auto;
+  margin-right: auto;
+
+  .stat-item {
+    flex: 1;
+    background: white;
+    padding: 1rem 1.5rem;
+    border-radius: 0.5rem;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+
+    i {
+      font-size: 1.5rem;
+      color: $primary-color;
+      opacity: 0.8;
+    }
+
+    .stat-content {
+      flex: 1;
+
+      label {
+        display: block;
+        font-size: 0.75rem;
+        color: $text-light;
+        margin-bottom: 0.25rem;
+      }
+
+      span {
+        font-size: 1rem;
+        font-weight: 600;
+        color: $text-color;
+      }
     }
   }
 }
 
 // Results section
 .results-section {
-  background-color: white;
+  background: white;
   border-radius: 0.5rem;
-  padding: 1.5rem;
-  box-shadow: 0 1px 3px rgba(0,0,0,0.05);
-  margin-bottom: 1.5rem;
-}
+  margin: 0 1.5rem 1.5rem;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+  overflow: hidden;
+  max-width: 1600px;
+  width: calc(100% - 3rem);
+  margin-left: auto;
+  margin-right: auto;
 
-.results-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 1.25rem;
-
-  h4 {
-    margin: 0;
-    font-size: 1.25rem;
-    font-weight: 500;
-  }
-
-  .results-actions {
+  .section-header {
+    padding: 1.5rem;
+    border-bottom: 1px solid $border-color;
     display: flex;
-    gap: 0.75rem;
+    justify-content: space-between;
+    align-items: center;
+
+    .section-title {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+
+      i {
+        font-size: 1.25rem;
+        color: $primary-color;
+      }
+
+      h2 {
+        margin: 0;
+        font-size: 1.25rem;
+        font-weight: 600;
+        color: $dark-color;
+      }
+    }
+
+    .section-actions {
+      display: flex;
+      gap: 0.75rem;
+    }
   }
-}
 
-.search-container {
-  position: relative;
-  margin-bottom: 1.25rem;
+  .search-bar {
+    padding: 1rem 1.5rem;
+    background: $background-color;
+    border-bottom: 1px solid $border-color;
+    position: relative;
 
-  .search-icon {
-    position: absolute;
-    left: 0.75rem;
-    top: 50%;
-    transform: translateY(-50%);
-    color: $text-light;
-  }
+    i {
+      position: absolute;
+      left: 2.25rem;
+      top: 50%;
+      transform: translateY(-50%);
+      color: $text-light;
+    }
 
-  .search-input {
-    width: 100%;
-    padding: 0.75rem 0.75rem 0.75rem 2.25rem;
-    border: 1px solid $border-color;
-    border-radius: 0.375rem;
-    font-size: 0.875rem;
+    .search-input {
+      width: 100%;
+      padding: 0.75rem 1rem 0.75rem 2.75rem;
+      border: 1px solid $border-color;
+      border-radius: 0.375rem;
+      font-size: 0.875rem;
+      transition: all 0.2s ease;
 
-    &:focus {
-      outline: none;
-      border-color: $primary-color;
-      box-shadow: 0 0 0 3px rgba($primary-color, 0.1);
+      &:focus {
+        outline: none;
+        border-color: $primary-color;
+        box-shadow: 0 0 0 3px rgba($primary-color, 0.1);
+      }
+
+      &::placeholder {
+        color: lighten($text-light, 15%);
+      }
     }
   }
 }
 
-// Results table
-.table-container {
+// Table styles
+.table-wrapper {
+  position: relative;
   overflow-x: auto;
 
   .results-table {
     width: 100%;
+    background: white;
 
     .mat-header-row {
-      background-color: $light-color;
+      background: $light-color;
     }
 
     .mat-header-cell {
-      color: $text-light;
-      font-size: 0.75rem;
-      font-weight: 500;
-      padding: 0.75rem 1rem;
+      color: $text-color;
+      font-size: 0.8125rem;
+      font-weight: 600;
+      padding: 1rem;
+      border-bottom: 2px solid $border-color;
+
+      i {
+        margin-right: 0.5rem;
+        color: $text-light;
+      }
     }
 
     .mat-cell {
       font-size: 0.875rem;
-      padding: 0.75rem 1rem;
+      padding: 1rem;
+      color: $text-color;
     }
 
     .mat-row {
-      transition: background-color 0.2s;
+      transition: all 0.2s ease;
+      border-bottom: 1px solid lighten($border-color, 5%);
 
       &:hover {
         background-color: $hover-color;
       }
 
       &.unsynced-row {
-        background-color: rgba($warning-color, 0.1);
+        background-color: rgba($warning-color, 0.05);
       }
+    }
+
+    // Specific column styles
+    .checkbox-cell {
+      width: 48px;
+      padding-left: 1rem !important;
+      padding-right: 0.5rem !important;
+    }
+
+    .instrument-badge {
+      display: inline-block;
+      padding: 0.25rem 0.5rem;
+      background: rgba($primary-color, 0.1);
+      color: $primary-color;
+      border-radius: 0.25rem;
+      font-size: 0.75rem;
+      font-weight: 500;
+    }
+
+    .result-value {
+      font-weight: 600;
+      color: $dark-color;
+    }
+
+    .date-time {
+      color: $text-light;
+      font-size: 0.8125rem;
+    }
+
+    .sync-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.375rem;
+      padding: 0.25rem 0.625rem;
+      border-radius: 1rem;
+      font-size: 0.75rem;
+      font-weight: 500;
+
+      i {
+        font-size: 0.75rem;
+      }
+
+      &.synced {
+        background: rgba($success-color, 0.1);
+        color: $success-color;
+      }
+
+      &.not-synced {
+        background: rgba($warning-color, 0.1);
+        color: $warning-color;
+      }
+
+      &.failed {
+        background: rgba($danger-color, 0.1);
+        color: $danger-color;
+      }
+    }
+  }
+
+  .table-empty-state {
+    padding: 4rem 2rem;
+    text-align: center;
+
+    i {
+      font-size: 3rem;
+      color: lighten($text-light, 20%);
+      margin-bottom: 1rem;
+    }
+
+    h3 {
+      margin: 0 0 0.5rem;
+      font-size: 1.125rem;
+      font-weight: 600;
+      color: $text-color;
+    }
+
+    p {
+      margin: 0;
+      color: $text-light;
     }
   }
 }
 
+// Pagination
+.table-pagination {
+  background: $light-color;
+  border-top: 1px solid $border-color;
+}
+
 // Footer
 .app-footer {
+  background: white;
+  border-top: 1px solid $border-color;
+  padding: 1rem 1.5rem;
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding-top: 1rem;
+
+  .footer-left {
+    display: flex;
+    gap: 1rem;
+  }
 
   .version-info {
     font-size: 0.75rem;
@@ -479,12 +841,18 @@ $status-disconnected: #e53935;
   }
 }
 
-// Helper classes
-.hidden {
-  display: none !important;
+// Animations
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
-// Animations
 .fa-throb {
   animation: throb 1.5s infinite;
 }
@@ -495,8 +863,8 @@ $status-disconnected: #e53935;
     opacity: 1;
   }
   50% {
-    transform: scale(1.2);
-    opacity: 0.7;
+    transform: scale(1.1);
+    opacity: 0.8;
   }
   100% {
     transform: scale(1);
@@ -504,81 +872,98 @@ $status-disconnected: #e53935;
   }
 }
 
-// Responsive adjustments
+.fa-spin {
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+// Responsive design
+@media (max-width: 1200px) {
+  .instrument-tabs .tab-item {
+    min-width: 180px;
+  }
+}
+
 @media (max-width: 768px) {
-  .app-header,
-  .connection-status-area,
-  .log-controls,
-  .results-header {
+  .app-header {
     flex-direction: column;
+    gap: 1rem;
+
+    .header-left {
+      width: 100%;
+      flex-direction: column;
+      align-items: flex-start;
+    }
+
+    .header-actions {
+      width: 100%;
+
+      .btn {
+        flex: 1;
+      }
+    }
+  }
+
+  .connection-card {
+    .connection-header {
+      flex-direction: column;
+      gap: 1rem;
+      align-items: flex-start;
+    }
+
+    .instrument-details-grid {
+      grid-template-columns: 1fr;
+    }
+  }
+
+  .quick-stats {
+    flex-direction: column;
+  }
+
+  .results-section {
+    .section-header {
+      flex-direction: column;
+      gap: 1rem;
+      align-items: flex-start;
+
+      .section-actions {
+        width: 100%;
+
+        .btn {
+          flex: 1;
+        }
+      }
+    }
+  }
+
+  .log-card .log-header {
+    flex-direction: column;
+    gap: 1rem;
     align-items: flex-start;
-    gap: 0.75rem;
-  }
 
-  .header-actions,
-  .connection-buttons,
-  .log-actions,
-  .results-actions {
-    width: 100%;
-  }
+    .log-controls {
+      width: 100%;
 
-  .btn {
-    flex: 1;
-  }
+      .search-box {
+        flex: 1;
 
-  .system-status-bar {
-    flex-direction: column;
-    gap: 0.5rem;
+        input {
+          width: 100%;
+        }
+      }
+    }
   }
 }
 
-
-.instrument-status-bar {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 10px;
-  padding: 10px;
-  background-color: #f5f5f5;
-  margin-bottom: 15px;
-  border-radius: 4px;
-}
-
-.instrument-status {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 5px 10px;
-  background-color: white;
-  border-radius: 4px;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
-}
-
-.status-indicator {
-  width: 12px;
-  height: 12px;
-  border-radius: 50%;
-  &.connected {
-    background-color: #4CAF50;
-  }
-  &.disconnected {
-    background-color: #F44336;
-  }
-}
-
-/* Add to your console.component.scss */
-.connection-buttons {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  align-items: center;
-}
-
-.connection-buttons .btn {
-  display: flex;
-  align-items: center;
-  gap: 5px;
-}
-
-.connection-buttons .btn .fa {
-  font-size: 1rem;
+// Utility classes
+.hidden {
+  display: none !important;
 }

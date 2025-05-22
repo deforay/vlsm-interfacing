@@ -2,10 +2,13 @@
 <div class="app-container">
   <!-- Header Section -->
   <header class="app-header">
-    <div class="connection-status">
-      <div [ngClass]="{'status-pill connected': mysqlConnected, 'status-pill disconnected': !mysqlConnected}">
-        <i class="fa" [ngClass]="mysqlConnected ? 'fa-check-circle' : 'fa-circle fa-throb'"></i>
-        {{ mysqlConnected ? 'MySQL Connected' : 'MySQL Disconnected' }}
+    <div class="header-left">
+      <h1 class="page-title">Interface Console</h1>
+      <div class="connection-status">
+        <div [ngClass]="{'status-pill connected': mysqlConnected, 'status-pill disconnected': !mysqlConnected}">
+          <i class="fa" [ngClass]="mysqlConnected ? 'fa-check-circle' : 'fa-circle fa-throb'"></i>
+          {{ mysqlConnected ? 'MySQL Connected' : 'MySQL Disconnected' }}
+        </div>
       </div>
     </div>
     <div class="header-actions">
@@ -23,266 +26,342 @@
   <!-- Instrument Tabs Section -->
   <div class="instrument-container">
     <div class="instrument-tabs">
-      <ul class="tabs-list">
-        <li *ngFor="let instrument of availableInstruments; let i = index" class="tab-item"
-          [class.active]="selectedTabIndex === i" (click)="selectTab(i)">
-          <div class="tab-content">
-            <i [ngClass]="{
-                'fa': true,
-                'fa-sync-alt': instrument.isConnected && instrument.transmissionInProgress,
-                'fa-check-circle': instrument.isConnected && !instrument.transmissionInProgress,
-                'fa-times-circle': !instrument.isConnected,
-                'fa-spin': instrument.isConnected && instrument.transmissionInProgress,
-                'connected': instrument.isConnected,
-                'disconnected': !instrument.isConnected
-              }"></i>
-            <span>{{instrument.connectionParams.instrumentId}}</span>
-          </div>
-        </li>
-      </ul>
+      <div class="tabs-wrapper">
+        <ul class="tabs-list">
+          <li *ngFor="let instrument of availableInstruments; let i = index" class="tab-item"
+            [class.active]="selectedTabIndex === i" (click)="selectTab(i)">
+            <div class="tab-content">
+              <div class="tab-icon">
+                <i [ngClass]="{
+                    'fa': true,
+                    'fa-sync-alt': instrument.isConnected && instrument.transmissionInProgress,
+                    'fa-check-circle': instrument.isConnected && !instrument.transmissionInProgress,
+                    'fa-times-circle': !instrument.isConnected,
+                    'fa-spin': instrument.isConnected && instrument.transmissionInProgress,
+                    'connected': instrument.isConnected,
+                    'disconnected': !instrument.isConnected
+                  }"></i>
+              </div>
+              <div class="tab-info">
+                <span class="tab-name">{{instrument.connectionParams.instrumentId}}</span>
+                <span class="tab-status" [ngClass]="{
+                  'status-connected': instrument.isConnected,
+                  'status-disconnected': !instrument.isConnected
+                }">
+                  {{ instrument.isConnected ? 'Connected' : 'Disconnected' }}
+                </span>
+              </div>
+            </div>
+          </li>
+        </ul>
+      </div>
+    </div>
+
+    <!-- No Instruments Message -->
+    <div class="empty-state" *ngIf="availableInstruments.length === 0">
+      <i class="fas fa-microscope"></i>
+      <h3>No Instruments Configured</h3>
+      <p>Add instruments in settings to start monitoring connections.</p>
+      <button class="btn btn-primary" routerLink="/settings">
+        <i class="fa fa-cog"></i>
+        <span>Go to Settings</span>
+      </button>
     </div>
 
     <!-- Instrument Content Area -->
-    <div class="instrument-details">
-      <div class="tab-content" *ngFor="let instrument of availableInstruments; let i = index"
+    <div class="instrument-details" *ngIf="availableInstruments.length > 0">
+      <div class="tab-panel" *ngFor="let instrument of availableInstruments; let i = index"
         [class.active]="selectedTabIndex === i">
 
-        <!-- Connection Status and Controls -->
-        <div class="connection-controls">
-          <div *ngIf="instrument.isConnected; else notConnected" class="connection-status-area">
-            <h5 class="status-title connected">
-              <i class="fa fa-check-circle"></i>
-              <span>{{instrument.connectionParams.instrumentId}}</span>&nbsp;Connected
-            </h5>
-            <button (click)="disconnect(instrument)" class="btn btn-danger">
-              <i class="fa fa-plug"></i>
-              <span>Disconnect</span>
-            </button>
+        <!-- Connection Card -->
+        <div class="connection-card">
+          <div class="connection-header">
+            <div class="connection-status-badge" [ngClass]="{
+              'connected': instrument.isConnected,
+              'disconnected': !instrument.isConnected
+            }">
+              <i class="fa" [ngClass]="instrument.isConnected ? 'fa-check-circle' : 'fa-times-circle'"></i>
+              <span>{{ instrument.isConnected ? 'Connected' : 'Disconnected' }}</span>
+            </div>
+            <div class="connection-actions">
+              <button *ngIf="!instrument.isConnected" (click)="reconnect(instrument)" class="btn btn-primary"
+                [disabled]="instrument.connectionInProcess">
+                <i class="fa fa-plug"></i>
+                <span>{{ instrument.instrumentButtonText }}</span>
+              </button>
+              <button *ngIf="instrument.isConnected" (click)="disconnect(instrument)" class="btn btn-danger">
+                <i class="fa fa-power-off"></i>
+                <span>Disconnect</span>
+              </button>
+              <button *ngIf="instrument.connectionInProcess" class="btn btn-warning btn-sm"
+                (click)="cancelConnection(instrument)">
+                <i class="fa fa-ban"></i>
+                <span>Cancel</span>
+              </button>
+              <button *ngIf="!instrument.isConnected &&
+                     (instrument.statusText.includes('Error') ||
+                      instrument.statusText.includes('EADDRINUSE') ||
+                      (instrument.statusText.includes('Listening') && instrument.connectionInProcess))"
+                class="btn btn-outline-warning btn-sm" (click)="forceRestartConnection(instrument)">
+                <i class="fa fa-bolt"></i>
+                <span>Force Restart</span>
+              </button>
+            </div>
           </div>
 
-          <ng-template #notConnected>
-            <div class="connection-status-area">
-              <h5 class="status-title disconnected">
-                <i class="fa fa-times-circle"></i>
-                <span>{{instrument.connectionParams.instrumentId}}</span>&nbsp;Not Connected
-              </h5>
+          <!-- Instrument Details Grid -->
+          <div class="instrument-details-grid">
+            <div class="detail-item">
+              <label>Machine Type</label>
+              <span>{{ instrument.connectionParams.machineType | uppercase }}</span>
+            </div>
+            <div class="detail-item">
+              <label>Connection Mode</label>
+              <span>{{ instrument.connectionParams.connectionMode === 'tcpclient' ? 'TCP Client' : 'TCP Server'
+                }}</span>
+            </div>
+            <div class="detail-item">
+              <label>Address</label>
+              <span>{{ instrument.connectionParams.host }}:{{ instrument.connectionParams.port }}</span>
+            </div>
+            <div class="detail-item">
+              <label>Protocol</label>
+              <span>{{ instrument.connectionParams.connectionProtocol | uppercase }}</span>
+            </div>
+          </div>
 
-              <div class="connection-buttons">
-                <button (click)="reconnect(instrument)" class="btn btn-primary"
-                  [disabled]="instrument.connectionInProcess">
-                  <i class="fa fa-plug"></i>
-                  <span>{{instrument.instrumentButtonText}}</span>
-                </button>
+          <div class="connection-timestamps" *ngIf="instrument.lastConnectTime || instrument.lastDisconnectTime">
+            <small *ngIf="instrument.lastConnectTime">
+              <i class="fa fa-clock"></i> Last connected: {{ instrument.lastConnectTime }}
+            </small>
+            <small *ngIf="instrument.lastDisconnectTime">
+              <i class="fa fa-clock"></i> Last disconnected: {{ instrument.lastDisconnectTime }}
+            </small>
+          </div>
+        </div>
 
-                <!-- Cancel button: only show when connection is in process -->
-                <button *ngIf="instrument.connectionInProcess" class="btn btn-danger btn-sm"
-                  (click)="cancelConnection(instrument)">
-                  <i class="fa fa-ban"></i>
-                  <span>Cancel</span>
-                </button>
-
-                <!-- Force Restart button: only show when there are connection issues -->
-                <button *ngIf="!instrument.isConnected &&
-           (instrument.statusText.includes('Error') ||
-            instrument.statusText.includes('EADDRINUSE') ||
-            (instrument.statusText.includes('Listening') && instrument.connectionInProcess))"
-                  class="btn btn-warning btn-sm" (click)="forceRestartConnection(instrument)">
-                  <i class="fa fa-bolt"></i>
-                  <span>Force Restart</span>
-                </button>
+        <!-- Log Viewer Card -->
+        <div class="log-card">
+          <div class="log-header">
+            <h3>
+              <i class="fa fa-terminal"></i>
+              Connection Logs
+            </h3>
+            <div class="log-controls">
+              <div class="search-box">
+                <i class="fa fa-search"></i>
+                <input type="text" [(ngModel)]="instrument.searchText" (input)="filterInstrumentLogs(instrument)"
+                  placeholder="Search logs...">
+              </div>
+              <button (click)="copyLog(instrument)" class="btn btn-sm btn-outline-primary">
+                <i class="fa fa-copy"></i>
+                <span>Copy</span>
+              </button>
+              <button (click)="clearLiveLog(instrument)" class="btn btn-sm btn-outline-danger">
+                <i class="fa fa-trash"></i>
+                <span>Clear</span>
+              </button>
+            </div>
+          </div>
+          <div class="log-viewer">
+            <div class="log-entries">
+              <ng-container *ngIf="instrumentLogs[instrument.connectionParams.instrumentId]">
+                <div class="log-entry"
+                  *ngFor="let logEntry of instrumentLogs[instrument.connectionParams.instrumentId].filteredLogs"
+                  [innerHTML]="getSafeHtml(logEntry)">
+                </div>
+              </ng-container>
+              <div class="log-empty"
+                *ngIf="!instrumentLogs[instrument.connectionParams.instrumentId] ||
+                                            instrumentLogs[instrument.connectionParams.instrumentId].filteredLogs.length === 0">
+                <i class="fa fa-info-circle"></i>
+                <span>No logs to display</span>
               </div>
             </div>
-          </ng-template>
-        </div>
-
-        <!-- Instrument Information -->
-        <div class="instrument-info">
-          <div class="info-pill">
-            <span>{{ instrument.connectionParams.machineType | uppercase }}</span>
-          </div>
-          <div class="info-pill">
-            <span>{{instrument.connectionParams.connectionMode === 'tcpclient' ? 'TCP Client' : 'TCP Server'}}</span>
-          </div>
-          <div class="info-pill">
-            <span>{{instrument.connectionParams.host}}:{{instrument.connectionParams.port}}</span>
-          </div>
-          <div class="info-pill">
-            <span>{{instrument.connectionParams.connectionProtocol | uppercase }}</span>
-          </div>
-          <div *ngIf="instrument.lastConnectTime" class="connection-timing">
-            <small>Connected: {{ instrument.lastConnectTime }}</small>
-          </div>
-          <div *ngIf="instrument.lastDisconnectTime" class="connection-timing">
-            <small>Disconnected: {{ instrument.lastDisconnectTime }}</small>
-          </div>
-        </div>
-
-        <!-- Log Controls -->
-        <div class="log-controls">
-          <div class="search-area">
-            <i class="fa fa-search search-icon"></i>
-            <input type="text" [(ngModel)]="instrument.searchText" (input)="filterInstrumentLogs(instrument)"
-              placeholder="Search {{ instrument.connectionParams.instrumentId }} logs...">
-          </div>
-          <div class="log-actions">
-            <button (click)="copyLog(instrument)" class="btn btn-outline-primary">
-              <i class="fa fa-copy"></i>
-              <span>Copy Log</span>
-            </button>
-            <button (click)="clearLiveLog(instrument)" class="btn btn-outline-danger">
-              <i class="fa fa-trash"></i>
-              <span>Clear Log</span>
-            </button>
-          </div>
-        </div>
-
-        <!-- Log Viewer -->
-        <div class="log-viewer">
-          <div class="log-entries">
-            <ng-container *ngIf="instrumentLogs[instrument.connectionParams.instrumentId]">
-              <ng-container
-                *ngFor="let logEntry of instrumentLogs[instrument.connectionParams.instrumentId].filteredLogs">
-                <div class="log-entry" [innerHTML]="getSafeHtml(logEntry)"></div>
-              </ng-container>
-            </ng-container>
           </div>
         </div>
       </div>
     </div>
   </div>
 
-  <!-- System Status Bar -->
-  <div class="system-status-bar">
-    <div class="status-item">
-      <span class="status-label">Last LIS Sync:</span>
-      <span class="status-value" *ngIf="lastLimsSync">{{ lastLimsSync }}</span>
-      <span class="status-value" *ngIf="!lastLimsSync">N/A</span>
+  <!-- Quick Stats Bar -->
+  <div class="quick-stats">
+    <div class="stat-item">
+      <i class="fa fa-sync"></i>
+      <div class="stat-content">
+        <label>Last LIS Sync</label>
+        <span>{{ lastLimsSync || 'Never' }}</span>
+      </div>
     </div>
-    <div class="status-item">
-      <span class="status-label">Last Result Received:</span>
-      <span class="status-value" *ngIf="lastResultReceived">{{ lastResultReceived }}</span>
-      <span class="status-value" *ngIf="!lastResultReceived">N/A</span>
+    <div class="stat-item">
+      <i class="fa fa-flask"></i>
+      <div class="stat-content">
+        <label>Last Result</label>
+        <span>{{ lastResultReceived || 'None' }}</span>
+      </div>
     </div>
   </div>
 
   <!-- Results Section -->
   <div class="results-section">
-    <div class="results-header">
-      <h4>Received Results</h4>
-      <div class="results-actions">
-        <button (click)="reSyncSelectedRecords();" class="btn btn-success"
-          [class.hidden]="selection.selected.length === 0">
+    <div class="section-header">
+      <div class="section-title">
+        <i class="fa fa-list"></i>
+        <h2>Received Results</h2>
+      </div>
+      <div class="section-actions">
+        <button (click)="reSyncSelectedRecords();" class="btn btn-success" [disabled]="selection.selected.length === 0">
           <i class="fa fa-sync"></i>
-          <span>Re-sync Selected Records</span>
+          <span>Re-sync Selected ({{ selection.selected.length }})</span>
         </button>
         <button class="btn btn-primary" (click)="fetchRecentResults(searchTerm);">
           <i class="fa fa-refresh"></i>
-          <span>Refresh Results</span>
+          <span>Refresh</span>
         </button>
       </div>
     </div>
 
     <!-- Search Bar -->
-    <div class="search-container">
-      <i class="fa fa-search search-icon"></i>
-      <input type="text" (keyup)="filterData($event)" placeholder="Search Results..." [(ngModel)]="searchTerm"
-        class="search-input">
+    <div class="search-bar">
+      <i class="fa fa-search"></i>
+      <input type="text" #searchInput placeholder="Search by instrument, sample ID, or test type..."
+        [(ngModel)]="searchTerm" class="search-input">
     </div>
 
     <!-- Results Table -->
-    <div class="table-container">
-      <mat-table #table [dataSource]="dataSource" class="results-table" matSort>
+    <div class="table-wrapper">
+      <mat-table [dataSource]="dataSource" class="results-table" matSort>
         <!-- Checkbox Column -->
         <ng-container matColumnDef="select">
-          <mat-header-cell *matHeaderCellDef>
-            <mat-checkbox (click)="$event.stopPropagation()" (change)="selectHandler(null, $event)"
-              [checked]="this.selection.selected.length === dataSource.data.length">
+          <mat-header-cell *matHeaderCellDef class="checkbox-cell">
+            <mat-checkbox (change)="selectHandler(null, $event)"
+              [checked]="selection.selected.length === dataSource.data.length && dataSource.data.length > 0">
             </mat-checkbox>
           </mat-header-cell>
-          <mat-cell *matCellDef="let row">
-            <mat-checkbox (click)="$event.stopPropagation()" (change)="selectHandler(row, $event)"
-              [checked]="selection.isSelected(row)">
+          <mat-cell *matCellDef="let row" class="checkbox-cell">
+            <mat-checkbox (change)="selectHandler(row, $event)" [checked]="selection.isSelected(row)">
             </mat-checkbox>
           </mat-cell>
         </ng-container>
 
         <!-- Instrument Column -->
         <ng-container matColumnDef="machine_used">
-          <mat-header-cell *matHeaderCellDef mat-sort-header>Instrument</mat-header-cell>
-          <mat-cell *matCellDef="let row">{{row.machine_used}}</mat-cell>
+          <mat-header-cell *matHeaderCellDef mat-sort-header>
+            <i class="fa fa-microscope"></i> Instrument
+          </mat-header-cell>
+          <mat-cell *matCellDef="let row">
+            <span class="instrument-badge">{{ row.machine_used }}</span>
+          </mat-cell>
         </ng-container>
 
         <!-- Sample/Order ID Column -->
         <ng-container matColumnDef="order_id">
-          <mat-header-cell *matHeaderCellDef mat-sort-header>Sample/Order ID</mat-header-cell>
-          <mat-cell *matCellDef="let row">{{row.order_id}}</mat-cell>
+          <mat-header-cell *matHeaderCellDef mat-sort-header>
+            <i class="fa fa-vial"></i> Sample ID
+          </mat-header-cell>
+          <mat-cell *matCellDef="let row">{{ row.order_id }}</mat-cell>
         </ng-container>
 
         <!-- Test Result Column -->
         <ng-container matColumnDef="results">
-          <mat-header-cell *matHeaderCellDef mat-sort-header>Test Result</mat-header-cell>
-          <mat-cell *matCellDef="let row">{{row.results}}</mat-cell>
+          <mat-header-cell *matHeaderCellDef mat-sort-header>Result</mat-header-cell>
+          <mat-cell *matCellDef="let row">
+            <span class="result-value">{{ row.results }}</span>
+          </mat-cell>
         </ng-container>
 
         <!-- Result Unit Column -->
         <ng-container matColumnDef="test_unit">
-          <mat-header-cell *matHeaderCellDef mat-sort-header>Result Unit</mat-header-cell>
-          <mat-cell *matCellDef="let row">{{row.test_unit}}</mat-cell>
+          <mat-header-cell *matHeaderCellDef mat-sort-header>Unit</mat-header-cell>
+          <mat-cell *matCellDef="let row">{{ row.test_unit }}</mat-cell>
         </ng-container>
 
         <!-- Test Type Column -->
         <ng-container matColumnDef="test_type">
           <mat-header-cell *matHeaderCellDef mat-sort-header>Test Type</mat-header-cell>
-          <mat-cell *matCellDef="let row">{{row.test_type}}</mat-cell>
+          <mat-cell *matCellDef="let row">{{ row.test_type }}</mat-cell>
         </ng-container>
 
         <!-- Tested By Column -->
         <ng-container matColumnDef="tested_by">
           <mat-header-cell *matHeaderCellDef mat-sort-header>Tested By</mat-header-cell>
-          <mat-cell *matCellDef="let row">{{row.tested_by}}</mat-cell>
+          <mat-cell *matCellDef="let row">{{ row.tested_by }}</mat-cell>
         </ng-container>
 
         <!-- Tested On Column -->
         <ng-container matColumnDef="analysed_date_time">
           <mat-header-cell *matHeaderCellDef mat-sort-header>Tested On</mat-header-cell>
-          <mat-cell *matCellDef="let row">{{row.analysed_date_time}}</mat-cell>
+          <mat-cell *matCellDef="let row">
+            <span class="date-time">{{ row.analysed_date_time }}</span>
+          </mat-cell>
         </ng-container>
 
         <!-- Received On Column -->
         <ng-container matColumnDef="added_on">
           <mat-header-cell *matHeaderCellDef mat-sort-header>Received On</mat-header-cell>
-          <mat-cell *matCellDef="let row">{{row.added_on}}</mat-cell>
+          <mat-cell *matCellDef="let row">
+            <span class="date-time">{{ row.added_on }}</span>
+          </mat-cell>
         </ng-container>
 
         <!-- LIS Sync Status Column -->
         <ng-container matColumnDef="lims_sync_status">
-          <mat-header-cell *matHeaderCellDef mat-sort-header>LIS Sync Status</mat-header-cell>
-          <mat-cell *matCellDef="let row">{{row.lims_sync_status}}</mat-cell>
+          <mat-header-cell *matHeaderCellDef mat-sort-header>Sync Status</mat-header-cell>
+          <mat-cell *matCellDef="let row">
+            <span class="sync-badge" [ngClass]="{
+              'synced': row.lims_sync_status === '1',
+              'not-synced': row.lims_sync_status === '0',
+              'failed': row.lims_sync_status === '2'
+            }">
+              <i class="fa" [ngClass]="{
+                'fa-check-circle': row.lims_sync_status === '1',
+                'fa-clock': row.lims_sync_status === '0',
+                'fa-exclamation-circle': row.lims_sync_status === '2'
+              }"></i>
+              {{ row.lims_sync_status === '1' ? 'Synced' :
+              row.lims_sync_status === '0' ? 'Pending' : 'Failed' }}
+            </span>
+          </mat-cell>
         </ng-container>
 
         <!-- LIS Sync Datetime Column -->
         <ng-container matColumnDef="lims_sync_date_time">
-          <mat-header-cell *matHeaderCellDef mat-sort-header>LIS Sync Datetime</mat-header-cell>
-          <mat-cell *matCellDef="let row">{{row.lims_sync_date_time}}</mat-cell>
+          <mat-header-cell *matHeaderCellDef mat-sort-header>Sync Time</mat-header-cell>
+          <mat-cell *matCellDef="let row">
+            <span class="date-time">{{ row.lims_sync_date_time || '-' }}</span>
+          </mat-cell>
         </ng-container>
 
-        <mat-header-row *matHeaderRowDef="displayedColumns"></mat-header-row>
-        <mat-row *matRowDef="let row; columns: displayedColumns;"
-          [ngClass]="{'unsynced-row': row.mysql_inserted === 0}"></mat-row>
+        <mat-header-row *matHeaderRowDef="displayedColumns" class="table-header"></mat-header-row>
+        <mat-row *matRowDef="let row; columns: displayedColumns;" class="table-row"
+          [class.unsynced-row]="row.lims_sync_status === '0'">
+        </mat-row>
       </mat-table>
+
+      <!-- Empty State -->
+      <div class="table-empty-state" *ngIf="dataSource.data.length === 0">
+        <i class="fa fa-inbox"></i>
+        <h3>No Results Found</h3>
+        <p>{{ searchTerm ? 'Try adjusting your search criteria' : 'Results will appear here as they are received' }}</p>
+      </div>
     </div>
 
     <!-- Pagination -->
     <mat-paginator [pageSizeOptions]="[50, 100, 250, 500]" [pageSize]="50" showFirstLastButtons
-      aria-label="Select Page"></mat-paginator>
+      class="table-pagination">
+    </mat-paginator>
   </div>
 
   <!-- Footer -->
-  <div class="app-footer">
-    <button routerLink="/raw-data" class="btn btn-dark">
-      <i class="fa fa-database"></i>
-      <span>View Raw Data</span>
-    </button>
-    <div class="version-info" *ngIf="appVersion">v{{appVersion}}</div>
-  </div>
+  <footer class="app-footer">
+    <div class="footer-left">
+      <button routerLink="/raw-data" class="btn btn-outline-dark">
+        <i class="fa fa-database"></i>
+        <span>View Raw Data</span>
+      </button>
+    </div>
+    <div class="footer-right">
+      <span class="version-info" *ngIf="appVersion">Version {{ appVersion }}</span>
+    </div>
+  </footer>
 </div>

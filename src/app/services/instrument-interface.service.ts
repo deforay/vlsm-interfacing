@@ -428,6 +428,7 @@ export class InstrumentInterfaceService {
       const rawData: RawMachineData = {
         data: that.strData,
         machine: instrumentConnectionData.instrumentId,
+        instrument_id: instrumentConnectionData.instrumentId
       };
 
       that.dbService.recordRawData(rawData, () => {
@@ -501,6 +502,7 @@ export class InstrumentInterfaceService {
       const rawData: RawMachineData = {
         data: that.strData,
         machine: instrumentConnectionData.instrumentId,
+        instrument_id: instrumentConnectionData.instrumentId
       };
 
       that.dbService.recordRawData(rawData, () => {
@@ -576,7 +578,7 @@ export class InstrumentInterfaceService {
     const that = this;
 
     that.utilitiesService.logger('info', 'Processing following ASTM Data to save into database...', instrumentConnectionData.instrumentId);
-    that.utilitiesService.logger('info', dataArray, instrumentConnectionData.instrumentId);
+    that.utilitiesService.logger('info', JSON.stringify(dataArray), instrumentConnectionData.instrumentId);
 
     // Extract sample result from the ASTM data
     const sampleResult = that.astmHelper.extractSampleResultFromASTM(dataArray, partData);
@@ -590,7 +592,7 @@ export class InstrumentInterfaceService {
       return that.saveResult(sampleResult, instrumentConnectionData);
     } else {
       that.utilitiesService.logger('error', 'Order record not found in the following ASTM data block', instrumentConnectionData.instrumentId);
-      that.utilitiesService.logger('error', dataArray, instrumentConnectionData.instrumentId);
+      that.utilitiesService.logger('error', JSON.stringify(dataArray), instrumentConnectionData.instrumentId);
       return false;
     }
   }

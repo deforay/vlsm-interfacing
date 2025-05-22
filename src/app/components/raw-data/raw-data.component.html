@@ -20,23 +20,66 @@
   <!-- Header Section -->
   <div class="header-section">
     <h2 class="page-title">Raw Data</h2>
-    <button (click)="click()" class="btn btn-primary">
-      <i class="fa fa-tachometer-alt"></i>
-      <span>Back to Console</span>
-    </button>
+    <div class="action-buttons">
+      <button type="button" [disabled]="selection.selected.length === 0 || isReprocessing" (click)="reprocessSelected()"
+        class="btn btn-success">
+        <i class="fas fa-sync-alt"></i>
+        <span>Reprocess Selected ({{ selection.selected.length }})</span>
+      </button>
+      <button type="button" (click)="click()" class="btn btn-primary">
+        <i class="fas fa-tachometer-alt"></i>
+        <span>Back to Console</span>
+      </button>
+    </div>
+  </div>
+
+  <!-- Reprocessing status bar -->
+  <div *ngIf="isReprocessing" class="reprocessing-status">
+    <div class="progress-container">
+      <div class="progress">
+        <div class="progress-bar"
+          [style.width.%]="(reprocessingStatus.processedCount / reprocessingStatus.totalCount) * 100">
+          <span *ngIf="(reprocessingStatus.processedCount / reprocessingStatus.totalCount) * 100 > 25">
+            {{ reprocessingStatus.processedCount }} / {{ reprocessingStatus.totalCount }}
+          </span>
+        </div>
+      </div>
+      <div class="status-details">
+        <span class="current-item">{{ reprocessingStatus.currentItem }}</span>
+        <span class="result-counts">
+          <span class="success-count">Success: {{ reprocessingStatus.success }}</span>
+          <span class="failed-count">Failed: {{ reprocessingStatus.failed }}</span>
+        </span>
+      </div>
+    </div>
   </div>
 
   <!-- Search Section -->
   <div class="search-section">
     <div class="search-container">
-      <i class="fa fa-search search-icon"></i>
-      <input type="text" (keyup)="filterData($event)" placeholder="Search raw data records..." class="search-input">
+      <i class="fas fa-search search-icon"></i>
+      <input #searchInput type="text" (keyup)="filterData($event)" placeholder="Search raw data records..."
+        class="search-input">
     </div>
   </div>
 
   <!-- Data Table -->
   <div class="table-container">
     <mat-table #table [dataSource]="dataSource" matSort class="data-table">
+      <!-- Checkbox Column -->
+      <ng-container matColumnDef="select">
+        <mat-header-cell *matHeaderCellDef class="column-select">
+          <mat-checkbox (change)="$event ? masterToggle() : null" [checked]="selection.hasValue() && isAllSelected()"
+            [indeterminate]="selection.hasValue() && !isAllSelected()" [aria-label]="checkboxLabel()">
+          </mat-checkbox>
+        </mat-header-cell>
+        <mat-cell *matCellDef="let row" class="column-select">
+          <mat-checkbox (click)="$event.stopPropagation()" (change)="$event ? selection.toggle(row) : null"
+            [checked]="selection.isSelected(row)" [aria-label]="checkboxLabel(row)">
+          </mat-checkbox>
+        </mat-cell>
+      </ng-container>
+
       <!-- Machine Column -->
       <ng-container matColumnDef="machine">
         <mat-header-cell *matHeaderCellDef mat-sort-header class="column-machine">Machine</mat-header-cell>
@@ -56,32 +99,44 @@
           <div class="data-preview-container" [ngClass]="{'expanded': row.expanded}">
             <div class="data-preview" *ngIf="!row.expanded">
               <span class="data-preview-text">{{ row.data | slice:0:50 }}</span>
-              <button class="btn-expand-toggle" (click)="toggleRow(row); $event.stopPropagation()">
+              <button class="btn-expand-toggle" (click)="toggleRow(row, $event)">
                 See more
-                <i class="fa fa-chevron-down"></i>
+                <i class="fas fa-chevron-down"></i>
               </button>
             </div>
             <div class="data-expanded" *ngIf="row.expanded">
               <!-- Using the pre tag to preserve formatting -->
               <pre class="data-content">{{ row.data }}</pre>
-              <button class="btn-expand-toggle" (click)="toggleRow(row); $event.stopPropagation()">
+              <button class="btn-expand-toggle" (click)="toggleRow(row, $event)">
                 See less
-                <i class="fa fa-chevron-up"></i>
+                <i class="fas fa-chevron-up"></i>
               </button>
             </div>
           </div>
         </mat-cell>
       </ng-container>
 
+      <!-- Actions Column -->
+      <ng-container matColumnDef="actions">
+        <mat-header-cell *matHeaderCellDef class="column-actions">Actions</mat-header-cell>
+        <mat-cell *matCellDef="let row" class="column-actions">
+          <button type="button" [disabled]="isReprocessing" (click)="reprocessSingleRow(row, $event)"
+            class="btn btn-sm btn-primary action-btn">
+            <i class="fas fa-sync-alt"></i> Reprocess
+          </button>
+        </mat-cell>
+      </ng-container>
+
       <!-- Header and Row Definitions -->
-      <mat-header-row *matHeaderRowDef="displayedColumns"></mat-header-row>
-      <mat-row *matRowDef="let row; columns: displayedColumns;" [ngClass]="{'expanded-row': row.expanded}"
-        (click)="row.expanded = !row.expanded"></mat-row>
+      <mat-header-row *matHeaderRowDef="displayedColumns; sticky: true"></mat-header-row>
+      <mat-row *matRowDef="let row; columns: displayedColumns;"
+        [ngClass]="{'expanded-row': row.expanded, 'selected-row': selection.isSelected(row)}"
+        (click)="selectRow(row, $event)"></mat-row>
     </mat-table>
 
     <!-- Empty State -->
     <div *ngIf="dataSource.data.length === 0" class="empty-state">
-      <i class="fa fa-database"></i>
+      <i class="fas fa-database"></i>
       <p>No data found</p>
       <small>Try adjusting your search criteria</small>
     </div>

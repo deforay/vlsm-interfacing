@@ -1,6 +1,6 @@
 // src/app/components/console/console.component.ts
 
-import { Component, OnInit, NgZone, OnDestroy, ChangeDetectorRef, ViewChild } from '@angular/core';
+import { Component, OnInit, NgZone, OnDestroy, ChangeDetectorRef, ViewChild, ElementRef } from '@angular/core';
 import { DomSanitizer } from '@angular/platform-browser';
 import { Router } from '@angular/router';
 import { ElectronStoreService } from '../../services/electron-store.service';
@@ -14,9 +14,11 @@ import { MatTableDataSource } from '@angular/material/table';
 import { MatSort } from '@angular/material/sort';
 import { SelectionModel } from "@angular/cdk/collections";
 import { MatCheckboxChange } from '@angular/material/checkbox';
-import { Subscription } from 'rxjs';
+import { fromEvent, Subscription } from 'rxjs';
 import { IpcRenderer } from 'electron';
 import { MatDialog } from '@angular/material/dialog';
+import { ChangeDetectionStrategy } from '@angular/core';
+import { debounceTime, distinctUntilChanged, shareReplay, map, filter } from 'rxjs/operators';
 
 export enum SelectType {
   single,
@@ -26,7 +28,8 @@ export enum SelectType {
 @Component({
   selector: 'app-console',
   templateUrl: './console.component.html',
-  styleUrls: ['./console.component.scss']
+  styleUrls: ['./console.component.scss'],
+  changeDetection: ChangeDetectionStrategy.OnPush
 })
 export class ConsoleComponent implements OnInit, OnDestroy {
   searchTerm: string = '';
@@ -82,6 +85,7 @@ export class ConsoleComponent implements OnInit, OnDestroy {
   selection = new SelectionModel<any>(true, []);
   displayType = SelectType.single;
   dataSource = new MatTableDataSource<any>();
+  @ViewChild('searchInput', { static: true }) searchInput: ElementRef;
   @ViewChild(MatPaginator, { static: true }) paginator: MatPaginator;
   @ViewChild(MatSort, { static: true }) sort: MatSort;
 
@@ -121,6 +125,22 @@ export class ConsoleComponent implements OnInit, OnDestroy {
     this.selection.clear();
   }
 
+  ngAfterViewInit() {
+    // Setup debounced search after view is initialized and input element is available
+    if (this.searchInput && this.searchInput.nativeElement) {
+      fromEvent(this.searchInput.nativeElement, 'input').pipe(
+        map((event: any) => event.target.value),
+        debounceTime(300), // Wait 300ms after last event
+        distinctUntilChanged() // Only emit if value changed
+      ).subscribe(value => {
+        // Run in NgZone to trigger change detection
+        this._ngZone.run(() => {
+          this.filterData({ target: { value } });
+        });
+      });
+    }
+  }
+
   ngOnInit() {
     const that = this;
     that.loadSettings();
@@ -136,28 +156,29 @@ export class ConsoleComponent implements OnInit, OnDestroy {
     });
 
     // Subscribe to available instruments from the connection manager
-    that.instrumentsSubscription = that.connectionManagerService.getActiveInstruments().subscribe(instruments => {
-      that._ngZone.run(() => {
-        that.availableInstruments = instruments;
+    that.instrumentsSubscription = that.connectionManagerService.getActiveInstruments()
+      .subscribe(instruments => {
+        that._ngZone.run(() => {
+          that.availableInstruments = instruments;
 
-        // Check if we should auto-reconnect instruments
-        that.checkForAutoReconnect();
+          // Check if we should auto-reconnect instruments
+          that.checkForAutoReconnect();
 
-        // Initialize the logs for each instrument
-        that.availableInstruments.forEach(instrument => {
-          that.utilitiesService.getInstrumentLogSubject(instrument.connectionParams.instrumentId)
-            .subscribe(logs => {
-              that._ngZone.run(() => {
-                that.updateLogsForInstrument(instrument.connectionParams.instrumentId, logs);
-                that.filterInstrumentLogs(instrument);
-                that.cdRef.detectChanges();
+          // Initialize the logs for each instrument
+          that.availableInstruments.forEach(instrument => {
+            that.utilitiesService.getInstrumentLogSubject(instrument.connectionParams.instrumentId)
+              .subscribe(logs => {
+                that._ngZone.run(() => {
+                  that.updateLogsForInstrument(instrument.connectionParams.instrumentId, logs);
+                  that.filterInstrumentLogs(instrument);
+                  that.cdRef.detectChanges();
+                });
               });
-            });
-        });
+          });
 
-        that.cdRef.detectChanges();
+          that.cdRef.detectChanges();
+        });
       });
-    });
 
     // Fetch last few orders and logs on load
     setTimeout(() => {
@@ -488,22 +509,18 @@ export class ConsoleComponent implements OnInit, OnDestroy {
 
   ngOnDestroy() {
     // Clear intervals
-    if (this.recentResultsInterval) {
-      clearInterval(this.recentResultsInterval);
-    }
-    if (this.mysqlCheckInterval) {
-      clearInterval(this.mysqlCheckInterval);
-    }
-    if (this.walCheckpointInterval) {
-      clearInterval(this.walCheckpointInterval);
-    }
-
-    // Unsubscribe from observables
-    if (this.electronStoreSubscription) {
-      this.electronStoreSubscription.unsubscribe();
-    }
-    if (this.instrumentsSubscription) {
-      this.instrumentsSubscription.unsubscribe();
-    }
+    [
+      this.recentResultsInterval,
+      this.mysqlCheckInterval,
+      this.walCheckpointInterval,
+      this.electronStoreSubscription,
+      this.instrumentsSubscription
+    ].forEach(item => {
+      if (typeof item === 'number') {
+        clearInterval(item);
+      } else if (item && typeof item.unsubscribe === 'function') {
+        item.unsubscribe();
+      }
+    });
   }
 }

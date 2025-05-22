@@ -254,6 +254,10 @@ export class DatabaseService {
   recordTestResults(data: any, success: any, errorf: any) {
     const placeholders = Object.values(data).map(() => '?').join(',');
     const mysqlQuery = 'INSERT INTO orders (' + Object.keys(data).join(',') + ') VALUES (' + placeholders + ')';
+    // Ensure instrument_id is set if not already present
+    if (!data.instrument_id && data.machine_used) {
+      data.instrument_id = data.machine_used;
+    }
 
     const handleSQLiteInsert = (mysqlInserted: boolean) => {
       data.mysql_inserted = mysqlInserted ? 1 : 0;
@@ -338,7 +342,7 @@ export class DatabaseService {
 
     if (searchParam) {
       const columns = [
-        'machine', 'added_on', 'data'
+        'machine', 'instrument_id', 'added_on', 'data'
       ];
       const searchConditions = columns.map(col => `${col} LIKE '%${searchParam}%'`).join(' OR ');
       recentRawDataQuery += ` WHERE ${searchConditions}`;
@@ -505,6 +509,10 @@ export class DatabaseService {
     const sqliteQuery = 'INSERT INTO raw_data (' + Object.keys(data).join(',') + ') VALUES (' + placeholders + ')';
     const mysqlQuery = 'INSERT INTO raw_data (' + Object.keys(data).join(',') + ') VALUES (' + placeholders + ')';
 
+    // Ensure instrument_id is set if not already present
+    if (!data.instrument_id && data.machine) {
+      data.instrument_id = data.machine;
+    }
     // Insert into SQLite
     that.electronService.execSqliteQuery(sqliteQuery, Object.values(data))
       .then(sqliteResults => {
@@ -536,10 +544,10 @@ export class DatabaseService {
 
     // Insert into SQLite first
     that.electronService.execSqliteQuery(sqliteQuery, Object.values(data))
-      .then(sqliteResults => {
+      .then((sqliteResults: any) => {
         success({ sqlite: sqliteResults });
       })
-      .catch(error => {
+      .catch((error: any) => {
         console.error('Error inserting into SQLite:', error);
         errorf(error);
       });

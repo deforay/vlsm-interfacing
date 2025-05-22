@@ -1,144 +1,184 @@
-<!-- src/app/components/dashboard/dashboard.component.html -->
+<!-- dashboard.component.html -->
 <div class="app-container">
-  <!-- Instrument status bar -->
-    <div class="instrument-status-bar">
-      <div class="instrument-status" *ngFor="let instrument of availableInstruments">
-        <!-- Status indicator dot -->
-        <div class="status-indicator"
-          [ngClass]="{'connected': instrument.isConnected, 'disconnected': !instrument.isConnected}"></div>
+  <!-- Header Section -->
+  <header class="app-header">
+    <div class="page-title">
+      <h1>Dashboard</h1>
+      <p class="subtitle">Real-time monitoring and analytics</p>
+    </div>
+    <div class="header-actions">
+      <button (click)="click()" routerLink="/console" class="btn btn-primary">
+        <i class="fa fa-terminal"></i>
+        <span>Back to Console</span>
+      </button>
+    </div>
+  </header>
 
-        <!-- Instrument ID -->
-        <span class="instrument-id">{{ instrument.connectionParams.instrumentId }}</span>
-
-        <!-- Status text from the service -->
+  <!-- Instrument Status Bar -->
+  <div class="status-overview">
+    <div class="status-card" *ngFor="let instrument of availableInstruments">
+      <div class="status-indicator"
+           [ngClass]="{'connected': instrument.isConnected, 'disconnected': !instrument.isConnected}">
+      </div>
+      <div class="status-info">
+        <span class="instrument-name">{{ instrument.connectionParams.instrumentId }}</span>
         <span class="status-text"
-          [ngClass]="{'connected-text': instrument.isConnected, 'disconnected-text': !instrument.isConnected}">
+              [ngClass]="{'connected-text': instrument.isConnected, 'disconnected-text': !instrument.isConnected}">
           {{ instrument.statusText }}
         </span>
       </div>
     </div>
-  <div class="card">
+  </div>
 
-
-    <div style="display: flex; justify-content: flex-end; margin-right: 2%;">
-      <button (click)="click()" routerLink="/console" class="btn btn-primary">
-        <i class="fa fa-dashboard"></i>
-        <span>Back to Console</span>
-      </button>
-    </div>
-
-    <label for="instrumentSelect" style="font-weight: bold;">SELECT INSTRUMENT</label><br>
-    <select id="instrumentSelect" [(ngModel)]="selectedInstrument" (change)="filterByInstrument()" class="form-control">
-      <option value="">All Instruments</option>
-      <option *ngFor="let instrument of instruments" [value]="instrument">
-        {{ instrument }}
-      </option>
-    </select>
-
-    <div class="card-container">
-      <div class="cards">
-        <div class="card-headers">
-          <h2>RESULTS RECEIVED</h2>
-          <h6 *ngIf="selectedInstrument;" style="font-size: 12px; text-align: center;">({{ selectedInstrument }})</h6>
-        </div>
-        <div class="cards-body">
-          <h2>{{ totalResults }}</h2>
-        </div>
-      </div>
-
-      <div class="cards">
-        <div class="card-headers-sync">
-          <h2>RESULTS SYNCED TO LIS</h2>
-          <h6 *ngIf="selectedInstrument;" style="font-size: 12px; text-align: center;">({{ selectedInstrument }})</h6>
-        </div>
-        <div class="cards-body">
-          <h2>{{ syncedResults }}</h2>
-        </div>
-      </div>
-
-      <div class="cards">
-        <div class="card-header-notsync">
-          <h2>RESULTS NOT YET SYNCED TO LIS</h2>
-          <h6 *ngIf="selectedInstrument;" style="font-size: 12px; text-align: center;">({{ selectedInstrument }})</h6>
-        </div>
-        <div class="cards-body">
-          <h2>{{ notYetSyncedResults }}</h2>
-        </div>
-      </div>
-
-      <div class="cards">
-        <div class="card-header-failed">
-          <h2>RESULTS FAILED TO SYNC TO LIS</h2>
-          <h6 *ngIf="selectedInstrument;" style="font-size: 12px; text-align: center;">({{ selectedInstrument }})</h6>
-        </div>
-        <div class="cards-body">
-          <h2>{{ failedtosync }}</h2>
-        </div>
+  <!-- Filter Section -->
+  <div class="filter-section">
+    <div class="filter-card">
+      <label class="filter-label">Select Instrument</label>
+      <div class="select-wrapper">
+        <i class="fa fa-microscope select-icon"></i>
+        <select id="instrumentSelect" [(ngModel)]="selectedInstrument" (change)="filterByInstrument()" class="modern-select">
+          <option value="">All Instruments</option>
+          <option *ngFor="let instrument of instruments" [value]="instrument">
+            {{ instrument }}
+          </option>
+        </select>
       </div>
     </div>
+  </div>
 
-    <div class="card-container">
-      <div class="cards">
-        <div class="card-headers">
-          <h2>Last LIS Sync On</h2>
-          <h6 *ngIf="selectedInstrument;" style="font-size: 12px; text-align: center;">({{ selectedInstrument }})</h6>
-        </div>
-        <div class="cards-body">
-          <h2>{{ latestResult?.lims_sync_date_time }}</h2>
-        </div>
+  <!-- Statistics Cards -->
+  <div class="stats-grid">
+    <div class="stat-card results-received">
+      <div class="stat-header">
+        <i class="fa fa-chart-line"></i>
+        <h3>Results Received</h3>
       </div>
+      <div class="stat-value">{{ totalResults }}</div>
+      <div class="stat-subtitle" *ngIf="selectedInstrument">{{ selectedInstrument }}</div>
+    </div>
 
-      <div class="cards">
-        <div class="card-headers">
-          <h2>Last Instrument Result Received On</h2>
-          <h6 *ngIf="selectedInstrument;" style="font-size: 12px; text-align: center;">({{ selectedInstrument }})</h6>
-        </div>
-        <div class="cards-body">
-          <h2>{{ latestResult?.added_on }}</h2>
-        </div>
+    <div class="stat-card results-synced">
+      <div class="stat-header">
+        <i class="fa fa-check-circle"></i>
+        <h3>Results Synced to LIS</h3>
+      </div>
+      <div class="stat-value">{{ syncedResults }}</div>
+      <div class="stat-subtitle" *ngIf="selectedInstrument">{{ selectedInstrument }}</div>
+    </div>
+
+    <div class="stat-card results-pending">
+      <div class="stat-header">
+        <i class="fa fa-clock"></i>
+        <h3>Pending Sync</h3>
+      </div>
+      <div class="stat-value">{{ notYetSyncedResults }}</div>
+      <div class="stat-subtitle" *ngIf="selectedInstrument">{{ selectedInstrument }}</div>
+    </div>
+
+    <div class="stat-card results-failed">
+      <div class="stat-header">
+        <i class="fa fa-exclamation-triangle"></i>
+        <h3>Failed to Sync</h3>
+      </div>
+      <div class="stat-value">{{ failedtosync }}</div>
+      <div class="stat-subtitle" *ngIf="selectedInstrument">{{ selectedInstrument }}</div>
+    </div>
+  </div>
+
+  <!-- Recent Activity Section -->
+  <div class="activity-section">
+    <div class="section-header">
+      <h2>Recent Activity</h2>
+      <div class="section-actions">
+        <button class="btn btn-sm btn-outline-primary" (click)="fetchDashboardData()">
+          <i class="fa fa-refresh"></i>
+          <span>Refresh</span>
+        </button>
       </div>
     </div>
 
-    <label style="font-weight: bold; margin-left: 2%;">APP USAGE</label>
-    <div *ngFor="let session of sessionDatasArray">
-      <div class="card-containers-tool">
-        <div class="cards-tool">
-          <div class="card-headers-sync">
-            <h2>Start Time</h2>
-          </div>
-          <div class="cards-body">
-            <p style="text-align: center;">{{ session.startTime }}</p>
-          </div>
+    <div class="activity-grid">
+      <div class="activity-card">
+        <div class="activity-icon sync-icon">
+          <i class="fa fa-sync"></i>
         </div>
+        <div class="activity-content">
+          <h4>Last LIS Sync</h4>
+          <p class="activity-time">{{ latestResult?.lims_sync_date_time || 'No sync data' }}</p>
+          <span class="activity-label" *ngIf="selectedInstrument">{{ selectedInstrument }}</span>
+        </div>
+      </div>
 
-        <div class="cards-tool">
-          <div class="card-header-failed">
-            <h2>End Time</h2>
-          </div>
-          <div class="cards-body">
-            <p style="text-align: center;">{{ session.endTime }}</p>
+      <div class="activity-card">
+        <div class="activity-icon result-icon">
+          <i class="fa fa-flask"></i>
+        </div>
+        <div class="activity-content">
+          <h4>Last Result Received</h4>
+          <p class="activity-time">{{ latestResult?.added_on || 'No results yet' }}</p>
+          <span class="activity-label" *ngIf="selectedInstrument">{{ selectedInstrument }}</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- App Usage Section -->
+  <div class="usage-section" *ngIf="sessionDatasArray.length > 0">
+    <div class="section-header">
+      <h2>App Usage History</h2>
+    </div>
+    <div class="usage-timeline">
+      <div class="timeline-item" *ngFor="let session of sessionDatasArray">
+        <div class="timeline-marker" [ngClass]="{
+          'active': session.endTime === 'N/A' && isInstrumentCurrentlyAvailable(session.mode),
+          'unknown': session.endTime === 'N/A' && !isInstrumentCurrentlyAvailable(session.mode)
+        }"></div>
+        <div class="timeline-content">
+          <div class="session-info">
+            <span class="session-id">{{ session.mode }}</span>
+            <div class="session-times">
+              <div class="time-block start-time">
+                <i class="fa fa-play-circle"></i>
+                <span>{{ session.startTime }}</span>
+              </div>
+              <div class="time-block end-time" *ngIf="session.endTime !== 'N/A'">
+                <i class="fa fa-stop-circle"></i>
+                <span>{{ session.endTime }}</span>
+              </div>
+              <div class="time-block active" *ngIf="session.endTime === 'N/A' && isInstrumentCurrentlyAvailable(session.mode)">
+                <i class="fa fa-circle active-indicator"></i>
+                <span>Active</span>
+              </div>
+              <div class="time-block unknown" *ngIf="session.endTime === 'N/A' && !isInstrumentCurrentlyAvailable(session.mode)">
+                <i class="fa fa-question-circle"></i>
+                <span>No end time recorded</span>
+              </div>
+            </div>
           </div>
         </div>
       </div>
     </div>
+  </div>
 
-    <label style="font-weight: bold; margin-left: 2%;">INSTRUMENT CONNECTIVITY</label>
-    <div *ngFor="let sessions of filteredSessionDatasArray">
-      <div class="card-containers-tool">
-        <div class="cards-tool">
-          <div class="card-headers-sync">
-            <h2>Start Time<br>({{ sessions.mode }})</h2>
-          </div>
-          <div class="cards-body-tool">
-            <p style="text-align: center;">{{ sessions.startTime }}</p>
-          </div>
+  <!-- Instrument Connectivity Section -->
+  <div class="connectivity-section" *ngIf="filteredSessionDatasArray.length > 0">
+    <div class="section-header">
+      <h2>Instrument Connectivity</h2>
+    </div>
+    <div class="connectivity-grid">
+      <div class="connectivity-card" *ngFor="let session of filteredSessionDatasArray">
+        <div class="connectivity-header">
+          <i class="fa fa-network-wired"></i>
+          <span>{{ session.mode }}</span>
         </div>
-        <div class="cards-tool">
-          <div class="card-header-failed">
-            <h2>End Time<br>({{ sessions.mode }})</h2>
+        <div class="connectivity-times">
+          <div class="time-stat">
+            <label>Start Time</label>
+            <p>{{ session.startTime }}</p>
           </div>
-          <div class="cards-body-tool">
-            <p style="text-align: center;">{{ sessions.endTime }}</p>
+          <div class="time-stat">
+            <label>End Time</label>
+            <p>{{ session.endTime }}</p>
           </div>
         </div>
       </div>

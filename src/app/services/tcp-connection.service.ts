@@ -19,6 +19,8 @@ export class TcpConnectionService {
   public socketClient = null;
   public server = null;
   public net = null;
+  private readonly SEND_BUFFER_SIZE = 65536; // 64KB
+  private readonly RECEIVE_BUFFER_SIZE = 262144; // 256KB
 
   protected clientConnectionOptions: any = null;
 
@@ -99,6 +101,11 @@ export class TcpConnectionService {
         // Enable TCP keep-alive with a 1-minute interval
         socket.setKeepAlive(true, 60000); // 1 minute keep-alive interval
 
+        // Set socket options for better performance
+        socket.setNoDelay(true);
+        socket.setRecvBufferSize(that.RECEIVE_BUFFER_SIZE);
+        socket.setSendBufferSize(that.SEND_BUFFER_SIZE);
+
         // Set timeout for the server socket
         socket.setTimeout(that.connectionTimeout);
 
@@ -141,7 +148,7 @@ export class TcpConnectionService {
           if (index !== -1) {
             sockets.splice(index, 1);
           }
-          console.log('CLOSED: ' + socket.host + ' ' + socket.host);
+          console.log('CLOSED: ' + socket.host + ' ' + socket.post);
         });
 
       });
@@ -176,7 +183,12 @@ export class TcpConnectionService {
       });
 
     } else if (connectionParams.connectionMode === 'tcpclient') {
-      instrumentConnectionData.connectionSocket = that.socketClient = new that.net.Socket();
+      instrumentConnectionData.connectionSocket = that.socketClient = new that.net.Socket({
+        // for better performance
+        highWaterMark: that.SEND_BUFFER_SIZE,
+        allowHalfOpen: false,
+        noDelay: true // Disable Nagle's algorithm for real-time data
+      });
       that.clientConnectionOptions = {
         port: connectionParams.port,
         host: connectionParams.host,
@@ -214,6 +226,11 @@ export class TcpConnectionService {
         that.connectionTimeout = 300000;
         instrumentConnectionData.statusSubject.next(true);
         instrumentConnectionData.reconnectAttempts = 0; // Reset retry attempts
+
+        // Set socket buffer sizes
+        instrumentConnectionData.connectionSocket.setRecvBufferSize(that.RECEIVE_BUFFER_SIZE);
+        instrumentConnectionData.connectionSocket.setSendBufferSize(that.SEND_BUFFER_SIZE);
+
         that.utilitiesService.logger('success', 'Connected as client successfully', instrumentConnectionData.instrumentId);
       });
 
@@ -271,6 +288,15 @@ export class TcpConnectionService {
     const instrumentConnectionData = this.connectionStack.get(key);
 
     if (!instrumentConnectionData) return;
+
+    // Adaptive heartbeat interval based on connection type
+    let heartbeatInterval = this.heartbeatInterval;
+
+    // Use longer intervals for stable connections
+    if (connectionParams.connectionMode === 'tcpserver') {
+      heartbeatInterval = 60000; // 60 seconds for server connections
+    }
+
 
     // Clear any existing heartbeat interval
     this.stopHeartbeat(connectionParams);

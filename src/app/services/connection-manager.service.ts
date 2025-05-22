@@ -5,6 +5,8 @@ import { ElectronStoreService } from './electron-store.service';
 import { TcpConnectionService } from './tcp-connection.service';
 import { BehaviorSubject, Observable } from 'rxjs';
 import { ConnectionParams } from '../interfaces/connection-params.interface';
+import { timer } from 'rxjs';
+import { filter } from 'rxjs/operators';
 
 @Injectable({
   providedIn: 'root'
@@ -31,7 +33,7 @@ export class ConnectionManagerService implements OnDestroy {
       this.updateInstrumentsList();
     });
 
-      this.startStatusSyncInterval();
+    this.startStatusSyncInterval();
 
   }
 
@@ -574,11 +576,14 @@ export class ConnectionManagerService implements OnDestroy {
 
   // Add a periodic status check
   startStatusSyncInterval() {
-    setInterval(() => {
+    timer(0, 5000).pipe(
+      // Only run when document is visible
+      filter(() => document.visibilityState === 'visible')
+    ).subscribe(() => {
       Array.from(this.activeInstruments.values()).forEach(instrument => {
         this.refreshConnectionStatus(instrument);
       });
-    }, 5000); // Check every 5 seconds
+    });
   }
 
   ngOnDestroy() {
