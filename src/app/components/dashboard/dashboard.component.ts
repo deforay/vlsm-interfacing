@@ -67,7 +67,7 @@ export class DashboardComponent implements OnInit {
     this.filterSessionData();
   }
 
-  private fetchDashboardData() {
+  public fetchDashboardData() {
     this.utilitiesService.fetchRecentResults('');
     this.utilitiesService.lastOrders.subscribe({
       next: lastFewOrders => {
