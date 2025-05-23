@@ -82,6 +82,7 @@ function createWindow(): BrowserWindow {
       nodeIntegration: true,
       allowRunningInsecureContent: serve,
       contextIsolation: false,
+      backgroundThrottling: false,
     },
   });
 
@@ -162,11 +163,15 @@ try {
           { label: 'Minimize', click: () => { win.minimize(); } },
           { label: 'Quit', click: () => { app.quit(); } },
         ]);
-        tray.setToolTip('Your Application');
+        tray.setToolTip('Interface Tool');
         tray.setContextMenu(contextMenu);
 
         tray.on('click', () => {
-          win.show();
+          if (win) {
+            if (win.isMinimized()) win.restore();
+            if (!win.isVisible()) win.show();
+            win.focus();
+          }
         });
 
         console.log('Tray icon setup successful.');
@@ -305,7 +310,7 @@ try {
           } else if (isInsert) {
             // For INSERT queries, use db.run() and return the lastID
             if (args === null || args === undefined) {
-              sqlite3Obj.run(sql, function(err) {
+              sqlite3Obj.run(sql, function (err) {
                 if (err) {
                   console.error(`SQLite error for query [${sql}]:`, err);
                   event.reply(uniqueEvent, {
@@ -322,7 +327,7 @@ try {
                 }
               });
             } else {
-              sqlite3Obj.run(sql, args, function(err) {
+              sqlite3Obj.run(sql, args, function (err) {
                 if (err) {
                   console.error(`SQLite error for query [${sql}]:`, err);
                   event.reply(uniqueEvent, {
@@ -342,7 +347,7 @@ try {
           } else {
             // For UPDATE, DELETE, etc., use db.run()
             if (args === null || args === undefined) {
-              sqlite3Obj.run(sql, function(err) {
+              sqlite3Obj.run(sql, function (err) {
                 if (err) {
                   console.error(`SQLite error for query [${sql}]:`, err);
                   event.reply(uniqueEvent, {
@@ -355,7 +360,7 @@ try {
                 }
               });
             } else {
-              sqlite3Obj.run(sql, args, function(err) {
+              sqlite3Obj.run(sql, args, function (err) {
                 if (err) {
                   console.error(`SQLite error for query [${sql}]:`, err);
                   event.reply(uniqueEvent, {
@@ -411,7 +416,7 @@ try {
             return;
           }
 
-          sqlite3Obj.run("PRAGMA wal_checkpoint(PASSIVE)", function(err) {
+          sqlite3Obj.run("PRAGMA wal_checkpoint(PASSIVE)", function (err) {
             if (err) {
               console.error('Error running WAL checkpoint:', err);
               reject(err);
