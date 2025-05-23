@@ -165,7 +165,8 @@
           </div>
           <div class="log-viewer">
             <div class="log-entries">
-              <ng-container *ngIf="instrumentLogs[instrument.connectionParams.instrumentId]">
+              <ng-container
+                *ngIf="instrumentLogs[instrument.connectionParams.instrumentId] && instrumentLogs[instrument.connectionParams.instrumentId].filteredLogs && instrumentLogs[instrument.connectionParams.instrumentId].filteredLogs.length > 0">
                 <div class="log-entry"
                   *ngFor="let logEntry of instrumentLogs[instrument.connectionParams.instrumentId].filteredLogs"
                   [innerHTML]="getSafeHtml(logEntry)">
@@ -173,6 +174,7 @@
               </ng-container>
               <div class="log-empty"
                 *ngIf="!instrumentLogs[instrument.connectionParams.instrumentId] ||
+                                            !instrumentLogs[instrument.connectionParams.instrumentId].filteredLogs ||
                                             instrumentLogs[instrument.connectionParams.instrumentId].filteredLogs.length === 0">
                 <i class="fa fa-info-circle"></i>
                 <span>No logs to display</span>
@@ -247,7 +249,7 @@
         <!-- Instrument Column -->
         <ng-container matColumnDef="machine_used">
           <mat-header-cell *matHeaderCellDef mat-sort-header>
-            <i class="fa fa-microscope"></i> Instrument
+            Instrument
           </mat-header-cell>
           <mat-cell *matCellDef="let row">
             <span class="instrument-badge">{{ row.machine_used }}</span>
@@ -257,7 +259,7 @@
         <!-- Sample/Order ID Column -->
         <ng-container matColumnDef="order_id">
           <mat-header-cell *matHeaderCellDef mat-sort-header>
-            <i class="fa fa-vial"></i> Sample ID
+            Sample ID
           </mat-header-cell>
           <mat-cell *matCellDef="let row">{{ row.order_id }}</mat-cell>
         </ng-container>
@@ -309,17 +311,17 @@
           <mat-header-cell *matHeaderCellDef mat-sort-header>Sync Status</mat-header-cell>
           <mat-cell *matCellDef="let row">
             <span class="sync-badge" [ngClass]="{
-              'synced': row.lims_sync_status === '1',
-              'not-synced': row.lims_sync_status === '0',
-              'failed': row.lims_sync_status === '2'
+              'synced': row.lims_sync_status == 1 || row.lims_sync_status === '1',
+              'not-synced': row.lims_sync_status == 0 || row.lims_sync_status === '0',
+              'failed': row.lims_sync_status == 2 || row.lims_sync_status === '2'
             }">
               <i class="fa" [ngClass]="{
-                'fa-check-circle': row.lims_sync_status === '1',
-                'fa-clock': row.lims_sync_status === '0',
-                'fa-exclamation-circle': row.lims_sync_status === '2'
+                'fa-check-circle': row.lims_sync_status == 1 || row.lims_sync_status === '1',
+                'fa-clock': row.lims_sync_status == 0 || row.lims_sync_status === '0',
+                'fa-exclamation-circle': row.lims_sync_status == 2 || row.lims_sync_status === '2'
               }"></i>
-              {{ row.lims_sync_status === '1' ? 'Synced' :
-              row.lims_sync_status === '0' ? 'Pending' : 'Failed' }}
+              {{ (row.lims_sync_status == 1 || row.lims_sync_status === '1') ? 'Synced' :
+              (row.lims_sync_status == 0 || row.lims_sync_status === '0') ? 'Pending' : 'Failed' }}
             </span>
           </mat-cell>
         </ng-container>
@@ -334,7 +336,7 @@
 
         <mat-header-row *matHeaderRowDef="displayedColumns" class="table-header"></mat-header-row>
         <mat-row *matRowDef="let row; columns: displayedColumns;" class="table-row"
-          [class.unsynced-row]="row.lims_sync_status === '0'">
+          [class.unsynced-row]="row.lims_sync_status == 0 || row.lims_sync_status === '0'">
         </mat-row>
       </mat-table>
 

@@ -374,6 +374,7 @@ select.form-control {
   .form-control {
     border-top-right-radius: 0;
     border-bottom-right-radius: 0;
+    flex: 1;
   }
 
   .btn {
@@ -381,6 +382,21 @@ select.form-control {
     border-bottom-left-radius: 0;
     border: 1px solid $border-color;
     border-left: none;
+    padding: 0.625rem 0.875rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 2.5rem;
+
+    &.btn-icon {
+      background: white;
+      color: $text-light;
+
+      &:hover {
+        background: $hover-color;
+        color: $text-color;
+      }
+    }
   }
 }
 
@@ -391,10 +407,32 @@ select.form-control {
   transform: translateY(-50%);
   color: $text-light;
   pointer-events: none;
+  z-index: 1;
 }
 
-.form-group:has(.input-icon) .form-control {
-  padding-left: 2.5rem;
+.input-with-icon {
+  position: relative;
+
+  .input-icon {
+    position: absolute;
+    left: 0.875rem;
+    top: 50%;
+    transform: translateY(-50%);
+    color: $text-light;
+    pointer-events: none;
+  }
+
+  .form-control.with-icon {
+    padding-left: 2.5rem;
+  }
+}
+
+.form-group {
+  position: relative;
+
+  &:has(.input-icon) .form-control {
+    padding-left: 2.5rem;
+  }
 }
 
 .error-message {
@@ -643,12 +681,6 @@ select.form-control {
       width: 100%;
     }
   }
-}
-
-// Tooltips (optional enhancement)
-[title] {
-  position: relative;
-  cursor: help;
 }
 
 // Loading state

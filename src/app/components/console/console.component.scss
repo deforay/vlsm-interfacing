@@ -724,54 +724,154 @@ $background-color: #f9fafb;
     .mat-row {
       transition: all 0.2s ease;
       border-bottom: 1px solid lighten($border-color, 5%);
+      cursor: pointer;
+      position: relative;
 
       &:hover {
-        background-color: $hover-color;
+        background-color: #e3f2fd !important;
+
+        &::after {
+          content: '';
+          position: absolute;
+          left: 0;
+          top: 0;
+          bottom: 0;
+          width: 3px;
+          background-color: $primary-color;
+        }
       }
 
       &.unsynced-row {
         background-color: rgba($warning-color, 0.05);
+
+        &:hover {
+          background-color: rgba($warning-color, 0.15) !important;
+        }
+      }
+    }
+
+    // Alternative zebra striping approach
+    tbody {
+      tr:nth-child(even) {
+        background-color: #f8f9fa;
+      }
+
+      tr:nth-child(odd) {
+        background-color: white;
       }
     }
 
     // Specific column styles
     .checkbox-cell {
       width: 48px;
+      max-width: 48px;
       padding-left: 1rem !important;
       padding-right: 0.5rem !important;
     }
 
+    .mat-column-select {
+      flex: 0 0 48px;
+      max-width: 48px;
+    }
+
+    .mat-column-machine_used {
+      flex: 0 0 150px;
+      max-width: 150px;
+    }
+
+    .mat-column-order_id {
+      flex: 0 0 180px;
+      max-width: 180px;
+    }
+
+    .mat-column-results {
+      flex: 0 0 180px;
+      max-width: 180px;
+    }
+
+    .mat-column-test_unit {
+      flex: 0 0 60px;
+      max-width: 60px;
+      text-align: center;
+    }
+
+    .mat-column-test_type {
+      flex: 0 0 80px;
+      max-width: 80px;
+    }
+
+    .mat-column-tested_by {
+      flex: 1 1 120px;
+      min-width: 120px;
+    }
+
+    .mat-column-analysed_date_time {
+      flex: 0 0 110px;
+      max-width: 110px;
+      font-size: 0.75rem;
+    }
+
+    .mat-column-added_on {
+      flex: 0 0 110px;
+      max-width: 110px;
+      font-size: 0.75rem;
+    }
+
+    .mat-column-lims_sync_status {
+      flex: 0 0 100px;
+      max-width: 100px;
+      text-align: center;
+    }
+
+    .mat-column-lims_sync_date_time {
+      flex: 0 0 110px;
+      max-width: 110px;
+      font-size: 0.75rem;
+    }
+
     .instrument-badge {
       display: inline-block;
-      padding: 0.25rem 0.5rem;
+      padding: 0.375rem 0.75rem;
       background: rgba($primary-color, 0.1);
       color: $primary-color;
       border-radius: 0.25rem;
-      font-size: 0.75rem;
-      font-weight: 500;
+      font-size: 0.875rem;
+      font-weight: 600;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      max-width: 100%;
     }
 
     .result-value {
-      font-weight: 600;
+      font-weight: 700;
       color: $dark-color;
+      font-size: 0.9375rem;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
     }
 
     .date-time {
       color: $text-light;
-      font-size: 0.8125rem;
+      font-size: 0.75rem;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
     }
 
     .sync-badge {
       display: inline-flex;
       align-items: center;
-      gap: 0.375rem;
-      padding: 0.25rem 0.625rem;
+      gap: 0.25rem;
+      padding: 0.25rem 0.5rem;
       border-radius: 1rem;
-      font-size: 0.75rem;
+      font-size: 0.7rem;
       font-weight: 500;
+      white-space: nowrap;
 
       i {
-        font-size: 0.75rem;
+        font-size: 0.7rem;
       }
 
       &.synced {

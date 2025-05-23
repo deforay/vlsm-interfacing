@@ -1,114 +1,150 @@
 <!-- raw-data.component.html -->
-<!-- Instrument status bar -->
-<div class="instrument-status-bar">
-  <div class="instrument-status" *ngFor="let instrument of availableInstruments">
-    <!-- Status indicator dot -->
-    <div class="status-indicator"
-      [ngClass]="{'connected': instrument.isConnected, 'disconnected': !instrument.isConnected}"></div>
-
-    <!-- Instrument ID -->
-    <span class="instrument-id">{{ instrument.connectionParams.instrumentId }}</span>
-
-    <!-- Status text from the service -->
-    <span class="status-text"
-      [ngClass]="{'connected-text': instrument.isConnected, 'disconnected-text': !instrument.isConnected}">
-      {{ instrument.statusText }}
-    </span>
-  </div>
-</div>
-<div class="raw-data-container">
+<div class="app-container">
   <!-- Header Section -->
-  <div class="header-section">
-    <h2 class="page-title">Raw Data</h2>
-    <div class="action-buttons">
-      <button type="button" [disabled]="selection.selected.length === 0 || isReprocessing" (click)="reprocessSelected()"
-        class="btn btn-success">
-        <i class="fas fa-sync-alt"></i>
+  <header class="app-header">
+    <div class="header-left">
+      <h1 class="page-title">Raw Data</h1>
+      <p class="subtitle">View and reprocess instrument raw data</p>
+    </div>
+    <div class="header-actions">
+      <button type="button"
+              [disabled]="selection.selected.length === 0 || isReprocessing"
+              (click)="reprocessSelected()"
+              class="btn btn-success">
+        <i class="fas fa-sync-alt" [class.fa-spin]="isReprocessing"></i>
         <span>Reprocess Selected ({{ selection.selected.length }})</span>
       </button>
       <button type="button" (click)="click()" class="btn btn-primary">
-        <i class="fas fa-tachometer-alt"></i>
+        <i class="fas fa-terminal"></i>
         <span>Back to Console</span>
       </button>
     </div>
+  </header>
+
+  <!-- Instrument Status Bar -->
+  <div class="status-overview">
+    <div class="status-card" *ngFor="let instrument of availableInstruments">
+      <div class="status-indicator"
+           [ngClass]="{'connected': instrument.isConnected, 'disconnected': !instrument.isConnected}">
+      </div>
+      <div class="status-info">
+        <span class="instrument-name">{{ instrument.connectionParams.instrumentId }}</span>
+        <span class="status-text"
+              [ngClass]="{'connected-text': instrument.isConnected, 'disconnected-text': !instrument.isConnected}">
+          {{ instrument.statusText }}
+        </span>
+      </div>
+    </div>
   </div>
 
-  <!-- Reprocessing status bar -->
-  <div *ngIf="isReprocessing" class="reprocessing-status">
-    <div class="progress-container">
-      <div class="progress">
-        <div class="progress-bar"
-          [style.width.%]="(reprocessingStatus.processedCount / reprocessingStatus.totalCount) * 100">
-          <span *ngIf="(reprocessingStatus.processedCount / reprocessingStatus.totalCount) * 100 > 25">
-            {{ reprocessingStatus.processedCount }} / {{ reprocessingStatus.totalCount }}
-          </span>
+  <!-- Reprocessing Status -->
+  <div *ngIf="isReprocessing" class="reprocessing-card">
+    <div class="reprocessing-header">
+      <i class="fas fa-sync-alt fa-spin"></i>
+      <h3>Reprocessing in Progress</h3>
+    </div>
+    <div class="reprocessing-content">
+      <div class="progress-wrapper">
+        <div class="progress">
+          <div class="progress-bar"
+               [style.width.%]="(reprocessingStatus.processedCount / reprocessingStatus.totalCount) * 100">
+          </div>
+        </div>
+        <div class="progress-text">
+          {{ reprocessingStatus.processedCount }} / {{ reprocessingStatus.totalCount }}
         </div>
       </div>
       <div class="status-details">
-        <span class="current-item">{{ reprocessingStatus.currentItem }}</span>
-        <span class="result-counts">
-          <span class="success-count">Success: {{ reprocessingStatus.success }}</span>
-          <span class="failed-count">Failed: {{ reprocessingStatus.failed }}</span>
-        </span>
+        <div class="current-item">
+          <i class="fas fa-file-alt"></i>
+          <span>{{ reprocessingStatus.currentItem }}</span>
+        </div>
+        <div class="result-counts">
+          <div class="success-count">
+            <i class="fas fa-check-circle"></i>
+            <span>Success: {{ reprocessingStatus.success }}</span>
+          </div>
+          <div class="failed-count">
+            <i class="fas fa-exclamation-circle"></i>
+            <span>Failed: {{ reprocessingStatus.failed }}</span>
+          </div>
+        </div>
       </div>
     </div>
   </div>
 
   <!-- Search Section -->
   <div class="search-section">
-    <div class="search-container">
-      <i class="fas fa-search search-icon"></i>
-      <input #searchInput type="text" (keyup)="filterData($event)" placeholder="Search raw data records..."
-        class="search-input">
+    <div class="search-box">
+      <i class="fas fa-search"></i>
+      <input #searchInput
+             type="text"
+             (keyup)="filterData($event)"
+             placeholder="Search by machine name, date, or data content..."
+             class="search-input">
     </div>
   </div>
 
-  <!-- Data Table -->
-  <div class="table-container">
-    <mat-table #table [dataSource]="dataSource" matSort class="data-table">
+  <!-- Data Table Section -->
+  <div class="table-section">
+    <mat-table [dataSource]="dataSource" matSort class="data-table">
       <!-- Checkbox Column -->
       <ng-container matColumnDef="select">
-        <mat-header-cell *matHeaderCellDef class="column-select">
-          <mat-checkbox (change)="$event ? masterToggle() : null" [checked]="selection.hasValue() && isAllSelected()"
-            [indeterminate]="selection.hasValue() && !isAllSelected()" [aria-label]="checkboxLabel()">
+        <mat-header-cell *matHeaderCellDef class="checkbox-cell">
+          <mat-checkbox (change)="$event ? masterToggle() : null"
+                        [checked]="selection.hasValue() && isAllSelected()"
+                        [indeterminate]="selection.hasValue() && !isAllSelected()">
           </mat-checkbox>
         </mat-header-cell>
-        <mat-cell *matCellDef="let row" class="column-select">
-          <mat-checkbox (click)="$event.stopPropagation()" (change)="$event ? selection.toggle(row) : null"
-            [checked]="selection.isSelected(row)" [aria-label]="checkboxLabel(row)">
+        <mat-cell *matCellDef="let row" class="checkbox-cell">
+          <mat-checkbox (click)="$event.stopPropagation()"
+                        (change)="$event ? selection.toggle(row) : null"
+                        [checked]="selection.isSelected(row)">
           </mat-checkbox>
         </mat-cell>
       </ng-container>
 
       <!-- Machine Column -->
       <ng-container matColumnDef="machine">
-        <mat-header-cell *matHeaderCellDef mat-sort-header class="column-machine">Machine</mat-header-cell>
-        <mat-cell *matCellDef="let row" class="column-machine">{{row.machine}}</mat-cell>
+        <mat-header-cell *matHeaderCellDef mat-sort-header>
+          <i class="fas fa-microscope"></i>&nbsp;Machine
+        </mat-header-cell>
+        <mat-cell *matCellDef="let row">
+          <span class="machine-badge">{{ row.machine }}</span>
+        </mat-cell>
       </ng-container>
 
       <!-- Added On Column -->
       <ng-container matColumnDef="added_on">
-        <mat-header-cell *matHeaderCellDef mat-sort-header class="column-added-on">Added On</mat-header-cell>
-        <mat-cell *matCellDef="let row" class="column-added-on">{{row.added_on}}</mat-cell>
+        <mat-header-cell *matHeaderCellDef mat-sort-header>
+          <i class="fas fa-clock"></i>&nbsp;Added On
+        </mat-header-cell>
+        <mat-cell *matCellDef="let row">
+          <span class="date-time">{{ row.added_on }}</span>
+        </mat-cell>
       </ng-container>
 
       <!-- Data Column -->
       <ng-container matColumnDef="data">
-        <mat-header-cell *matHeaderCellDef mat-sort-header class="column-data">Data</mat-header-cell>
-        <mat-cell *matCellDef="let row" class="column-data">
-          <div class="data-preview-container" [ngClass]="{'expanded': row.expanded}">
+        <mat-header-cell *matHeaderCellDef mat-sort-header>
+          <i class="fas fa-code"></i>&nbsp;Data
+        </mat-header-cell>
+        <mat-cell *matCellDef="let row" class="data-cell">
+          <div class="data-container" [class.expanded]="row.expanded">
             <div class="data-preview" *ngIf="!row.expanded">
-              <span class="data-preview-text">{{ row.data | slice:0:50 }}</span>
-              <button class="btn-expand-toggle" (click)="toggleRow(row, $event)">
-                See more
+              <code class="data-snippet">{{ row.data | slice:0:60 }}{{ row.data.length > 60 ? '...' : '' }}</code>
+              <button class="btn-expand"
+                      (click)="toggleRow(row, $event)"
+                      *ngIf="row.data.length > 60">
+                <span>Show more</span>
                 <i class="fas fa-chevron-down"></i>
               </button>
             </div>
-            <div class="data-expanded" *ngIf="row.expanded">
-              <!-- Using the pre tag to preserve formatting -->
+            <div class="data-full" *ngIf="row.expanded">
               <pre class="data-content">{{ row.data }}</pre>
-              <button class="btn-expand-toggle" (click)="toggleRow(row, $event)">
-                See less
+              <button class="btn-expand"
+                      (click)="toggleRow(row, $event)">
+                <span>Show less</span>
                 <i class="fas fa-chevron-up"></i>
               </button>
             </div>
@@ -118,32 +154,41 @@
 
       <!-- Actions Column -->
       <ng-container matColumnDef="actions">
-        <mat-header-cell *matHeaderCellDef class="column-actions">Actions</mat-header-cell>
-        <mat-cell *matCellDef="let row" class="column-actions">
-          <button type="button" [disabled]="isReprocessing" (click)="reprocessSingleRow(row, $event)"
-            class="btn btn-sm btn-primary action-btn">
-            <i class="fas fa-sync-alt"></i> Reprocess
+        <mat-header-cell *matHeaderCellDef class="actions-cell">Actions</mat-header-cell>
+        <mat-cell *matCellDef="let row" class="actions-cell">
+          <button type="button"
+                  [disabled]="isReprocessing"
+                  (click)="reprocessSingleRow(row, $event)"
+                  class="btn btn-sm btn-outline-primary"
+                  title="Reprocess this entry">
+            <i class="fas fa-sync-alt"></i>
+            <span>Reprocess</span>
           </button>
         </mat-cell>
       </ng-container>
 
       <!-- Header and Row Definitions -->
-      <mat-header-row *matHeaderRowDef="displayedColumns; sticky: true"></mat-header-row>
+      <mat-header-row *matHeaderRowDef="displayedColumns; sticky: true" class="table-header"></mat-header-row>
       <mat-row *matRowDef="let row; columns: displayedColumns;"
-        [ngClass]="{'expanded-row': row.expanded, 'selected-row': selection.isSelected(row)}"
-        (click)="selectRow(row, $event)"></mat-row>
+               class="table-row"
+               [class.expanded-row]="row.expanded"
+               [class.selected-row]="selection.isSelected(row)"
+               (click)="selectRow(row, $event)">
+      </mat-row>
     </mat-table>
 
     <!-- Empty State -->
     <div *ngIf="dataSource.data.length === 0" class="empty-state">
       <i class="fas fa-database"></i>
-      <p>No data found</p>
-      <small>Try adjusting your search criteria</small>
+      <h3>No Raw Data Found</h3>
+      <p>{{ searchInput?.value ? 'Try adjusting your search criteria' : 'Raw data will appear here as it\'s received' }}</p>
     </div>
 
     <!-- Pagination -->
-    <mat-paginator [pageSizeOptions]="[50, 100, 250, 500]" [pageSize]="100" showFirstLastButtons
-      aria-label="Select Page">
+    <mat-paginator [pageSizeOptions]="[50, 100, 250, 500]"
+                   [pageSize]="100"
+                   showFirstLastButtons
+                   class="table-pagination">
     </mat-paginator>
   </div>
 </div>
