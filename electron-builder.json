@@ -1,5 +1,5 @@
 {
-  "productName": "Interfacing Tool",
+  "productName": "vlsm-interfacing",
   "appId": "com.deforay.vlsm-interfacing",
   "asar": true,
   "directories": {

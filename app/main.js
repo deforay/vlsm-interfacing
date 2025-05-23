@@ -75,6 +75,7 @@ function createWindow() {
             nodeIntegration: true,
             allowRunningInsecureContent: serve,
             contextIsolation: false,
+            backgroundThrottling: false,
         },
     });
     if (serve) {
@@ -140,10 +141,16 @@ try {
                     { label: 'Minimize', click: () => { win.minimize(); } },
                     { label: 'Quit', click: () => { electron_1.app.quit(); } },
                 ]);
-                tray.setToolTip('Your Application');
+                tray.setToolTip('Interface Tool');
                 tray.setContextMenu(contextMenu);
                 tray.on('click', () => {
-                    win.show();
+                    if (win) {
+                        if (win.isMinimized())
+                            win.restore();
+                        if (!win.isVisible())
+                            win.show();
+                        win.focus();
+                    }
                 });
                 console.log('Tray icon setup successful.');
             }
@@ -185,6 +192,7 @@ try {
                 return { status: 'ok' };
             });
             electron_1.ipcMain.handle('mysql-query', (event, config, query, values) => {
+                console.error('MySQL query:', { config, query, values });
                 const key = JSON.stringify(config);
                 if (!mysqlPools[key]) {
                     mysqlPools[key] = mysql.createPool(config);
@@ -192,7 +200,17 @@ try {
                 return new Promise((resolve, reject) => {
                     mysqlPools[key].query(query, values !== null && values !== void 0 ? values : [], (err, results) => {
                         if (err) {
-                            reject({ message: err.message, code: err.code });
+                            // Log the detailed error in the main process for debugging
+                            console.error('MySQL error in main process:', {
+                                message: err.message,
+                                code: err.code,
+                                sqlState: err.sqlState,
+                                sqlMessage: err.sqlMessage,
+                                sql: err.sql, // Be cautious if SQL queries can be very large or sensitive
+                                fatal: err.fatal
+                            });
+                            // Reject with the original MySQL error object
+                            reject(err);
                         }
                         else {
                             resolve(results);

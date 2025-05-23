@@ -150,7 +150,6 @@ try {
       sqlite3Obj = db;
       console.info('SQLite setup complete');
 
-
       createWindow();
       copyMigrationFiles();  // Ensure migration files are moved
 
@@ -194,7 +193,7 @@ try {
           if (canceled) {
             return { status: 'cancelled', message: 'Export cancelled.' };
           } else {
-            fs.writeFileSync(filePath, settingsJSON, 'utf-8');
+            fs.writeFileSync(filePath, settingsJSON, 'utf8');
             return { status: 'success', message: 'Settings successfully exported.' };
           }
         } catch (err) {
@@ -216,6 +215,7 @@ try {
         return { status: 'ok' };
       });
 
+
       ipcMain.handle('mysql-query', (event, config, query: string, values?: any[]) => {
         const key = JSON.stringify(config);
         if (!mysqlPools[key]) {
@@ -225,7 +225,16 @@ try {
         return new Promise((resolve, reject) => {
           mysqlPools[key].query(query, values ?? [], (err: any, results: any) => {
             if (err) {
-              reject({ message: err.message, code: err.code });
+              // Log the detailed error in the main process for debugging
+              // console.error('MySQL error in main process:', {
+              //   message: err.message,
+              //   code: err.code,
+              //   sqlState: err.sqlState,
+              //   sqlMessage: err.sqlMessage,
+              //   fatal: err.fatal
+              // });
+              // Reject with the original MySQL error object
+              reject(err);
             } else {
               resolve(results);
             }
@@ -384,6 +393,8 @@ try {
         }
       });
 
+
+
       ipcMain.handle('log-info', (event, message, instrumentId = null) => {
         let appLog = log.scope('app');
         if (instrumentId) {
@@ -391,6 +402,157 @@ try {
         }
         appLog.info(message);
       });
+
+      ipcMain.handle('run-mysql-migrations', async (event, config) => {
+        const migrationTargetDir = path.join(app.getPath('userData'), 'mysql-migrations');
+
+        if (!fs.existsSync(migrationTargetDir)) {
+          console.log('No migration directory found, skipping migrations');
+          return { success: true, message: 'No migrations to run' };
+        }
+
+        try {
+          const migrationFiles = fs.readdirSync(migrationTargetDir)
+            .filter(file => file.endsWith('.sql'))
+            .sort(); // Sort to ensure migrations run in order
+
+          if (migrationFiles.length === 0) {
+            console.log('No migration files found');
+            return { success: true, message: 'No migration files found' };
+          }
+
+          console.log(`Found ${migrationFiles.length} migration files:`, migrationFiles);
+
+          // Create a temporary pool for migrations
+          const migrationPool = mysql.createPool(config);
+
+          return new Promise((resolve) => {
+            // Create versions table if it doesn't exist
+            const createVersionsTable = `
+        CREATE TABLE IF NOT EXISTS versions (
+          id INT AUTO_INCREMENT PRIMARY KEY,
+          version INT NOT NULL,
+          applied_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+      `;
+
+            migrationPool.query(createVersionsTable, (err) => {
+              if (err) {
+                console.error('Error creating versions table:', err);
+                migrationPool.end();
+                resolve({ success: false, error: err.message });
+                return;
+              }
+
+              // Get already executed migrations
+              migrationPool.query('SELECT version FROM versions', (err, results) => {
+                if (err) {
+                  console.error('Error reading versions table:', err);
+                  migrationPool.end();
+                  resolve({ success: false, error: err.message });
+                  return;
+                }
+
+                const executedVersions = results.map((row: any) => row.version);
+
+                // Parse migration files to get versions
+                const migrations = migrationFiles
+                  .map(file => ({
+                    version: parseInt(file.replace('.sql', ''), 10),
+                    file: file
+                  }))
+                  .filter(migration => !isNaN(migration.version) && !executedVersions.includes(migration.version))
+                  .sort((a, b) => a.version - b.version);
+
+                if (migrations.length === 0) {
+                  console.log('All migrations already executed');
+                  migrationPool.end();
+                  resolve({ success: true, message: 'All migrations already executed' });
+                  return;
+                }
+
+                console.log(`Executing ${migrations.length} pending migrations:`, migrations.map(m => m.file));
+
+                // Execute migrations sequentially
+                let currentIndex = 0;
+
+                function executeMigration() {
+                  if (currentIndex >= migrations.length) {
+                    console.log('All migrations completed successfully');
+                    migrationPool.end();
+                    resolve({ success: true, message: 'All migrations completed successfully' });
+                    return;
+                  }
+
+                  const migration = migrations[currentIndex];
+                  const migrationPath = path.join(migrationTargetDir, migration.file);
+
+                  try {
+                    const migrationSql = fs.readFileSync(migrationPath, 'utf8');
+
+                    console.log(`Executing migration: ${migration.file}`);
+
+                    // Split SQL into individual statements
+                    const statements = migrationSql
+                      .split(';')
+                      .map(stmt => stmt.trim())
+                      .filter(stmt => stmt.length > 0);
+
+                    // Execute all statements in the migration file
+                    let statementIndex = 0;
+
+                    function executeStatement() {
+                      if (statementIndex >= statements.length) {
+                        // All statements executed, record the migration
+                        migrationPool.query(
+                          'INSERT INTO versions (version) VALUES (?)',
+                          [migration.version],
+                          (err) => {
+                            if (err) {
+                              console.error(`Error recording migration ${migration.file}:`, err);
+                              migrationPool.end();
+                              resolve({ success: false, error: err.message });
+                              return;
+                            }
+
+                            console.log(`Migration ${migration.file} completed successfully`);
+                            currentIndex++;
+                            executeMigration(); // Execute next migration
+                          }
+                        );
+                        return;
+                      }
+
+                      migrationPool.query(statements[statementIndex], (err) => {
+                        if (err) {
+                          console.warn(`Warning in statement ${statementIndex + 1} of ${migration.file}:`, err.message);
+                          // Continue with next statement even if one fails
+                        }
+                        statementIndex++;
+                        executeStatement();
+                      });
+                    }
+
+                    executeStatement();
+
+                  } catch (err) {
+                    console.error(`Error reading migration file ${migration.file}:`, err);
+                    migrationPool.end();
+                    resolve({ success: false, error: err.message });
+                  }
+                }
+
+                executeMigration();
+              });
+            });
+          });
+
+        } catch (err) {
+          console.error('Error during migration process:', err);
+          return { success: false, error: err.message };
+        }
+      });
+
 
       ipcMain.handle('log-warning', (event, message, instrumentId = null) => {
         let appLog = log.scope('app');

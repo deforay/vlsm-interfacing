@@ -111,7 +111,7 @@ export class DatabaseService {
     });
   }
 
-  private checkAndRunMigrations(connection) {
+  private async checkAndRunMigrations(connection) {
     const that = this;
     if (that.hasRunMigrations) {
       console.log('Migrations already run, skipping...');
@@ -119,98 +119,20 @@ export class DatabaseService {
     }
     that.hasRunMigrations = true;
 
-    console.log('Checking and running migrations...');
-    let versionsTable = `CREATE TABLE IF NOT EXISTS versions(
-                            id INT AUTO_INCREMENT PRIMARY KEY,
-                            version INT NOT NULL
-                            )ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;`;
-    connection.query(versionsTable, (err) => {
-      if (err) {
-        console.error('Error creating versions table:', err);
-        return;
-      }
-      that.getCurrentVersion(connection, (currentVersion: number) => {
-        console.log(`Current DB version: ${currentVersion}`); // Log the current version before running migrations
-        that.runMigrations(connection, currentVersion);
-      });
-    });
-  }
+    console.log('Running MySQL migrations via main process...');
 
-  private getCurrentVersion(connection: any, callback: any) {
-    connection.query('SELECT MAX(version) AS version FROM versions', (err: any, results: any) => {
-      if (err) {
-        console.error('Error fetching current version:', err);
-        callback(0);  // Return 0 if there's an error fetching the version
+    try {
+      const result = await that.electronService.ipcRenderer.invoke('run-mysql-migrations', that.dbConfig);
+
+      if (result.success) {
+        console.log('Migrations completed successfully:', result.message);
       } else {
-        const currentVersion = results[0]?.version || 0;
-        console.log('Fetched current version:', currentVersion);
-        callback(currentVersion);
+        console.error('Migration failed:', result.error);
       }
-    });
-  }
-  private runMigrations(connection: any, currentVersion: number) {
-    const that = this;
-    console.log('Starting migrations...');
-    const migrationFiles = fs.readdirSync(that.migrationDir).filter(file => file.endsWith('.sql'));
-    const sortedMigrations = migrationFiles
-      .map(file => ({ version: parseInt(file.replace('.sql', ''), 10), file }))
-      .filter(migration => migration.version > currentVersion)
-      .sort((a, b) => a.version - b.version);
-
-    if (sortedMigrations.length === 0) {
-      console.log('No new migrations to apply.');
-      return;
+    } catch (error) {
+      console.error('Error running migrations:', error);
     }
-
-    const runNextMigration = (index: number) => {
-      if (index < sortedMigrations.length) {
-        const { version, file } = sortedMigrations[index];
-        console.log(`Applying migration ${version} from file ${file}`);  // Added log for visibility
-        const filePath = path.join(that.migrationDir, file);
-        const sql = fs.readFileSync(filePath, 'utf8');
-
-        // Run all SQL statements from the file
-        that.runSqlStatements(connection, sql, () => {
-          console.log(`Migration ${version} APPLYING`);
-          // After all SQL statements from the file have been processed, insert the version number
-          connection.query('INSERT INTO versions (version) VALUES (?)', [version], (err) => {
-            if (err) {
-              console.error(`Error recording migration version ${version}:`, err);
-            } else {
-              console.log(`Migration ${version} applied successfully and recorded in versions table.`);
-            }
-            runNextMigration(index + 1); // Move to the next migration file
-          });
-        });
-      } else {
-        console.log('All migrations applied.');
-      }
-    };
-
-    runNextMigration(0);
   }
-
-  private runSqlStatements(connection: any, sql: string, callback: any) {
-    const statements = sql.split(';').map(stmt => stmt.trim()).filter(stmt => stmt.length > 0);
-
-    const runNextStatement = (index) => {
-      if (index < statements.length) {
-        connection.query(statements[index], (err) => {
-          if (err) {
-            // Log the error but continue processing the next statement
-            console.warn(`Error running SQL statement: ${statements[index]}`, err.message);
-          }
-          runNextStatement(index + 1); // Continue with the next statement
-        });
-      } else {
-        callback(); // All statements processed, proceed to the next migration file
-      }
-    };
-
-    runNextStatement(0);
-  }
-
-
 
   execQuery(query: string, data: any, success: any, errorf: any, callback = null) {
     if (!this.mysqlPool) {
@@ -498,13 +420,14 @@ export class DatabaseService {
     });
   }
 
+
+  // In database.service.ts, replace the recordRawData method with this version:
+
+  // In database.service.ts, update the recordRawData method:
+
   recordRawData(data, success, errorf) {
-    // console.log("====== Raw Data ======");
-    // console.log(data);
-    // console.log(Object.keys(data));
-    // console.log(Object.values(data));
-    // console.log("======================");
     const that = this;
+
     const placeholders = Object.values(data).map(() => '?').join(',');
     const sqliteQuery = 'INSERT INTO raw_data (' + Object.keys(data).join(',') + ') VALUES (' + placeholders + ')';
     const mysqlQuery = 'INSERT INTO raw_data (' + Object.keys(data).join(',') + ') VALUES (' + placeholders + ')';
@@ -513,27 +436,63 @@ export class DatabaseService {
     if (!data.instrument_id && data.machine) {
       data.instrument_id = data.machine;
     }
-    // Insert into SQLite
+
+    // Insert into SQLite first
     that.electronService.execSqliteQuery(sqliteQuery, Object.values(data))
       .then(sqliteResults => {
+        // Signal success immediately after SQLite succeeds
         success({ sqlite: sqliteResults });
-      })
-      .catch(error => {
-        console.error('Error inserting into SQLite:', error);
-        errorf(error);
-      });
 
-    // Try inserting into MySQL if connected
-    that.checkMysqlConnection(null, () => {
-      that.execQuery(mysqlQuery, Object.values(data), (mysqlResults) => {
-        //console.log('MySQL Inserted:', mysqlResults);
-      }, (mysqlError) => {
-        console.error('Error inserting into MySQL:', mysqlError.message);
-        errorf(mysqlError);
+        // Try MySQL separately (don't call errorf on MySQL failures)
+        that.checkMysqlConnection(null,
+          // MySQL connection success callback
+          () => {
+            that.execQuery(mysqlQuery, Object.values(data),
+              // MySQL insert success
+              () => {
+                console.log('MySQL raw data insert successful');
+              },
+              // MySQL insert error - don't call main errorf since SQLite succeeded
+              (mysqlError) => {
+                // Just log a simplified error message
+                let errorMsg = 'Unknown error';
+
+                // Try to extract a useful message
+                try {
+                  if (mysqlError === null || mysqlError === undefined) {
+                    errorMsg = 'Null or undefined error';
+                  } else if (typeof mysqlError === 'string') {
+                    errorMsg = mysqlError;
+                  } else if (typeof mysqlError === 'object') {
+                    if (mysqlError.message) {
+                      errorMsg = mysqlError.message;
+                    } else {
+                      errorMsg = JSON.stringify(mysqlError, null, 2); // <-- Fix here
+                    }
+                  }
+                } catch (e) {
+                  errorMsg = 'Error while extracting error message';
+                }
+
+                // Log a simple warning without the full object
+                console.warn(`MySQL insert warning (non-critical): ${errorMsg}`);
+                console.warn('Full MySQL error object:', mysqlError);
+
+              }
+            );
+          },
+          // MySQL connection error - also don't call errorf
+          () => {
+            // Just log the connection issue
+            console.log('MySQL connection unavailable, skipping MySQL insert');
+          }
+        );
+      })
+      .catch(sqliteError => {
+        // Only call errorf if SQLite insert fails
+        console.error('Error inserting into SQLite:', sqliteError);
+        errorf(sqliteError);
       });
-    }, (mysqlError) => {
-      //console.error('MySQL connection error:', mysqlError.message);
-    });
   }
 
   recordConsoleLogs(data: any, success: any, errorf: any) {

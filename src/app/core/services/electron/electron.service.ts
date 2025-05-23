@@ -25,7 +25,6 @@ interface MySQLClient {
   };
 }
 
-
 @Injectable({
   providedIn: 'root'
 })
@@ -35,69 +34,87 @@ export class ElectronService {
   childProcess: typeof childProcess;
   fs: typeof fs;
   mysql: MySQLClient;
-
   net: typeof net;
 
   constructor() {
-
     const that = this;
-    // Conditional imports
+
     if (that.isElectron) {
       that.ipcRenderer = window.require('electron').ipcRenderer;
       that.webFrame = window.require('electron').webFrame;
-
       that.childProcess = window.require('child_process');
       that.fs = window.require('fs');
-
-      that.mysql = {
-        createPool: (config) => ({
-          _config: config,
-          on: () => { },
-          query: (q, args, cb) => {
-            this.ipcRenderer.invoke('mysql-query', config, q, args)
-              .then(res => cb(null, res))
-              .catch(err => cb(err));
-          },
-          getConnection: (cb) => {
-            const pool = {
-              query: (q, args, cb2) => {
-                this.ipcRenderer.invoke('mysql-query', config, q, args)
-                  .then(res => cb2(null, res))
-                  .catch(err => cb2(err));
-              },
-              release: () => { }
-            };
-            cb(null, pool);
-          }
-        }),
-        createConnection: (config) => {
-          return {
-            connect: (cb) => {
-              this.ipcRenderer.invoke('mysql-query', config, 'SELECT 1')
-                .then(() => cb(null))
-                .catch(cb);
-            },
-            destroy: () => { }
-          };
-        }
-      };
-
       that.net = window.require('net');
 
-      // Notes :
-      // * A NodeJS's dependency imported with 'window.require' MUST BE present in `dependencies` of both `app/package.json`
-      // and `package.json (root folder)` in order to make it work here in Electron's Renderer process (src folder)
-      // because it will loaded at runtime by Electron.
-      // * A NodeJS's dependency imported with TS module import (ex: import { Dropbox } from 'dropbox') CAN only be present
-      // in `dependencies` of `package.json (root folder)` because it is loaded during build phase and does not need to be
-      // in the final bundle. Reminder : only if not used in Electron's Main process (app folder)
+      // Simplified MySQL implementation
+      that.mysql = {
+        createPool: (config) => ({
+          on: () => { },
+          query: (q, args, cb) => this.executeQuery(config, q, args, cb),
+          getConnection: (cb) => {
+            const connection = {
+              query: (q, args, cb2) => this.executeQuery(config, q, args, cb2),
+              release: () => { }
+            };
+            cb(null, connection);
+          }
+        }),
+        createConnection: (config) => ({
+          connect: (cb) => this.testConnection(config, cb),
+          destroy: () => { }
+        })
+      };
+    }
+  }
 
-      // If you want to use a NodeJS 3rd party deps in Renderer process,
-      // ipcRenderer.invoke can serve many common use cases.
-      // https://www.electronjs.org/docs/latest/api/ipc-renderer#ipcrendererinvokechannel-args
+  private sanitizeConfig(config: any) {
+    return {
+      host: config.host,
+      port: config.port,
+      user: config.user,
+      password: config.password,
+      database: config.database,
+      connectionLimit: config.connectionLimit,
+      waitForConnections: config.waitForConnections,
+      queueLimit: config.queueLimit
+    };
+  }
 
+  private createMySQLError(err: any): any {
+    if (typeof err === 'string') {
+      return { message: err, code: 'UNKNOWN_ERROR' };
     }
 
+    if (err && typeof err === 'object') {
+      return {
+        message: err.message || 'MySQL error',
+        code: err.code || 'UNKNOWN_ERROR'
+      };
+    }
+
+    return { message: 'Unknown MySQL error', code: 'UNKNOWN_ERROR' };
+  }
+
+  private executeQuery(config: any, query: string, args: any, callback: (err: any, res?: any) => void) {
+    try {
+      this.ipcRenderer.invoke('mysql-query', this.sanitizeConfig(config), query, args)
+        .then(res => callback(null, res))
+        .catch(err => callback(this.createMySQLError(err)));
+    } catch (error) {
+      console.error('Error invoking IPC for MySQL query:', error);
+      callback(this.createMySQLError(error));
+    }
+  }
+
+  private testConnection(config: any, callback: (err: any) => void) {
+    try {
+      this.ipcRenderer.invoke('mysql-query', this.sanitizeConfig(config), 'SELECT 1')
+        .then(() => callback(null))
+        .catch(err => callback(this.createMySQLError(err)));
+    } catch (error) {
+      console.error('Error invoking IPC for MySQL connection:', error);
+      callback(this.createMySQLError(error));
+    }
   }
 
   get isElectron(): boolean {
@@ -114,11 +131,11 @@ export class ElectronService {
 
   execSqliteQuery(sql: any, args?: any): any {
     return new Promise((resolve) => {
-      const uniqueEvent = `sqlite3-reply-${Date.now()}-${Math.random()}`; // Unique event name
+      const uniqueEvent = `sqlite3-reply-${Date.now()}-${Math.random()}`;
       this.ipcRenderer.once(uniqueEvent, (_, arg) => {
         resolve(arg);
       });
-      this.ipcRenderer.send('sqlite3-query', sql, args, uniqueEvent); // Send unique event name
+      this.ipcRenderer.send('sqlite3-query', sql, args, uniqueEvent);
     });
   }
 
@@ -137,5 +154,4 @@ export class ElectronService {
   logWarning(message: string, instrumentId: string = null) {
     this.ipcRenderer.invoke('log-warning', message, instrumentId);
   }
-
 }

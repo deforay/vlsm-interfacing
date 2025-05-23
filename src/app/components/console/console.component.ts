@@ -57,11 +57,17 @@ export class ConsoleComponent implements OnInit, OnDestroy {
 
     // Check each instrument
     this.availableInstruments.forEach(instrument => {
-      if (instrument.isConnected) {
-        // For any instrument that thinks it's connected, verify the connection
-        // This will trigger the heartbeat system to check
-        this.tcpService.verifyConnection(instrument.connectionParams);
-      }
+      this.availableInstruments.forEach(instrument => {
+        if (instrument.isConnected) {
+          // Verify the connection - this will check socket state and update status
+          const isActuallyConnected = this.tcpService.verifyConnection(instrument.connectionParams);
+
+          // Update your instrument's connected state if needed
+          if (!isActuallyConnected) {
+            instrument.isConnected = false;
+          }
+        }
+      });
     });
   }
 
