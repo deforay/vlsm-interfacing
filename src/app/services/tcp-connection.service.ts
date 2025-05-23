@@ -11,6 +11,7 @@ interface ConnectionHealth {
   bytesSent: number;
   reconnectCount: number;
   lastHeartbeat: Date;
+  lastDataSent: Date;
 }
 
 @Injectable({
@@ -94,7 +95,8 @@ export class TcpConnectionService implements OnDestroy {
         bytesReceived: 0,
         bytesSent: 0,
         reconnectCount: 0,
-        lastHeartbeat: new Date()
+        lastHeartbeat: new Date(),
+        lastDataSent: new Date(0) // Initialize to a very old date (epoch). This signifies no data has been sent yet.
       });
     }
 
@@ -345,35 +347,61 @@ export class TcpConnectionService implements OnDestroy {
 
   private sendHeartbeat(connectionParams: ConnectionParams) {
     const key = this._generateConnectionIdentifierKey(connectionParams);
-    const health = this.connectionHealth.get(key);
+    const health = this.connectionHealth.get(key); // health is fetched here
     const instrumentConnectionData = this.connectionStack.get(key);
 
-    if (!instrumentConnectionData || !instrumentConnectionData.connectionSocket) return;
+    if (!instrumentConnectionData || !instrumentConnectionData.connectionSocket || !health) return;
 
     const now = Date.now();
-    const lastReceived = health?.lastDataReceived?.getTime() || 0;
+    const lastReceived = health.lastDataReceived.getTime();
+    // Use health.lastDataSent directly, it's initialized to new Date(0)
+    const lastSent = health.lastDataSent.getTime();
 
+    // Check for critical inactivity from peer first
     if (now - lastReceived > this.heartbeatTimeout) {
       console.warn(`No data received from ${connectionParams.instrumentId} in ${this.heartbeatTimeout / 1000}s`);
       this._handleDisconnection(connectionParams, 'Inactivity timeout');
       return;
     }
 
+    const adaptiveHeartbeatInterval = connectionParams.connectionMode === 'tcpserver' ? 60000 : this.heartbeatInterval;
+    const activeCommunicationThreshold = adaptiveHeartbeatInterval / 2; // Or a fixed value e.g. 10000 (10s)
+
+    if ((now - lastReceived < activeCommunicationThreshold) || (now - lastSent < activeCommunicationThreshold)) {
+      // console.log(`Heartbeat skipped for ${connectionParams.instrumentId} due to recent traffic.`);
+      health.lastHeartbeat = new Date(); // Update to show heartbeat cycle was considered
+      return;
+    }
+
     try {
+      let sentHeartbeatDataLength = 0;
       if (connectionParams.connectionProtocol.includes('astm')) {
-        instrumentConnectionData.connectionSocket.write(String.fromCharCode(5)); // ENQ
+        const astmData = String.fromCharCode(5); // ENQ
+        instrumentConnectionData.connectionSocket.write(astmData);
+        sentHeartbeatDataLength = Buffer.byteLength(astmData, 'utf8');
       } else if (connectionParams.connectionProtocol.includes('hl7')) {
         const timestamp = new Date().toISOString().replace(/[-:T.]/g, '').substring(0, 14);
-        instrumentConnectionData.connectionSocket.write('\x0B' + `MSH|^~\\&|||||${timestamp}||ACK^A01|1|P|2.5.1\r` + '\x1C' + '\x0D');
+        const hl7Data = '\x0B' + `MSH|^~\\&|||||${timestamp}||ACK^A01|1|P|2.5.1\r` + '\x1C' + '\x0D';
+        instrumentConnectionData.connectionSocket.write(hl7Data);
+        sentHeartbeatDataLength = Buffer.byteLength(hl7Data, 'utf8');
       } else {
-        instrumentConnectionData.connectionSocket.write(Buffer.from([]));
+        const emptyData = Buffer.from([]);
+        instrumentConnectionData.connectionSocket.write(emptyData);
+        sentHeartbeatDataLength = emptyData.length; // Will be 0
       }
+
+      // Update health for sent heartbeat data
+      // 'health' is already available from the top of the function
+      health.bytesSent += sentHeartbeatDataLength;
+      health.lastDataSent = new Date(); // <--- ADD THIS LINE (heartbeat is sent data)
+
     } catch (err) {
       console.error(`Failed to send heartbeat to ${connectionParams.instrumentId}:`, err);
       this._handleDisconnection(connectionParams, 'Heartbeat send error');
+      return; // Ensure execution stops if disconnection is handled
     }
 
-    if (health) health.lastHeartbeat = new Date();
+    health.lastHeartbeat = new Date(); // This marks that the heartbeat logic/cycle completed
   }
 
 
@@ -570,6 +598,7 @@ export class TcpConnectionService implements OnDestroy {
           const health = that.connectionHealth.get(connectionIdentifierKey);
           if (health) {
             health.bytesSent += Buffer.byteLength(data, 'utf8');
+            health.lastDataSent = new Date();
           }
         }
       });
@@ -595,34 +624,45 @@ export class TcpConnectionService implements OnDestroy {
   }
 
   private processQueuedData(connectionKey: string) {
-    if (this.processingQueue.get(connectionKey)) return; // already processing
-    this.processingQueue.set(connectionKey, true);
+    let that = this; // 'this' is already correctly captured by arrow functions if used consistently
+    if (that.processingQueue.get(connectionKey)) return;
+    that.processingQueue.set(connectionKey, true);
 
-    const queue = this.dataQueue.get(connectionKey);
-    const instrumentConnectionData = this.connectionStack.get(connectionKey);
+    const queue = that.dataQueue.get(connectionKey);
+    const instrumentConnectionData = that.connectionStack.get(connectionKey);
     if (!queue || !instrumentConnectionData?.connectionSocket?.writable) {
-      this.processingQueue.set(connectionKey, false);
+      that.processingQueue.set(connectionKey, false);
       return;
     }
 
     const processNext = () => {
       if (queue.length === 0) {
-        this.processingQueue.set(connectionKey, false);
+        that.processingQueue.set(connectionKey, false);
         return;
       }
 
-      const data = queue.shift();
-      const success = instrumentConnectionData.connectionSocket.write(data, (err) => {
+      const dataToSend = queue.shift(); // This is the Buffer to send
+      // const dataBuffer = queue.shift(); // REMOVE THIS ERRONEOUS LINE
+
+      const success = instrumentConnectionData.connectionSocket.write(dataToSend, (err) => {
         if (err) {
-          this.queueData(connectionKey, data);
-          this.processingQueue.set(connectionKey, false);
+          // Consider unshift to retry sooner for transient errors:
+          // queue.unshift(dataToSend);
+          that.queueData(connectionKey, dataToSend); // Re-queues the correct data
+          that.processingQueue.set(connectionKey, false);
           return;
+        }
+        // Data from queue sent successfully
+        const health = that.connectionHealth.get(connectionKey); // or this.connectionHealth.get if 'that' is not needed
+        if (health) {
+          health.bytesSent += dataToSend.length; // USE dataToSend.length
+          health.lastDataSent = new Date();
         }
         processNext(); // recursively process next
       });
 
       if (!success) {
-        queue.unshift(data);
+        queue.unshift(dataToSend); // Correctly unshift the data that couldn't be written immediately
         instrumentConnectionData.connectionSocket.once('drain', () => {
           processNext();
         });
