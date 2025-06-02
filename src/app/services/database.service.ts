@@ -59,6 +59,8 @@ export class DatabaseService {
 
       that.mysqlPool = mysql.createPool(that.dbConfig);
 
+      console.log('MySQL pool created, waiting for connection...');
+
       that.mysqlPool.on('connection', (connection) => {
         console.log('MySQL connection established, running migrations if necessary.');
         connection.query("SET SESSION sql_mode=(SELECT REPLACE(@@sql_mode, 'ONLY_FULL_GROUP_BY', ''))");
@@ -67,6 +69,11 @@ export class DatabaseService {
 
         that.checkAndRunMigrations(connection);
       });
+
+      that.mysqlPool.on('error', (err) => {
+        console.error('MySQL pool error:', err);
+      });
+
     } else {
       //console.warn('MySQL Pool or configuration is already initialized or incomplete.');
     }
@@ -111,6 +118,10 @@ export class DatabaseService {
     });
   }
 
+  /**
+   * Checks if migrations have been run and executes them if not.
+   * This method is called automatically when the MySQL connection is established.
+   */
   private async checkAndRunMigrations(connection) {
     const that = this;
     if (that.hasRunMigrations) {
@@ -119,19 +130,109 @@ export class DatabaseService {
     }
     that.hasRunMigrations = true;
 
-    console.log('Running MySQL migrations via main process...');
+    console.log('Running MySQL migrations via DatabaseService...');
 
     try {
-      const result = await that.electronService.ipcRenderer.invoke('run-mysql-migrations', that.dbConfig);
+      // Get the migration directory path
+      const userDataPath = await that.electronService.getUserDataPath();
+      const migrationDir = path.join(userDataPath, 'mysql-migrations');
 
-      if (result.success) {
-        console.log('Migrations completed successfully:', result.message);
-      } else {
-        console.error('Migration failed:', result.error);
+      // Check if migration directory exists
+      if (!that.electronService.fs.existsSync(migrationDir)) {
+        console.log('No migration directory found, skipping migrations');
+        return;
       }
+
+      // Get migration files
+      const migrationFiles = that.electronService.fs.readdirSync(migrationDir)
+        .filter(file => file.endsWith('.sql'))
+        .sort(); // Sort to ensure migrations run in order
+
+      if (migrationFiles.length === 0) {
+        console.log('No migration files found');
+        return;
+      }
+
+      console.log(`Found ${migrationFiles.length} migration files:`, migrationFiles);
+
+      // Create versions table if it doesn't exist
+      const createVersionsTable = `
+      CREATE TABLE IF NOT EXISTS versions (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        version INT NOT NULL,
+        applied_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+    `;
+
+      await that.execQueryPromise(createVersionsTable, []);
+
+      // Get already executed migrations
+      const executedResults = await that.execQueryPromise('SELECT version FROM versions', []);
+      const executedVersions = executedResults.map((row: any) => row.version);
+
+      // Parse migration files to get versions
+      const migrations = migrationFiles
+        .map(file => ({
+          version: parseInt(file.replace('.sql', ''), 10),
+          file: file
+        }))
+        .filter(migration => !isNaN(migration.version) && !executedVersions.includes(migration.version))
+        .sort((a, b) => a.version - b.version);
+
+      if (migrations.length === 0) {
+        console.log('All migrations already executed');
+        return;
+      }
+
+      console.log(`Executing ${migrations.length} pending migrations:`, migrations.map(m => m.file));
+
+      // Execute migrations sequentially
+      for (const migration of migrations) {
+        try {
+          const migrationPath = path.join(migrationDir, migration.file);
+          const migrationSql = that.electronService.fs.readFileSync(migrationPath, 'utf8');
+
+          console.log(`Executing migration: ${migration.file}`);
+
+          // Split SQL into individual statements
+          const statements = migrationSql
+            .split(';')
+            .map(stmt => stmt.trim())
+            .filter(stmt => stmt.length > 0);
+
+          // Execute all statements in the migration file
+          for (const statement of statements) {
+            try {
+              await that.execQueryPromise(statement, []);
+            } catch (err) {
+              console.warn(`Warning in statement of ${migration.file}:`, err.message);
+              // Continue with next statement even if one fails
+            }
+          }
+
+          // Record the migration as completed
+          await that.execQueryPromise('INSERT INTO versions (version) VALUES (?)', [migration.version]);
+          console.log(`Migration ${migration.file} completed successfully`);
+
+        } catch (err) {
+          console.error(`Error executing migration ${migration.file}:`, err);
+          throw err;
+        }
+      }
+
+      console.log('All migrations completed successfully');
+
     } catch (error) {
-      console.error('Error running migrations:', error);
+      console.error('Error during migration process:', error);
+      throw error;
     }
+  }
+
+  // Helper method to convert execQuery to Promise-based:
+  private execQueryPromise(query: string, data: any[]): Promise<any> {
+    return new Promise((resolve, reject) => {
+      this.execQuery(query, data, resolve, reject);
+    });
   }
 
   execQuery(query: string, data: any, success: any, errorf: any, callback = null) {

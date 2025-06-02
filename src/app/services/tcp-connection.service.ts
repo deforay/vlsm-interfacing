@@ -19,13 +19,11 @@ interface ConnectionHealth {
 export class TcpConnectionService implements OnDestroy {
 
   public connectionParams: ConnectionParams = null;
-  private readonly MAX_RECONNECT_ATTEMPTS = 10; // Maximum reconnection attempts
+  private readonly MAX_RECONNECT_ATTEMPTS = 25; // Maximum reconnection attempts
   protected handleTCPCallback: (connectionIdentifierKey: string, data: any) => void;
-  public socketClient = null;
+
   public server = null;
   public net = null;
-  private readonly SEND_BUFFER_SIZE = 65536; // 64KB
-  private readonly RECEIVE_BUFFER_SIZE = 262144; // 256KB
 
   protected clientConnectionOptions: any = null;
 
@@ -132,7 +130,6 @@ export class TcpConnectionService implements OnDestroy {
         that.utilitiesService.logger('info', (new Date()) + ' : A remote client (' + clientAddress + ') has connected to the Interfacing Server', instrumentConnectionData.instrumentId);
 
         sockets.push(socket);
-        that.socketClient = socket;
 
         // Enable TCP keep-alive with a 1-minute interval
         socket.setKeepAlive(true, 60000);
@@ -140,14 +137,6 @@ export class TcpConnectionService implements OnDestroy {
         // Set socket options for better performance
         socket.setNoDelay(true);
 
-        // Check if the socket methods exist before calling them
-        if (typeof socket.setRecvBufferSize === 'function') {
-          socket.setRecvBufferSize(that.RECEIVE_BUFFER_SIZE);
-        }
-
-        if (typeof socket.setSendBufferSize === 'function') {
-          socket.setSendBufferSize(that.SEND_BUFFER_SIZE);
-        }
 
         // Set timeout for the server socket
         socket.setTimeout(that.connectionTimeout);
@@ -177,7 +166,7 @@ export class TcpConnectionService implements OnDestroy {
           that.connectionTimeout = 300000; // Reset to 5 minutes
         });
 
-        instrumentConnectionData.connectionSocket = that.socketClient;
+        instrumentConnectionData.connectionSocket = socket;
         instrumentConnectionData.statusSubject.next(true);
 
         socket.on('close', function () {
@@ -220,9 +209,7 @@ export class TcpConnectionService implements OnDestroy {
       });
 
     } else if (connectionParams.connectionMode === 'tcpclient') {
-      instrumentConnectionData.connectionSocket = that.socketClient = new that.net.Socket({
-        highWaterMark: that.SEND_BUFFER_SIZE,
-        allowHalfOpen: false,
+      instrumentConnectionData.connectionSocket = new that.net.Socket({
         noDelay: true
       });
       that.clientConnectionOptions = {
@@ -253,14 +240,8 @@ export class TcpConnectionService implements OnDestroy {
         instrumentConnectionData.statusSubject.next(true);
         instrumentConnectionData.reconnectAttempts = 0;
 
-        // Check if the socket methods exist before calling them
-        if (typeof instrumentConnectionData.connectionSocket.setRecvBufferSize === 'function') {
-          instrumentConnectionData.connectionSocket.setRecvBufferSize(that.RECEIVE_BUFFER_SIZE);
-        }
+        instrumentConnectionData.connectionSocket.setNoDelay(true);
 
-        if (typeof instrumentConnectionData.connectionSocket.setSendBufferSize === 'function') {
-          instrumentConnectionData.connectionSocket.setSendBufferSize(that.SEND_BUFFER_SIZE);
-        }
 
         that.utilitiesService.logger('success', 'Connected as client successfully', instrumentConnectionData.instrumentId);
       });
