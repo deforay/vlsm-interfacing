@@ -148,15 +148,21 @@ export class ASTMHelperService {
    * @returns Object containing processed ASTM data
    */
   processASTMText(astmText: string, withChecksum: boolean = true): any {
-    // Check if the text is a header
-    const regexToCheckIfHeader = /^\d*H/;
-    if (regexToCheckIfHeader.test(astmText.replace(/[\x05\x02\x03]/g, ''))) {
+    // Step 1: Control character removal
+    const cleanedForHeaderCheck = astmText.replace(/[\x00-\x1F\x7F]/g, '');
+
+    // Step 2: use regex pattern to check if the text starts with a header
+    const regexToCheckIfHeader = /^\d*H\|/; // Added the | after H
+
+    const isHeader = regexToCheckIfHeader.test(cleanedForHeaderCheck);
+
+    if (isHeader) {
       astmText = this.START + astmText;
     }
 
     return {
       text: astmText,
-      isHeader: regexToCheckIfHeader.test(astmText.replace(/[\x05\x02\x03]/g, '')),
+      isHeader: isHeader,
       isEOT: astmText === this.EOT,
       isNAK: astmText === this.NAK
     };

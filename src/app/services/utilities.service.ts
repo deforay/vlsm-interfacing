@@ -126,8 +126,6 @@ export class UtilitiesService {
   }
 
 
-
-
   fetchRecentResults(searchParam?: string) {
     const that = this;
     that.dbService.fetchRecentResults((res) => {
