@@ -104,7 +104,7 @@ export class SettingsComponent implements OnInit {
       duplicateIndexes.forEach(index => {
         instrumentsSettings.at(index).get('analyzerMachineName').setErrors({ 'duplicateInstrumentName': true });
       });
-      return null;  // This validator no longer returns an error itself
+      return null;
     };
   }
 
@@ -117,7 +117,7 @@ export class SettingsComponent implements OnInit {
       duplicateIndexes.forEach(index => {
         instrumentsSettings.at(index).setErrors({ 'duplicateIpPort': true });
       });
-      return null;  // This validator no longer returns an error itself
+      return null;
     };
   }
 
@@ -142,9 +142,6 @@ export class SettingsComponent implements OnInit {
       this.instrumentsSettings.at(index).get('analyzerMachineHost').setValue(this.machineIps[0]);
     }
   }
-
-
-
 
   // Getter for easy access to the instrumentsSettings FormArray
   get instrumentsSettings(): FormArray {

@@ -1,4 +1,4 @@
-/* console.component.scss */
+/* console.component.scss - Space optimized with full-width console */
 @import "~@fortawesome/fontawesome-free/css/all.min.css";
 
 // Color variables
@@ -18,7 +18,7 @@ $status-connected: #43a047;
 $status-disconnected: #e53935;
 $background-color: #f9fafb;
 
-// Base styles
+// Base styles - Allow scrolling with proper layout
 .app-container {
   font-family: "Roboto", "Segoe UI", Arial, sans-serif;
   color: $text-color;
@@ -28,27 +28,26 @@ $background-color: #f9fafb;
   flex-direction: column;
 }
 
-// Header
+// Header - Compact
 .app-header {
   background: white;
   border-bottom: 1px solid $border-color;
-  padding: 1rem 1.5rem;
+  padding: 0.75rem 1.25rem; // Reduced from 1rem 1.5rem
   display: flex;
   justify-content: space-between;
   align-items: center;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
-  position: sticky;
-  top: 0;
+  flex-shrink: 0;
   z-index: 100;
 
   .header-left {
     display: flex;
     align-items: center;
-    gap: 1.5rem;
+    gap: 1.25rem; // Reduced from 1.5rem
 
     .page-title {
       margin: 0;
-      font-size: 1.5rem;
+      font-size: 1.375rem; // Reduced from 1.5rem
       font-weight: 600;
       color: $dark-color;
     }
@@ -56,22 +55,22 @@ $background-color: #f9fafb;
 
   .header-actions {
     display: flex;
-    gap: 0.75rem;
+    gap: 0.625rem; // Reduced from 0.75rem
   }
 }
 
-// Status pill
+// Status pill - Compact
 .status-pill {
   display: flex;
   align-items: center;
-  padding: 0.375rem 0.875rem;
+  padding: 0.25rem 0.75rem; // Reduced from 0.375rem 0.875rem
   border-radius: 2rem;
-  font-size: 0.8125rem;
+  font-size: 0.75rem; // Reduced from 0.8125rem
   font-weight: 500;
-  gap: 0.5rem;
+  gap: 0.375rem; // Reduced from 0.5rem
 
   i {
-    font-size: 0.875rem;
+    font-size: 0.75rem; // Reduced from 0.875rem
   }
 
   &.connected {
@@ -85,20 +84,20 @@ $background-color: #f9fafb;
   }
 }
 
-// Button styles
+// Button styles - Compact
 .btn {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  padding: 0.5rem 1rem;
-  font-size: 0.875rem;
+  padding: 0.375rem 0.875rem; // Reduced from 0.5rem 1rem
+  font-size: 0.8125rem; // Reduced from 0.875rem
   font-weight: 500;
   border-radius: 0.375rem;
   border: none;
   cursor: pointer;
   transition: all 0.2s ease;
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
-  gap: 0.5rem;
+  gap: 0.375rem; // Reduced from 0.5rem
   white-space: nowrap;
 
   &:hover:not(:disabled) {
@@ -118,7 +117,7 @@ $background-color: #f9fafb;
   }
 
   i {
-    font-size: 0.875rem;
+    font-size: 0.75rem; // Reduced from 0.875rem
   }
 
   &.btn-primary {
@@ -207,25 +206,26 @@ $background-color: #f9fafb;
   }
 
   &.btn-sm {
-    padding: 0.375rem 0.75rem;
-    font-size: 0.8125rem;
+    padding: 0.25rem 0.625rem; // Reduced from 0.375rem 0.75rem
+    font-size: 0.75rem; // Reduced from 0.8125rem
   }
 }
 
-// Instrument container
+// Instrument container - Allow natural scrolling
 .instrument-container {
   flex: 1;
   display: flex;
   flex-direction: column;
-  padding: 1.5rem;
+  padding: 1rem; // Reduced from 1.5rem
   max-width: 1600px;
   width: 100%;
   margin: 0 auto;
 }
 
-// Instrument tabs
+// Instrument tabs - Compact
 .instrument-tabs {
-  margin-bottom: 1.5rem;
+  margin-bottom: 1rem; // Reduced from 1.5rem
+  flex-shrink: 0;
 
   .tabs-wrapper {
     background: white;
@@ -239,13 +239,13 @@ $background-color: #f9fafb;
     list-style: none;
     margin: 0;
     padding: 0;
-    min-height: 4rem;
+    min-height: 3rem; // Reduced from 4rem
   }
 
   .tab-item {
     flex: 1;
-    min-width: 200px;
-    max-width: 250px;
+    min-width: 180px; // Reduced from 200px
+    max-width: 220px; // Reduced from 250px
     cursor: pointer;
     transition: all 0.3s ease;
     position: relative;
@@ -281,11 +281,11 @@ $background-color: #f9fafb;
     .tab-content {
       display: flex;
       align-items: center;
-      padding: 1rem 1.5rem;
-      gap: 1rem;
+      padding: 0.75rem 1.25rem; // Reduced from 1rem 1.5rem
+      gap: 0.75rem; // Reduced from 1rem
 
       .tab-icon {
-        font-size: 1.25rem;
+        font-size: 1.125rem; // Reduced from 1.25rem
 
         .connected {
           color: $status-connected;
@@ -299,16 +299,16 @@ $background-color: #f9fafb;
       .tab-info {
         display: flex;
         flex-direction: column;
-        gap: 0.25rem;
+        gap: 0.125rem; // Reduced from 0.25rem
 
         .tab-name {
-          font-size: 0.875rem;
+          font-size: 0.8125rem; // Reduced from 0.875rem
           font-weight: 500;
           color: $text-color;
         }
 
         .tab-status {
-          font-size: 0.75rem;
+          font-size: 0.6875rem; // Reduced from 0.75rem
 
           &.status-connected {
             color: $status-connected;
@@ -323,34 +323,34 @@ $background-color: #f9fafb;
   }
 }
 
-// Empty state
+// Empty state - Compact
 .empty-state {
   background: white;
   border-radius: 0.5rem;
-  padding: 4rem 2rem;
+  padding: 3rem 2rem; // Reduced from 4rem 2rem
   text-align: center;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
 
   i {
-    font-size: 4rem;
+    font-size: 3rem; // Reduced from 4rem
     color: lighten($text-light, 20%);
-    margin-bottom: 1.5rem;
+    margin-bottom: 1rem; // Reduced from 1.5rem
   }
 
   h3 {
-    margin: 0 0 0.5rem;
-    font-size: 1.25rem;
+    margin: 0 0 0.375rem; // Reduced from 0.5rem
+    font-size: 1.125rem; // Reduced from 1.25rem
     font-weight: 600;
     color: $text-color;
   }
 
   p {
-    margin: 0 0 1.5rem;
+    margin: 0 0 1rem; // Reduced from 1.5rem
     color: $text-light;
   }
 }
 
-// Instrument details
+// Instrument details - Natural flow
 .instrument-details {
   flex: 1;
 
@@ -358,35 +358,38 @@ $background-color: #f9fafb;
     display: none;
 
     &.active {
-      display: block;
+      display: flex;
+      flex-direction: column;
       animation: fadeIn 0.3s ease;
     }
   }
 }
 
-// Connection card
+// Connection card - Significantly reduced height
 .connection-card {
   background: white;
   border-radius: 0.5rem;
-  padding: 1.5rem;
-  margin-bottom: 1.5rem;
+  padding: 1rem; // Reduced from 1.5rem
+  margin-bottom: 1rem; // Reduced from 1.5rem
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+  flex-shrink: 0;
 
   .connection-header {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    margin-bottom: 1.5rem;
-    padding-bottom: 1.5rem;
+    margin-bottom: 0.75rem; // Reduced from 1.5rem
+    padding-bottom: 0.75rem; // Reduced from 1.5rem
     border-bottom: 1px solid $border-color;
 
     .connection-status-badge {
       display: flex;
       align-items: center;
-      gap: 0.5rem;
-      padding: 0.5rem 1rem;
+      gap: 0.375rem; // Reduced from 0.5rem
+      padding: 0.375rem 0.75rem; // Reduced from 0.5rem 1rem
       border-radius: 0.375rem;
       font-weight: 500;
+      font-size: 0.8125rem; // Added smaller font
 
       &.connected {
         background: rgba($status-connected, 0.1);
@@ -399,35 +402,39 @@ $background-color: #f9fafb;
       }
 
       i {
-        font-size: 1rem;
+        font-size: 0.875rem; // Reduced from 1rem
       }
     }
 
     .connection-actions {
       display: flex;
-      gap: 0.5rem;
+      gap: 0.375rem; // Reduced from 0.5rem
       flex-wrap: wrap;
     }
   }
 
+  // Compact details grid with horizontal layout
   .instrument-details-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-    gap: 1.5rem;
-    margin-bottom: 1rem;
+    display: flex; // Changed from grid to flex for horizontal layout
+    flex-wrap: wrap;
+    gap: 1rem; // Reduced from 1.5rem
+    margin-bottom: 0.75rem; // Reduced from 1rem
 
     .detail-item {
+      flex: 1;
+      min-width: 120px; // Minimum width for readability
+
       label {
         display: block;
-        font-size: 0.75rem;
+        font-size: 0.6875rem; // Reduced from 0.75rem
         color: $text-light;
-        margin-bottom: 0.25rem;
+        margin-bottom: 0.125rem; // Reduced from 0.25rem
         text-transform: uppercase;
         letter-spacing: 0.025em;
       }
 
       span {
-        font-size: 0.875rem;
+        font-size: 0.8125rem; // Reduced from 0.875rem
         font-weight: 500;
         color: $text-color;
       }
@@ -436,13 +443,13 @@ $background-color: #f9fafb;
 
   .connection-timestamps {
     display: flex;
-    gap: 1.5rem;
-    padding-top: 1rem;
+    gap: 1rem; // Reduced from 1.5rem
+    padding-top: 0.75rem; // Reduced from 1rem
     border-top: 1px solid $border-color;
 
     small {
       color: $text-light;
-      font-size: 0.75rem;
+      font-size: 0.6875rem; // Reduced from 0.75rem
 
       i {
         margin-right: 0.25rem;
@@ -451,29 +458,33 @@ $background-color: #f9fafb;
   }
 }
 
-// Log card
+// Log card - Proper minimum height for visibility
 .log-card {
   background: white;
   border-radius: 0.5rem;
   overflow: hidden;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+  display: flex;
+  flex-direction: column;
+  margin-bottom: 1rem; // Add space below console
 
   .log-header {
-    padding: 1rem 1.5rem;
+    padding: 0.75rem 1.25rem; // Reduced from 1rem 1.5rem
     background: linear-gradient(135deg, lighten($dark-color, 75%), lighten($dark-color, 73%));
     border-bottom: 1px solid $border-color;
     display: flex;
     justify-content: space-between;
     align-items: center;
+    flex-shrink: 0;
 
     h3 {
       margin: 0;
-      font-size: 1rem;
+      font-size: 0.875rem; // Reduced from 1rem
       font-weight: 600;
       color: $dark-color;
       display: flex;
       align-items: center;
-      gap: 0.5rem;
+      gap: 0.375rem; // Reduced from 0.5rem
 
       i {
         color: $primary-color;
@@ -483,14 +494,14 @@ $background-color: #f9fafb;
     .log-controls {
       display: flex;
       align-items: center;
-      gap: 0.75rem;
+      gap: 0.5rem; // Reduced from 0.75rem
 
       .search-box {
         position: relative;
 
         i {
           position: absolute;
-          left: 0.75rem;
+          left: 0.625rem; // Reduced from 0.75rem
           top: 50%;
           transform: translateY(-50%);
           color: $text-light;
@@ -498,11 +509,11 @@ $background-color: #f9fafb;
         }
 
         input {
-          padding: 0.375rem 0.75rem 0.375rem 2.25rem;
+          padding: 0.25rem 0.5rem 0.25rem 1.875rem; // Reduced padding
           border: 1px solid $border-color;
           border-radius: 0.25rem;
-          font-size: 0.8125rem;
-          width: 200px;
+          font-size: 0.75rem; // Reduced from 0.8125rem
+          width: 180px; // Reduced from 200px
           transition: all 0.2s ease;
 
           &:focus {
@@ -517,21 +528,23 @@ $background-color: #f9fafb;
 
   .log-viewer {
     background-color: #1e293b;
+    min-height: 400px; // Set minimum height for visibility
+    height: 400px; // Fixed height for console
 
     .log-entries {
-      height: 300px;
+      height: 100%;
       overflow-y: auto;
-      padding: 1rem;
+      padding: 0.75rem; // Reduced from 1rem
       font-family: "Consolas", "Monaco", monospace;
-      font-size: 0.8125rem;
-      line-height: 1.6;
+      font-size: 0.75rem; // Reduced from 0.8125rem
+      line-height: 1.5; // Reduced from 1.6
       color: #e2e8f0;
       display: flex;
       flex-direction: column-reverse;
 
       .log-entry {
-        margin-bottom: 0.5rem;
-        padding: 0.25rem 0;
+        margin-bottom: 0.25rem; // Reduced from 0.5rem
+        padding: 0.125rem 0; // Reduced from 0.25rem 0
         white-space: pre-wrap;
         word-break: break-all;
 
@@ -552,42 +565,42 @@ $background-color: #f9fafb;
         display: flex;
         align-items: center;
         justify-content: center;
-        gap: 0.5rem;
+        gap: 0.375rem; // Reduced from 0.5rem
         color: #64748b;
         font-style: italic;
-        padding: 2rem;
+        padding: 1.5rem; // Reduced from 2rem
 
         i {
-          font-size: 1.25rem;
+          font-size: 1rem; // Reduced from 1.25rem
         }
       }
     }
   }
 }
 
-// Quick stats bar
+// Quick stats bar - Normal flow
 .quick-stats {
   display: flex;
-  gap: 1rem;
-  margin: 1.5rem;
+  gap: 0.75rem; // Reduced from 1rem
+  margin: 0.75rem 1rem; // Reduced margins
   padding: 0;
   max-width: 1600px;
-  width: calc(100% - 3rem);
+  width: calc(100% - 2rem);
   margin-left: auto;
   margin-right: auto;
 
   .stat-item {
     flex: 1;
     background: white;
-    padding: 1rem 1.5rem;
+    padding: 0.75rem 1rem; // Reduced from 1rem 1.5rem
     border-radius: 0.5rem;
     box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
     display: flex;
     align-items: center;
-    gap: 1rem;
+    gap: 0.75rem; // Reduced from 1rem
 
     i {
-      font-size: 1.5rem;
+      font-size: 1.25rem; // Reduced from 1.5rem
       color: $primary-color;
       opacity: 0.8;
     }
@@ -597,13 +610,13 @@ $background-color: #f9fafb;
 
       label {
         display: block;
-        font-size: 0.75rem;
+        font-size: 0.6875rem; // Reduced from 0.75rem
         color: $text-light;
-        margin-bottom: 0.25rem;
+        margin-bottom: 0.125rem; // Reduced from 0.25rem
       }
 
       span {
-        font-size: 1rem;
+        font-size: 0.875rem; // Reduced from 1rem
         font-weight: 600;
         color: $text-color;
       }
@@ -611,20 +624,20 @@ $background-color: #f9fafb;
   }
 }
 
-// Results section
+// Results section - Normal scrollable layout
 .results-section {
   background: white;
   border-radius: 0.5rem;
-  margin: 0 1.5rem 1.5rem;
+  margin: 0 1rem 1rem; // Reduced from 0 1.5rem 1.5rem
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
   overflow: hidden;
   max-width: 1600px;
-  width: calc(100% - 3rem);
+  width: calc(100% - 2rem);
   margin-left: auto;
   margin-right: auto;
 
   .section-header {
-    padding: 1.5rem;
+    padding: 1rem; // Reduced from 1.5rem
     border-bottom: 1px solid $border-color;
     display: flex;
     justify-content: space-between;
@@ -633,16 +646,16 @@ $background-color: #f9fafb;
     .section-title {
       display: flex;
       align-items: center;
-      gap: 0.75rem;
+      gap: 0.5rem; // Reduced from 0.75rem
 
       i {
-        font-size: 1.25rem;
+        font-size: 1rem; // Reduced from 1.25rem
         color: $primary-color;
       }
 
       h2 {
         margin: 0;
-        font-size: 1.25rem;
+        font-size: 1rem; // Reduced from 1.25rem
         font-weight: 600;
         color: $dark-color;
       }
@@ -650,19 +663,19 @@ $background-color: #f9fafb;
 
     .section-actions {
       display: flex;
-      gap: 0.75rem;
+      gap: 0.5rem; // Reduced from 0.75rem
     }
   }
 
   .search-bar {
-    padding: 1rem 1.5rem;
+    padding: 0.75rem 1rem; // Reduced from 1rem 1.5rem
     background: $background-color;
     border-bottom: 1px solid $border-color;
     position: relative;
 
     i {
       position: absolute;
-      left: 2.25rem;
+      left: 1.75rem; // Reduced from 2.25rem
       top: 50%;
       transform: translateY(-50%);
       color: $text-light;
@@ -670,10 +683,10 @@ $background-color: #f9fafb;
 
     .search-input {
       width: 100%;
-      padding: 0.75rem 1rem 0.75rem 2.75rem;
+      padding: 0.5rem 0.75rem 0.5rem 2.25rem; // Reduced padding
       border: 1px solid $border-color;
       border-radius: 0.375rem;
-      font-size: 0.875rem;
+      font-size: 0.8125rem; // Reduced from 0.875rem
       transition: all 0.2s ease;
 
       &:focus {
@@ -689,7 +702,7 @@ $background-color: #f9fafb;
   }
 }
 
-// Table styles
+// Table styles - Natural scrolling
 .table-wrapper {
   position: relative;
   overflow-x: auto;
@@ -704,20 +717,20 @@ $background-color: #f9fafb;
 
     .mat-header-cell {
       color: $text-color;
-      font-size: 0.8125rem;
+      font-size: 0.75rem; // Reduced from 0.8125rem
       font-weight: 600;
-      padding: 1rem;
+      padding: 0.75rem; // Reduced from 1rem
       border-bottom: 2px solid $border-color;
 
       i {
-        margin-right: 0.5rem;
+        margin-right: 0.375rem; // Reduced from 0.5rem
         color: $text-light;
       }
     }
 
     .mat-cell {
-      font-size: 0.875rem;
-      padding: 1rem;
+      font-size: 0.8125rem; // Reduced from 0.875rem
+      padding: 0.75rem; // Reduced from 1rem
       color: $text-color;
     }
 
@@ -750,7 +763,7 @@ $background-color: #f9fafb;
       }
     }
 
-    // Alternative zebra striping approach
+    // Rest of table styles remain the same but with reduced sizing
     tbody {
       tr:nth-child(even) {
         background-color: #f8f9fa;
@@ -761,81 +774,80 @@ $background-color: #f9fafb;
       }
     }
 
-    // Specific column styles
     .checkbox-cell {
-      width: 48px;
-      max-width: 48px;
-      padding-left: 1rem !important;
-      padding-right: 0.5rem !important;
+      width: 40px; // Reduced from 48px
+      max-width: 40px;
+      padding-left: 0.75rem !important;
+      padding-right: 0.375rem !important;
     }
 
     .mat-column-select {
-      flex: 0 0 48px;
-      max-width: 48px;
+      flex: 0 0 40px;
+      max-width: 40px;
     }
 
     .mat-column-machine_used {
-      flex: 0 0 150px;
-      max-width: 150px;
+      flex: 0 0 130px; // Reduced from 150px
+      max-width: 130px;
     }
 
     .mat-column-order_id {
-      flex: 0 0 180px;
-      max-width: 180px;
+      flex: 0 0 160px; // Reduced from 180px
+      max-width: 160px;
     }
 
     .mat-column-results {
-      flex: 0 0 180px;
-      max-width: 180px;
+      flex: 0 0 140px; // Reduced from 180px
+      max-width: 140px;
     }
 
     .mat-column-test_unit {
-      flex: 0 0 60px;
-      max-width: 60px;
+      flex: 0 0 50px; // Reduced from 60px
+      max-width: 50px;
       text-align: center;
     }
 
     .mat-column-test_type {
-      flex: 0 0 80px;
-      max-width: 80px;
+      flex: 0 0 70px; // Reduced from 80px
+      max-width: 70px;
     }
 
     .mat-column-tested_by {
-      flex: 1 1 120px;
-      min-width: 120px;
+      flex: 1 1 100px; // Reduced from 120px
+      min-width: 100px;
     }
 
     .mat-column-analysed_date_time {
-      flex: 0 0 110px;
-      max-width: 110px;
-      font-size: 0.75rem;
+      flex: 0 0 100px; // Reduced from 110px
+      max-width: 100px;
+      font-size: 0.6875rem; // Reduced from 0.75rem
     }
 
     .mat-column-added_on {
-      flex: 0 0 110px;
-      max-width: 110px;
-      font-size: 0.75rem;
+      flex: 0 0 100px; // Reduced from 110px
+      max-width: 100px;
+      font-size: 0.6875rem; // Reduced from 0.75rem
     }
 
     .mat-column-lims_sync_status {
-      flex: 0 0 100px;
-      max-width: 100px;
+      flex: 0 0 90px; // Reduced from 100px
+      max-width: 90px;
       text-align: center;
     }
 
     .mat-column-lims_sync_date_time {
-      flex: 0 0 110px;
-      max-width: 110px;
-      font-size: 0.75rem;
+      flex: 0 0 100px; // Reduced from 110px
+      max-width: 100px;
+      font-size: 0.6875rem; // Reduced from 0.75rem
     }
 
     .instrument-badge {
       display: inline-block;
-      padding: 0.375rem 0.75rem;
+      padding: 0.25rem 0.5rem; // Reduced from 0.375rem 0.75rem
       background: rgba($primary-color, 0.1);
       color: $primary-color;
       border-radius: 0.25rem;
-      font-size: 0.875rem;
+      font-size: 0.75rem; // Reduced from 0.875rem
       font-weight: 600;
       white-space: nowrap;
       overflow: hidden;
@@ -846,7 +858,7 @@ $background-color: #f9fafb;
     .result-value {
       font-weight: 700;
       color: $dark-color;
-      font-size: 0.9375rem;
+      font-size: 0.875rem; // Reduced from 0.9375rem
       white-space: nowrap;
       overflow: hidden;
       text-overflow: ellipsis;
@@ -854,7 +866,7 @@ $background-color: #f9fafb;
 
     .date-time {
       color: $text-light;
-      font-size: 0.75rem;
+      font-size: 0.6875rem; // Reduced from 0.75rem
       white-space: nowrap;
       overflow: hidden;
       text-overflow: ellipsis;
@@ -863,15 +875,15 @@ $background-color: #f9fafb;
     .sync-badge {
       display: inline-flex;
       align-items: center;
-      gap: 0.25rem;
-      padding: 0.25rem 0.5rem;
+      gap: 0.125rem; // Reduced from 0.25rem
+      padding: 0.125rem 0.375rem; // Reduced from 0.25rem 0.5rem
       border-radius: 1rem;
-      font-size: 0.7rem;
+      font-size: 0.625rem; // Reduced from 0.7rem
       font-weight: 500;
       white-space: nowrap;
 
       i {
-        font-size: 0.7rem;
+        font-size: 0.625rem; // Reduced from 0.7rem
       }
 
       &.synced {
@@ -892,18 +904,18 @@ $background-color: #f9fafb;
   }
 
   .table-empty-state {
-    padding: 4rem 2rem;
+    padding: 2rem 1rem; // Reduced from 4rem 2rem
     text-align: center;
 
     i {
-      font-size: 3rem;
+      font-size: 2rem; // Reduced from 3rem
       color: lighten($text-light, 20%);
-      margin-bottom: 1rem;
+      margin-bottom: 0.75rem; // Reduced from 1rem
     }
 
     h3 {
-      margin: 0 0 0.5rem;
-      font-size: 1.125rem;
+      margin: 0 0 0.375rem; // Reduced from 0.5rem
+      font-size: 1rem; // Reduced from 1.125rem
       font-weight: 600;
       color: $text-color;
     }
@@ -911,32 +923,34 @@ $background-color: #f9fafb;
     p {
       margin: 0;
       color: $text-light;
+      font-size: 0.875rem; // Added smaller font
     }
   }
 }
 
-// Pagination
+// Pagination - Compact
 .table-pagination {
   background: $light-color;
   border-top: 1px solid $border-color;
+  flex-shrink: 0;
 }
 
-// Footer
+// Footer - Thin and normal flow
 .app-footer {
   background: white;
   border-top: 1px solid $border-color;
-  padding: 1rem 1.5rem;
+  padding: 0.5rem 1rem; // Significantly reduced from 1rem 1.5rem
   display: flex;
   justify-content: space-between;
   align-items: center;
 
   .footer-left {
     display: flex;
-    gap: 1rem;
+    gap: 0.5rem; // Reduced from 1rem
   }
 
   .version-info {
-    font-size: 0.75rem;
+    font-size: 0.6875rem; // Reduced from 0.75rem
     color: $text-light;
   }
 }
@@ -945,7 +959,7 @@ $background-color: #f9fafb;
 @keyframes fadeIn {
   from {
     opacity: 0;
-    transform: translateY(10px);
+    transform: translateY(5px); // Reduced from 10px
   }
   to {
     opacity: 1;
@@ -988,19 +1002,21 @@ $background-color: #f9fafb;
 // Responsive design
 @media (max-width: 1200px) {
   .instrument-tabs .tab-item {
-    min-width: 180px;
+    min-width: 160px; // Reduced from 180px
   }
 }
 
 @media (max-width: 768px) {
   .app-header {
+    padding: 0.5rem 1rem; // Further reduced for mobile
     flex-direction: column;
-    gap: 1rem;
+    gap: 0.75rem; // Reduced from 1rem
 
     .header-left {
       width: 100%;
       flex-direction: column;
       align-items: flex-start;
+      gap: 0.5rem; // Added gap
     }
 
     .header-actions {
@@ -1012,26 +1028,35 @@ $background-color: #f9fafb;
     }
   }
 
+  .instrument-container {
+    padding: 0.75rem; // Reduced from 1rem
+  }
+
   .connection-card {
     .connection-header {
       flex-direction: column;
-      gap: 1rem;
+      gap: 0.75rem; // Reduced from 1rem
       align-items: flex-start;
     }
 
     .instrument-details-grid {
-      grid-template-columns: 1fr;
+      flex-direction: column; // Stack vertically on mobile
+      gap: 0.75rem;
     }
   }
 
   .quick-stats {
     flex-direction: column;
+    gap: 0.5rem; // Reduced spacing
+    margin: 0.5rem; // Reduced margins
   }
 
   .results-section {
+    margin: 0 0.75rem 0.75rem; // Reduced margins
+
     .section-header {
       flex-direction: column;
-      gap: 1rem;
+      gap: 0.75rem; // Reduced from 1rem
       align-items: flex-start;
 
       .section-actions {
@@ -1046,7 +1071,7 @@ $background-color: #f9fafb;
 
   .log-card .log-header {
     flex-direction: column;
-    gap: 1rem;
+    gap: 0.75rem; // Reduced from 1rem
     align-items: flex-start;
 
     .log-controls {
@@ -1061,9 +1086,92 @@ $background-color: #f9fafb;
       }
     }
   }
+
+  .app-footer {
+    padding: 0.375rem 0.75rem; // Further reduced for mobile
+  }
+}
+
+// High-density display optimizations
+@media (max-height: 900px) {
+  .connection-card {
+    padding: 0.75rem; // Further reduce on shorter screens
+    margin-bottom: 0.75rem;
+
+    .connection-header {
+      margin-bottom: 0.5rem;
+      padding-bottom: 0.5rem;
+    }
+
+    .instrument-details-grid {
+      gap: 0.75rem;
+      margin-bottom: 0.5rem;
+    }
+
+    .connection-timestamps {
+      padding-top: 0.5rem;
+    }
+  }
+
+  .log-card .log-header {
+    padding: 0.5rem 1rem; // Further reduce header
+  }
+
+  .quick-stats {
+    margin: 0.5rem; // Tighter margins
+
+    .stat-item {
+      padding: 0.5rem 0.75rem; // Smaller stat items
+    }
+  }
+}
+
+@media (max-height: 768px) {
+  .instrument-tabs {
+    margin-bottom: 0.75rem; // Further reduce
+
+    .tabs-list {
+      min-height: 2.5rem; // Even more compact tabs
+    }
+
+    .tab-content {
+      padding: 0.5rem 1rem; // Tighter tab padding
+    }
+  }
+
+  .connection-card {
+    .instrument-details-grid .detail-item {
+      label {
+        font-size: 0.625rem; // Even smaller labels
+        margin-bottom: 0.0625rem;
+      }
+
+      span {
+        font-size: 0.75rem; // Smaller values
+      }
+    }
+  }
 }
 
 // Utility classes
 .hidden {
   display: none !important;
+}
+
+// Additional space-saving utilities
+.compact {
+  .connection-card {
+    padding: 0.5rem !important;
+    margin-bottom: 0.5rem !important;
+  }
+
+  .log-card .log-entries {
+    font-size: 0.6875rem !important;
+    line-height: 1.4 !important;
+    padding: 0.5rem !important;
+  }
+
+  .instrument-details-grid {
+    gap: 0.5rem !important;
+  }
 }
