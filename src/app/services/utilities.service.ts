@@ -9,6 +9,8 @@ import { ElectronService } from '../core/services';
 
 export class UtilitiesService {
 
+
+  private readonly moment = require('moment');
   protected timer = null;
   protected logtext = [];
 
@@ -198,42 +200,40 @@ export class UtilitiesService {
 
   logger(logType = null, message = null, instrumentId = null) {
     const that = this;
-    if (message) {
-      const moment = require('moment');
-      const date = moment(new Date()).format('DD-MMM-YYYY HH:mm:ss');
-      let logFor = ` [${date}] `;
-      if (instrumentId) {
-        logFor = ` [${instrumentId}]  [${date}] `;
-      }
+    if (!message) return;
 
-      let logMessage = '';
+    // Generate timestamp and format message
+    const date =  this.moment(new Date()).format('DD-MMM-YYYY HH:mm:ss');
+    let logFor = ` [${date}] `;
+    if (instrumentId) {
+      logFor = ` [${instrumentId}]  [${date}] `;
+    }
 
-      if (logType === 'info') {
-        that.electronService.logInfo(message, instrumentId);
-        logMessage = `<span class="text-info">[info]</span> ${logFor}${message}`;
-      } else if (logType === 'error') {
-        that.electronService.logError(message, instrumentId);
-        logMessage = `<span class="text-danger">[error]</span> ${logFor}${message}`;
-      } else if (logType === 'success') {
-        that.electronService.logInfo(message, instrumentId);
-        logMessage = `<span class="text-success">[success]</span> ${logFor}${message}`;
-      } else if (logType === 'ignore') {
-        logMessage = `${message}`;
-      }
+    let logMessage = '';
+    if (logType === 'info') {
+      that.electronService.logInfo(message, instrumentId);
+      logMessage = `<span class="text-info">[info]</span> ${logFor}${message}`;
+    } else if (logType === 'error') {
+      that.electronService.logError(message, instrumentId);
+      logMessage = `<span class="text-danger">[error]</span> ${logFor}${message}`;
+    } else if (logType === 'success') {
+      that.electronService.logInfo(message, instrumentId);
+      logMessage = `<span class="text-success">[success]</span> ${logFor}${message}`;
+    } else if (logType === 'ignore') {
+      logMessage = `${message}`;
+    }
 
-      //console.log(`${logFor}${message}`);
+    // Update UI immediately
+    const logSubject = that.getInstrumentLogSubject(instrumentId);
+    const currentLogs = logSubject.value;
+    logSubject.next([logMessage, ...currentLogs]);
 
-      //that.logtext[that.logtext.length] = logMessage;
-      const logSubject = that.getInstrumentLogSubject(instrumentId);
-      const currentLogs = logSubject.value;
-      logSubject.next([logMessage, ...currentLogs]);
-
-      if (logType !== 'ignore') {
-        const dbLog: any = {};
-        dbLog.log = logMessage;
-
-        that.dbService.recordConsoleLogs(dbLog, (res) => { }, (err) => { });
-      }
+    // THE ONLY CHANGE: Make database logging async
+    if (logType !== 'ignore') {
+      process.nextTick(() => {
+        const dbLog: any = { log: logMessage };
+        that.dbService.recordConsoleLogs(dbLog, () => { }, () => { });
+      });
     }
   }
 

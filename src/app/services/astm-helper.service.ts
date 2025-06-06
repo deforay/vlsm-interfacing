@@ -16,6 +16,10 @@ export class ASTMHelperService {
   protected CR = '\x0D'; // Carriage Return
 
   protected START = '##START##';
+  // Buffer for ACK character
+  // This is used to send an ACK response to the instrument after processing a message
+  // It is defined as a Buffer to ensure it is sent in the correct binary format
+  private readonly ACK_BUFFER = Buffer.from('\x06', 'binary');
 
   // Track sequence numbers for different instruments
   private astmSequenceNumbers: Map<string, number> = new Map();
@@ -28,6 +32,26 @@ export class ASTMHelperService {
  */
   getStartMarker(): string {
     return this.START;
+  }
+
+  /**
+ * Sends ACK immediately with minimal overhead for ASTM protocol
+ * @param instrumentConnectionData The instrument connection to send ACK to
+ * @param logMessage Optional message to log (defaults to generic ACK message)
+ */
+  sendACK(instrumentConnectionData: any, logMessage?: string): void {
+    try {
+      if (instrumentConnectionData &&
+        instrumentConnectionData.connectionSocket &&
+        instrumentConnectionData.connectionSocket.writable) {
+
+        // Send pre-created ACK buffer immediately
+        instrumentConnectionData.connectionSocket.write(this.ACK_BUFFER);
+        this.utilitiesService.logger('info', logMessage || 'Sending ASTM ACK', instrumentConnectionData.instrumentId);
+      }
+    } catch (error) {
+      this.utilitiesService.logger('error', 'Failed to send ASTM ACK: ' + error, instrumentConnectionData.instrumentId);
+    }
   }
 
   /**
@@ -240,30 +264,6 @@ export class ASTMHelperService {
       console.error("Error extracting sample result from ASTM:", error);
       return null;
     }
-  }
-
-  /**
-   * Gets an acknowledgment (ACK) for an ASTM message
-   * @returns ACK character
-   */
-  getACK(): string {
-    return this.ACK;
-  }
-
-  /**
-   * Gets the End of Transmission (EOT) character
-   * @returns EOT character
-   */
-  getEOT(): string {
-    return this.EOT;
-  }
-
-  /**
-   * Gets the Negative Acknowledgment (NAK) character
-   * @returns NAK character
-   */
-  getNAK(): string {
-    return this.NAK;
   }
 
   /**

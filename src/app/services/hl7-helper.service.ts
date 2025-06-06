@@ -18,53 +18,93 @@ export class HL7HelperService {
    * @param hl7Version HL7 version to use (default: 2.5.1)
    * @returns Formatted HL7 ACK message
    */
+  /**
+ * Generates an optimized HL7 ACK (acknowledgment) message with detailed field mapping
+ * @param messageID Message ID to acknowledge (goes to MSH-10 in response, MSA-2 for original msg)
+ * @param characterSet Character set to use in response (MSH-18)
+ * @param messageProfileIdentifier Message profile identifier (MSH-21)
+ * @param hl7Version HL7 version to use (MSH-12, default: 2.5.1)
+ * @returns Formatted HL7 ACK message
+ */
   generateHL7ACK(messageID: string | number, characterSet: string, messageProfileIdentifier: string, hl7Version = '2.5.1'): string {
+    // Handle empty/null parameters
     if (!messageID || messageID === '') {
       messageID = Math.random().toString();
     }
-
     if (!characterSet || characterSet === '') {
       characterSet = 'UNICODE UTF-8';
     }
-
     if (!messageProfileIdentifier || messageProfileIdentifier === '') {
       messageProfileIdentifier = '';
     }
 
+    // Pre-create control characters for better performance
+    const VT = '\x0B';  // Start of message
+    const CR = '\x0D';  // Carriage return
+    const FS = '\x1C';  // End of message
+
+    // Generate timestamp once
     const moment = require('moment');
-    const date = moment(new Date()).format('YYYYMMDDHHmmss');
+    const date = moment().format('YYYYMMDDHHmmss');
 
-    const mshFields = [
-      'MSH',                     // MSH-1 (not transmitted, added by framing)
-      '^~\\&',                   // MSH-2 Encoding Characters
-      'VLSM',                    // MSH-3 Sending Application
-      'VLSM',                    // MSH-4 Sending Facility
-      'VLSM',                    // MSH-5 Receiving Application
-      'VLSM',                    // MSH-6 Receiving Facility
-      date,                      // MSH-7 Date/Time
-      '',                        // MSH-8 Security
-      'ACK^R22^ACK',             // MSH-9 Message Type
-      randomUUID(),              // MSH-10 Message Control ID
-      'P',                       // MSH-11 Processing ID
-      hl7Version,                // MSH-12 Version ID
-      '',                        // MSH-13 Sequence Number
-      '',                        // MSH-14 Continuation Pointer
-      'NE',                      // MSH-15 Accept Acknowledgment Type
-      'AL',                      // MSH-16 Application Acknowledgment Type
-      '',                        // MSH-17 Country Code
-      characterSet,              // MSH-18 Character Set
-      '',                        // MSH-19 Principal Language of Message
-      '',                        // MSH-20 Alternate Character Set Handling Scheme
-      messageProfileIdentifier   // MSH-21 Message Profile Identifier
-    ];
+    // Build optimized ACK message with field position comments
+    const ack = `${VT}MSH|^~\\&|VLSM|VLSM|VLSM|VLSM|${date}||ACK^R22^ACK|${randomUUID()}|P|${hl7Version}|||NE|AL||${characterSet}||${messageProfileIdentifier}${CR}MSA|AA|${messageID}${CR}${FS}${CR}`;
 
-    let ack = String.fromCharCode(11) // <VT>
-      + mshFields.join('|') + String.fromCharCode(13) // <CR>
-      + 'MSA|AA|' + messageID + String.fromCharCode(13)
-      + String.fromCharCode(28) + String.fromCharCode(13); // <FS><CR>
+    /*
+    MSH Field Breakdown:
+    MSH|          - Message Header (segment ID)
+    ^~\&|         - MSH-2: Encoding Characters
+    VLSM|         - MSH-3: Sending Application
+    VLSM|         - MSH-4: Sending Facility
+    VLSM|         - MSH-5: Receiving Application
+    VLSM|         - MSH-6: Receiving Facility
+    ${date}|      - MSH-7: Date/Time of Message
+    |             - MSH-8: Security (empty)
+    ACK^R22^ACK|  - MSH-9: Message Type (ACK^Event^Message Structure)
+    ${randomUUID()}| - MSH-10: Message Control ID (new UUID for this ACK)
+    P|            - MSH-11: Processing ID (P=Production)
+    ${hl7Version}| - MSH-12: Version ID
+    |             - MSH-13: Sequence Number (empty)
+    |             - MSH-14: Continuation Pointer (empty)
+    NE|           - MSH-15: Accept Acknowledgment Type (NE=Never)
+    AL|           - MSH-16: Application Acknowledgment Type (AL=Always)
+    |             - MSH-17: Country Code (empty)
+    ${characterSet}| - MSH-18: Character Set
+    |             - MSH-19: Principal Language (empty)
+    |             - MSH-20: Alternate Character Set Handling (empty)
+    ${messageProfileIdentifier} - MSH-21: Message Profile Identifier
 
-    this.utilitiesService.logger('info', 'Sending HL7 ACK : ' + ack);
+    MSA Field Breakdown:
+    MSA|          - Message Acknowledgment (segment ID)
+    AA|           - MSA-1: Acknowledgment Code (AA=Application Accept)
+    ${messageID}  - MSA-2: Message Control ID (from original message)
+    */
+
     return ack;
+  }
+
+  /**
+ * Sends HL7 ACK immediately with minimal overhead
+ * @param instrumentConnectionData The instrument connection to send ACK to
+ * @param msgID Message ID to acknowledge
+ * @param characterSet Character set for the ACK
+ * @param messageProfileIdentifier Message profile identifier
+ * @param hl7Version HL7 version (default: 2.5.1)
+ */
+  sendHL7ACK(instrumentConnectionData: any, msgID: string, characterSet: string = 'UNICODE UTF-8', messageProfileIdentifier: string = '', hl7Version: string = '2.5.1'): void {
+    try {
+      if (instrumentConnectionData &&
+        instrumentConnectionData.connectionSocket &&
+        instrumentConnectionData.connectionSocket.writable) {
+
+        // Generate and send ACK immediately
+        const ackMessage = this.generateHL7ACK(msgID, characterSet, messageProfileIdentifier, hl7Version);
+        instrumentConnectionData.connectionSocket.write(ackMessage);
+        this.utilitiesService.logger('info', 'Sent HL7 ACK for message: ' + msgID, instrumentConnectionData.instrumentId);
+      }
+    } catch (error) {
+      this.utilitiesService.logger('error', 'Failed to send HL7 ACK: ' + error, instrumentConnectionData.instrumentId);
+    }
   }
 
   /**

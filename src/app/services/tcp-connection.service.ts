@@ -131,11 +131,18 @@ export class TcpConnectionService implements OnDestroy {
 
         sockets.push(socket);
 
-        // Enable TCP keep-alive with a 1-minute interval
-        socket.setKeepAlive(true, 60000);
+        socket.setKeepAlive(true, 60000); // Enable keep-alive with a 60-second interval
+        socket.setNoDelay(true); // Disable Nagle's algorithm for low latency
+        socket.setMaxListeners(0); // Remove listener limit
 
-        // Set socket options for better performance
-        socket.setNoDelay(true);
+        try {
+          // Set socket to high priority if available
+          if (socket.setTOS) {
+            socket.setTOS(0x10); // IPTOS_LOWDELAY
+          }
+        } catch (e) {
+          // Ignore if not supported
+        }
 
 
         // Set timeout for the server socket
@@ -210,7 +217,10 @@ export class TcpConnectionService implements OnDestroy {
 
     } else if (connectionParams.connectionMode === 'tcpclient') {
       instrumentConnectionData.connectionSocket = new that.net.Socket({
-        noDelay: true
+        noDelay: true,
+        allowHalfOpen: false,
+        readable: true,
+        writable: true
       });
       that.clientConnectionOptions = {
         port: connectionParams.port,
@@ -241,6 +251,16 @@ export class TcpConnectionService implements OnDestroy {
         instrumentConnectionData.reconnectAttempts = 0;
 
         instrumentConnectionData.connectionSocket.setNoDelay(true);
+
+        try {
+          if (instrumentConnectionData.connectionSocket.setTOS) {
+            instrumentConnectionData.connectionSocket.setTOS(0x10); // IPTOS_LOWDELAY
+          }
+          // Disable socket buffering for immediate sends
+          instrumentConnectionData.connectionSocket.setMaxListeners(0);
+        } catch (e) {
+          // Ignore if not supported
+        }
 
 
         that.utilitiesService.logger('success', 'Connected as client successfully', instrumentConnectionData.instrumentId);

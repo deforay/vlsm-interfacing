@@ -91,7 +91,7 @@ export class InstrumentInterfaceService {
     const messageProfileIdentifier = message.get('MSH.21')?.toString() ?? '';
     const hl7Version = message.get('MSH.12')?.toString() ?? '2.5.1';
 
-    instrumentConnectionData.connectionSocket.write(that.hl7Helper.generateHL7ACK(msgID, characterSet, messageProfileIdentifier, hl7Version));
+    that.hl7Helper.sendHL7ACK(instrumentConnectionData, msgID, characterSet, messageProfileIdentifier, hl7Version);
 
     const hl7DataArray = rawHl7Text.split('MSH|');
 
@@ -169,7 +169,7 @@ export class InstrumentInterfaceService {
     const messageProfileIdentifier = message.get('MSH.21')?.toString() ?? '';
     const hl7Version = message.get('MSH.12')?.toString() ?? '2.5.1';
 
-    instrumentConnectionData.connectionSocket.write(that.hl7Helper.generateHL7ACK(msgID, characterSet, messageProfileIdentifier, hl7Version));
+    that.hl7Helper.sendHL7ACK(instrumentConnectionData, msgID, characterSet, messageProfileIdentifier, hl7Version);
 
     const hl7DataArray = rawHl7Text.split('MSH|');
 
@@ -247,7 +247,7 @@ export class InstrumentInterfaceService {
     const messageProfileIdentifier = message.get('MSH.21')?.toString() ?? '';
     const hl7Version = message.get('MSH.12')?.toString() ?? '2.5.1';
 
-    instrumentConnectionData.connectionSocket.write(that.hl7Helper.generateHL7ACK(msgID, characterSet, messageProfileIdentifier, hl7Version));
+    that.hl7Helper.sendHL7ACK(instrumentConnectionData, msgID, characterSet, messageProfileIdentifier, hl7Version);
 
     const hl7DataArray = rawHl7Text.split('MSH|');
 
@@ -325,7 +325,7 @@ export class InstrumentInterfaceService {
     const messageProfileIdentifier = message.get('MSH.21')?.toString() ?? '';
     const hl7Version = message.get('MSH.12')?.toString() ?? '2.5.1';
 
-    instrumentConnectionData.connectionSocket.write(that.hl7Helper.generateHL7ACK(msgID, characterSet, messageProfileIdentifier, hl7Version));
+    that.hl7Helper.sendHL7ACK(instrumentConnectionData, msgID, characterSet, messageProfileIdentifier, hl7Version);
 
     const hl7DataArray = rawHl7Text.split('MSH|');
 
@@ -420,7 +420,7 @@ export class InstrumentInterfaceService {
     const processedText = that.astmHelper.processASTMText(astmText);
 
     if (processedText.isEOT) {
-      instrumentConnectionData.connectionSocket.write(that.astmHelper.getACK());
+      that.astmHelper.sendACK(instrumentConnectionData, 'Sending ACK');
       that.utilitiesService.logger('info', 'Received EOT. Sending ACK.', instrumentConnectionData.instrumentId);
       that.utilitiesService.logger('info', 'Processing ' + astmProtocolType, instrumentConnectionData.instrumentId);
       that.utilitiesService.logger('info', 'Received  ' + that.strData, instrumentConnectionData.instrumentId);
@@ -430,11 +430,12 @@ export class InstrumentInterfaceService {
         machine: instrumentConnectionData.instrumentId,
         instrument_id: instrumentConnectionData.instrumentId
       };
-
-      that.dbService.recordRawData(rawData, () => {
-        that.utilitiesService.logger('success', 'Successfully saved raw ASTM data', instrumentConnectionData.instrumentId);
-      }, (err: any) => {
-        that.utilitiesService.logger('error', 'Failed to save raw data : ' + JSON.stringify(err), instrumentConnectionData.instrumentId);
+      process.nextTick(() => {
+        that.dbService.recordRawData(rawData, () => {
+          that.utilitiesService.logger('success', 'Successfully saved raw ASTM data', instrumentConnectionData.instrumentId);
+        }, (err: any) => {
+          that.utilitiesService.logger('error', 'Failed to save raw data : ' + JSON.stringify(err), instrumentConnectionData.instrumentId);
+        });
       });
 
       let origAstmData = that.strData;
@@ -466,10 +467,11 @@ export class InstrumentInterfaceService {
       that.strData = '';
       instrumentConnectionData.transmissionStatusSubject.next(false);
     } else if (processedText.isNAK) {
-      instrumentConnectionData.connectionSocket.write(that.astmHelper.getACK());
+      that.astmHelper.sendACK(instrumentConnectionData, 'Sending ACK');
       that.utilitiesService.logger('error', 'NAK Received', instrumentConnectionData.instrumentId);
       that.utilitiesService.logger('info', 'Sending ACK', instrumentConnectionData.instrumentId);
     } else {
+      that.astmHelper.sendACK(instrumentConnectionData, 'Sending ACK');
       // If it's a header, it's already been processed in processASTMText
       if (processedText.isHeader) {
         that.strData += processedText.text;
@@ -478,7 +480,6 @@ export class InstrumentInterfaceService {
       }
 
       that.utilitiesService.logger('info', astmProtocolType.toUpperCase() + ' | Receiving....' + astmText, instrumentConnectionData.instrumentId);
-      instrumentConnectionData.connectionSocket.write(that.astmHelper.getACK());
       that.utilitiesService.logger('info', 'Sending ACK', instrumentConnectionData.instrumentId);
     }
   }
@@ -504,12 +505,14 @@ export class InstrumentInterfaceService {
         machine: instrumentConnectionData.instrumentId,
         instrument_id: instrumentConnectionData.instrumentId
       };
-
-      that.dbService.recordRawData(rawData, () => {
-        that.utilitiesService.logger('success', 'Successfully saved raw HL7 data', instrumentConnectionData.instrumentId);
-      }, (err: any) => {
-        that.utilitiesService.logger('error', 'Failed to save raw data ' + JSON.stringify(err), instrumentConnectionData.instrumentId);
+      process.nextTick(() => {
+        that.dbService.recordRawData(rawData, () => {
+          that.utilitiesService.logger('success', 'Successfully saved raw HL7 data', instrumentConnectionData.instrumentId);
+        }, (err: any) => {
+          that.utilitiesService.logger('error', 'Failed to save raw data ' + JSON.stringify(err), instrumentConnectionData.instrumentId);
+        });
       });
+
 
       that.strData = that.strData.replace(/[\x0b\x1c]/g, '');
       that.strData = that.strData.trim();
@@ -559,15 +562,17 @@ export class InstrumentInterfaceService {
     const that = this;
     if (sampleResult) {
       const data = { ...sampleResult, instrument_id: instrumentConnectionData.instrumentId };
-      that.dbService.recordTestResults(data,
-        (res) => {
-          that.utilitiesService.logger('success', 'Successfully saved result : ' + sampleResult.test_id + '|' + sampleResult.order_id, instrumentConnectionData.instrumentId);
-          return true;
-        },
-        (err) => {
-          that.utilitiesService.logger('error', 'Failed to save result : ' + sampleResult.test_id + '|' + sampleResult.order_id + ' | ' + JSON.stringify(err), instrumentConnectionData.instrumentId);
-          return false;
-        });
+      process.nextTick(() => {
+        that.dbService.recordTestResults(data,
+          (res) => {
+            that.utilitiesService.logger('success', 'Successfully saved result : ' + sampleResult.test_id + '|' + sampleResult.order_id, instrumentConnectionData.instrumentId);
+            return true;
+          },
+          (err) => {
+            that.utilitiesService.logger('error', 'Failed to save result : ' + sampleResult.test_id + '|' + sampleResult.order_id + ' | ' + JSON.stringify(err), instrumentConnectionData.instrumentId);
+            return false;
+          });
+      });
     } else {
       that.utilitiesService.logger('error', 'Failed to save result into the database : ' + JSON.stringify(sampleResult), instrumentConnectionData.instrumentId);
       return false;
