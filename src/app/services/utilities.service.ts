@@ -215,7 +215,11 @@ export class UtilitiesService {
       logMessage = `<span style="color: #00e676 !important;">[success]</span>${logFor}${message}`;
     } else if (logType === 'ignore') {
       logMessage = `${message}`;
+    } else if (logType === 'warn') {
+      that.electronService.logWarning(message, instrumentId);
+      logMessage = `<span style="color:orange !important;">[warn]</span>${logFor}${message}`;
     }
+
 
     // Update UI immediately
     const logSubject = that.getInstrumentLogSubject(instrumentId);

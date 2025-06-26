@@ -179,7 +179,8 @@ export class TcpConnectionService implements OnDestroy {
             ? `Client ${socket.remoteAddress}:${socket.remotePort} disconnected with error`
             : `Client ${socket.remoteAddress}:${socket.remotePort} disconnected normally`;
 
-          that.utilitiesService.logger('warn', msg, instrumentConnectionData.instrumentId);
+          const logType = hadError ? 'error' : 'info';
+          that.utilitiesService.logger(logType, msg, instrumentConnectionData.instrumentId);
         });
 
       });
