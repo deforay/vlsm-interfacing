@@ -61,14 +61,7 @@ export class DatabaseService {
 
       console.log('MySQL pool created, waiting for connection...');
 
-      that.mysqlPool.on('connection', (connection) => {
-        console.log('MySQL connection established, running migrations if necessary.');
-        connection.query("SET SESSION sql_mode=(SELECT REPLACE(@@sql_mode, 'ONLY_FULL_GROUP_BY', ''))");
-        connection.query("SET SESSION INTERACTIVE_TIMEOUT=600");
-        connection.query("SET SESSION WAIT_TIMEOUT=600");
-
-        that.checkAndRunMigrations(connection);
-      });
+      await that.setupDatabase();
 
       that.mysqlPool.on('error', (err) => {
         console.error('MySQL pool error:', err);
@@ -77,6 +70,14 @@ export class DatabaseService {
     } else {
       //console.warn('MySQL Pool or configuration is already initialized or incomplete.');
     }
+  }
+
+
+  private async setupDatabase(): Promise<void> {
+    await this.checkAndRunMigrations(null);
+    await this.execQueryPromise("SET SESSION sql_mode=(SELECT REPLACE(@@sql_mode, 'ONLY_FULL_GROUP_BY', ''))", []);
+    await this.execQueryPromise("SET SESSION INTERACTIVE_TIMEOUT=600", []);
+    await this.execQueryPromise("SET SESSION WAIT_TIMEOUT=600", []);
   }
 
   public sqlite3WalCheckpoint(): void {
@@ -529,7 +530,6 @@ export class DatabaseService {
       const searchConditions = columns.map(col => `${col} LIKE '%${searchParam}%'`).join(' OR ');
       recentRawDataQuery += ` WHERE ${searchConditions}`;
     }
-    recentRawDataQuery += ' ORDER BY added_on DESC LIMIT 1000';
 
     this.checkMysqlConnection(null, () => {
       // MySQL connected
@@ -557,25 +557,11 @@ export class DatabaseService {
       recentResultsQuery += ` WHERE ${searchConditions}`;
     }
 
+    recentResultsQuery += ' ORDER BY added_on DESC';
+
     this.electronService.execSqliteQuery(recentResultsQuery, null)
       .then(success)
       .catch(errorf);
-
-    // this.checkMysqlConnection(null, () => {
-    //   // MySQL is connected, use MySQL
-    //   this.execQuery(recentResultsQuery, null, success, (mysqlError) => {
-    //     console.error('MySQL query error:', mysqlError.message);
-    //     // If MySQL query fails, fallback to SQLite
-    //     this.electronService.execSqliteQuery(recentResultsQuery, null)
-    //       .then(success)
-    //       .catch(errorf);
-    //   });
-    // }, (err) => {
-    //   // MySQL not connected, fallback to SQLite
-    //   this.electronService.execSqliteQuery(recentResultsQuery, null)
-    //     .then(success)
-    //     .catch(errorf);
-    // });
   }
 
   reSyncRecord(orderId: string): void {

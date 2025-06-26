@@ -179,17 +179,11 @@ export class UtilitiesService {
   fetchLastSyncTimes(callback): any {
     const that = this;
     that.dbService.fetchLastSyncTimes((res) => {
-      // data.lastLimsSync = (res[0].lastLimsSync);
-      // data.lastResultReceived = (res[0].lastResultReceived);
-      // return data;
-
       callback(res[0]);
     }, (err) => {
       that.logger('error', 'Failed to fetch last sync time ' + JSON.stringify(err));
     });
   }
-
-
 
   getInstrumentLogSubject(instrumentId: string): BehaviorSubject<string[]> {
     if (!this.logTextMap.has(instrumentId)) {
@@ -203,22 +197,22 @@ export class UtilitiesService {
     if (!message) return;
 
     // Generate timestamp and format message
-    const date =  this.moment(new Date()).format('DD-MMM-YYYY HH:mm:ss');
+    const date = this.moment(new Date()).format('DD-MMM-YYYY HH:mm:ss');
     let logFor = ` [${date}] `;
     if (instrumentId) {
-      logFor = ` [${instrumentId}]  [${date}] `;
+      logFor = ` [${instrumentId}] [${date}] `;
     }
 
     let logMessage = '';
     if (logType === 'info') {
       that.electronService.logInfo(message, instrumentId);
-      logMessage = `<span class="text-info">[info]</span> ${logFor}${message}`;
+      logMessage = `<span style="color:rgb(129, 209, 247) !important;">[info]</span>${logFor}${message}`;
     } else if (logType === 'error') {
       that.electronService.logError(message, instrumentId);
-      logMessage = `<span class="text-danger">[error]</span> ${logFor}${message}`;
+      logMessage = `<span style="color: #ff5252 !important;">[error]</span>${logFor}${message}`;
     } else if (logType === 'success') {
       that.electronService.logInfo(message, instrumentId);
-      logMessage = `<span class="text-success">[success]</span> ${logFor}${message}`;
+      logMessage = `<span style="color: #00e676 !important;">[success]</span>${logFor}${message}`;
     } else if (logType === 'ignore') {
       logMessage = `${message}`;
     }

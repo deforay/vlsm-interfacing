@@ -1,6 +1,6 @@
 {
   "name": "vlsm-interfacing",
-  "version": "3.0.0",
+  "version": "3.1.0",
   "description": "Interfacing Tool By VLSM",
   "homepage": "https://github.com/deforay/vlsm-interfacing",
   "author": {
@@ -12,12 +12,21 @@
     "EID",
     "Viral Load",
     "Covid-19",
+    "TB",
     "Roche Cobas",
+    "Roche Cobas Taqman",
+    "Roche Cobas 8800",
+    "Roche Cobas 4800",
+    "Roche Cobas 5800",
+    "Roche Cobas 6800/8800",
     "Abbott m2000",
     "Abbott Alinity",
     "GeneXpert",
     "ASTM",
     "HL7",
+    "Intelis",
+    "Lab Instrument Interfacing",
+    "Lab Interfacing",
     "Interfacing Tool",
     "Interfacing",
     "vlsm",
@@ -34,7 +43,7 @@
     "electron-store": "^8.2.0",
     "hl7parser": "^1.0.1",
     "moment": "^2.30.1",
-    "mysql": "2.18.1",
+    "mysql2": "^3.14.1",
     "@vscode/sqlite3": "^5.1.8-vscode"
   }
 }

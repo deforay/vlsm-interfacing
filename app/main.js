@@ -12,7 +12,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 const electron_1 = require("electron");
 const path = require("path");
 const fs = require("fs");
-const mysql = require("mysql");
+const mysql = require("mysql2");
 const log = require("electron-log/main");
 const sqlite3helper_main_1 = require("./sqlite3helper.main");
 const Store = require('electron-store');
@@ -22,6 +22,30 @@ let sqlite3Obj = null;
 let sqliteDbName = 'interface.db';
 const args = process.argv.slice(1), serve = args.some(val => val === '--serve');
 let tray = null;
+function createUniversalMySQLConfig(baseConfig) {
+    return Object.assign(Object.assign({}, baseConfig), { 
+        // Connection settings (valid for both pools and connections)
+        ssl: false, insecureAuth: true, supportBigNumbers: true, bigNumberStrings: true, 
+        // Connection-specific timeout (valid for connections)
+        connectTimeout: 10000, 
+        // Date handling (consistent across versions)
+        dateStrings: ['DATE', 'DATETIME', 'TIMESTAMP'], 
+        // Character set (important for MySQL 5.x compatibility)
+        charset: 'utf8mb4', 
+        // SQL mode handling (MySQL 5.x vs 8.x differences)
+        typeCast: function (field, next) {
+            // Handle different data types consistently
+            if (field.type === 'BIT' && field.length === 1) {
+                return field.buffer()[0] === 1;
+            }
+            return next();
+        } });
+}
+function createUniversalMySQLPoolConfig(baseConfig) {
+    return Object.assign(Object.assign({}, createUniversalMySQLConfig(baseConfig)), { 
+        // Pool-specific settings
+        acquireTimeout: 10000, timeout: 600, connectionLimit: 10, waitForConnections: true, queueLimit: 0 });
+}
 function copyMigrationFiles() {
     const migrationSourceDir = path.join(__dirname, 'mysql-migrations');
     const migrationTargetDir = path.join(electron_1.app.getPath('userData'), 'mysql-migrations');
@@ -187,33 +211,123 @@ try {
             electron_1.ipcMain.handle('mysql-create-pool', (event, config) => {
                 const key = JSON.stringify(config);
                 if (!mysqlPools[key]) {
-                    mysqlPools[key] = mysql.createPool(config);
+                    const universalConfig = createUniversalMySQLPoolConfig(config);
+                    try {
+                        mysqlPools[key] = mysql.createPool(universalConfig);
+                        // Set up pool event handlers
+                        mysqlPools[key].on('connection', (connection) => {
+                            console.log('MySQL connection established');
+                            // Set session variables for compatibility across versions
+                            const compatibilityQueries = [
+                                "SET SESSION sql_mode=(SELECT REPLACE(@@sql_mode, 'ONLY_FULL_GROUP_BY', ''))",
+                                "SET SESSION INTERACTIVE_TIMEOUT=600",
+                                "SET SESSION WAIT_TIMEOUT=600"
+                            ];
+                            compatibilityQueries.forEach(query => {
+                                connection.query(query, (err) => {
+                                    if (err) {
+                                        console.warn(`Non-critical SQL mode warning: ${err.message}`);
+                                    }
+                                });
+                            });
+                        });
+                        mysqlPools[key].on('error', (err) => {
+                            console.error('MySQL pool error:', err.message);
+                        });
+                    }
+                    catch (error) {
+                        console.error('Error creating MySQL pool:', error);
+                        throw error;
+                    }
                 }
                 return { status: 'ok' };
             });
             electron_1.ipcMain.handle('mysql-query', (event, config, query, values) => {
                 const key = JSON.stringify(config);
                 if (!mysqlPools[key]) {
-                    mysqlPools[key] = mysql.createPool(config);
+                    const universalConfig = createUniversalMySQLPoolConfig(config);
+                    mysqlPools[key] = mysql.createPool(universalConfig);
                 }
                 return new Promise((resolve, reject) => {
                     mysqlPools[key].query(query, values !== null && values !== void 0 ? values : [], (err, results) => {
                         if (err) {
-                            // Log the detailed error in the main process for debugging
-                            // console.error('MySQL error in main process:', {
-                            //   message: err.message,
-                            //   code: err.code,
-                            //   sqlState: err.sqlState,
-                            //   sqlMessage: err.sqlMessage,
-                            //   fatal: err.fatal
-                            // });
-                            // Reject with the original MySQL error object
+                            // Enhanced error handling for different MySQL versions
+                            const errorInfo = {
+                                message: err.message,
+                                code: err.code,
+                                errno: err.errno,
+                                sqlState: err.sqlState,
+                                sqlMessage: err.sqlMessage,
+                                fatal: err.fatal
+                            };
+                            // Log different error types
+                            if (err.code === 'ER_NOT_SUPPORTED_AUTH_MODE') {
+                                console.error('MySQL Authentication Error - Try updating user auth method:', errorInfo);
+                            }
+                            else if (err.code === 'ECONNREFUSED') {
+                                console.error('MySQL Connection Refused - Check if MySQL is running:', errorInfo);
+                            }
+                            else if (err.code === 'ER_ACCESS_DENIED_ERROR') {
+                                console.error('MySQL Access Denied - Check credentials:', errorInfo);
+                            }
+                            else {
+                                console.error('MySQL Error:', errorInfo);
+                            }
                             reject(err);
                         }
                         else {
                             resolve(results);
                         }
                     });
+                });
+            });
+            electron_1.ipcMain.handle('mysql-test-connection', (event, config) => {
+                return new Promise((resolve, reject) => {
+                    // Use connection config (not pool config) for single connection test
+                    const universalConfig = createUniversalMySQLConfig(config);
+                    // Create a temporary connection for testing
+                    const testConnection = mysql.createConnection(universalConfig);
+                    testConnection.connect((err) => {
+                        if (err) {
+                            testConnection.destroy();
+                            reject({
+                                success: false,
+                                error: err.message,
+                                code: err.code,
+                                version: 'unknown'
+                            });
+                        }
+                        else {
+                            // Get MySQL version for debugging
+                            testConnection.query('SELECT VERSION() as version', (versionErr, results) => {
+                                const version = results && results[0] ? results[0].version : 'unknown';
+                                testConnection.destroy();
+                                if (versionErr) {
+                                    reject({
+                                        success: false,
+                                        error: versionErr.message,
+                                        version: version
+                                    });
+                                }
+                                else {
+                                    resolve({
+                                        success: true,
+                                        message: 'Connection successful',
+                                        version: version
+                                    });
+                                }
+                            });
+                        }
+                    });
+                    // Timeout the test after 15 seconds
+                    setTimeout(() => {
+                        testConnection.destroy();
+                        reject({
+                            success: false,
+                            error: 'Connection test timeout',
+                            code: 'TIMEOUT'
+                        });
+                    }, 15000);
                 });
             });
             electron_1.ipcMain.handle('import-settings', (event) => __awaiter(void 0, void 0, void 0, function* () {
@@ -383,127 +497,6 @@ try {
                 }
                 appLog.info(message);
             });
-            electron_1.ipcMain.handle('run-mysql-migrations', (event, config) => __awaiter(void 0, void 0, void 0, function* () {
-                const migrationTargetDir = path.join(electron_1.app.getPath('userData'), 'mysql-migrations');
-                if (!fs.existsSync(migrationTargetDir)) {
-                    console.log('No migration directory found, skipping migrations');
-                    return { success: true, message: 'No migrations to run' };
-                }
-                try {
-                    const migrationFiles = fs.readdirSync(migrationTargetDir)
-                        .filter(file => file.endsWith('.sql'))
-                        .sort(); // Sort to ensure migrations run in order
-                    if (migrationFiles.length === 0) {
-                        console.log('No migration files found');
-                        return { success: true, message: 'No migration files found' };
-                    }
-                    console.log(`Found ${migrationFiles.length} migration files:`, migrationFiles);
-                    // Create a temporary pool for migrations
-                    const migrationPool = mysql.createPool(config);
-                    return new Promise((resolve) => {
-                        // Create versions table if it doesn't exist
-                        const createVersionsTable = `
-        CREATE TABLE IF NOT EXISTS versions (
-          id INT AUTO_INCREMENT PRIMARY KEY,
-          version INT NOT NULL,
-          applied_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
-      `;
-                        migrationPool.query(createVersionsTable, (err) => {
-                            if (err) {
-                                console.error('Error creating versions table:', err);
-                                migrationPool.end();
-                                resolve({ success: false, error: err.message });
-                                return;
-                            }
-                            // Get already executed migrations
-                            migrationPool.query('SELECT version FROM versions', (err, results) => {
-                                if (err) {
-                                    console.error('Error reading versions table:', err);
-                                    migrationPool.end();
-                                    resolve({ success: false, error: err.message });
-                                    return;
-                                }
-                                const executedVersions = results.map((row) => row.version);
-                                // Parse migration files to get versions
-                                const migrations = migrationFiles
-                                    .map(file => ({
-                                    version: parseInt(file.replace('.sql', ''), 10),
-                                    file: file
-                                }))
-                                    .filter(migration => !isNaN(migration.version) && !executedVersions.includes(migration.version))
-                                    .sort((a, b) => a.version - b.version);
-                                if (migrations.length === 0) {
-                                    console.log('All migrations already executed');
-                                    migrationPool.end();
-                                    resolve({ success: true, message: 'All migrations already executed' });
-                                    return;
-                                }
-                                console.log(`Executing ${migrations.length} pending migrations:`, migrations.map(m => m.file));
-                                // Execute migrations sequentially
-                                let currentIndex = 0;
-                                function executeMigration() {
-                                    if (currentIndex >= migrations.length) {
-                                        console.log('All migrations completed successfully');
-                                        migrationPool.end();
-                                        resolve({ success: true, message: 'All migrations completed successfully' });
-                                        return;
-                                    }
-                                    const migration = migrations[currentIndex];
-                                    const migrationPath = path.join(migrationTargetDir, migration.file);
-                                    try {
-                                        const migrationSql = fs.readFileSync(migrationPath, 'utf8');
-                                        console.log(`Executing migration: ${migration.file}`);
-                                        // Split SQL into individual statements
-                                        const statements = migrationSql
-                                            .split(';')
-                                            .map(stmt => stmt.trim())
-                                            .filter(stmt => stmt.length > 0);
-                                        // Execute all statements in the migration file
-                                        let statementIndex = 0;
-                                        function executeStatement() {
-                                            if (statementIndex >= statements.length) {
-                                                // All statements executed, record the migration
-                                                migrationPool.query('INSERT INTO versions (version) VALUES (?)', [migration.version], (err) => {
-                                                    if (err) {
-                                                        console.error(`Error recording migration ${migration.file}:`, err);
-                                                        migrationPool.end();
-                                                        resolve({ success: false, error: err.message });
-                                                        return;
-                                                    }
-                                                    console.log(`Migration ${migration.file} completed successfully`);
-                                                    currentIndex++;
-                                                    executeMigration(); // Execute next migration
-                                                });
-                                                return;
-                                            }
-                                            migrationPool.query(statements[statementIndex], (err) => {
-                                                if (err) {
-                                                    console.warn(`Warning in statement ${statementIndex + 1} of ${migration.file}:`, err.message);
-                                                    // Continue with next statement even if one fails
-                                                }
-                                                statementIndex++;
-                                                executeStatement();
-                                            });
-                                        }
-                                        executeStatement();
-                                    }
-                                    catch (err) {
-                                        console.error(`Error reading migration file ${migration.file}:`, err);
-                                        migrationPool.end();
-                                        resolve({ success: false, error: err.message });
-                                    }
-                                }
-                                executeMigration();
-                            });
-                        });
-                    });
-                }
-                catch (err) {
-                    console.error('Error during migration process:', err);
-                    return { success: false, error: err.message };
-                }
-            }));
             electron_1.ipcMain.handle('log-warning', (event, message, instrumentId = null) => {
                 let appLog = log.scope('app');
                 if (instrumentId) {

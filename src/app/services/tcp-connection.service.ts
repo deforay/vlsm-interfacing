@@ -19,9 +19,8 @@ interface ConnectionHealth {
 export class TcpConnectionService implements OnDestroy {
 
   public connectionParams: ConnectionParams = null;
-  private readonly MAX_RECONNECT_ATTEMPTS = 25; // Maximum reconnection attempts
   protected handleTCPCallback: (connectionIdentifierKey: string, data: any) => void;
-
+  public socketClient = null; // Restored from old code
   public server = null;
   public net = null;
 
@@ -57,7 +56,6 @@ export class TcpConnectionService implements OnDestroy {
     const parts = key.split(':');
     if (parts.length < 4) return null;
 
-    // This is a simplified version - you'd need to reconstruct the full ConnectionParams
     return {
       host: parts[0],
       port: parseInt(parts[1]),
@@ -82,7 +80,7 @@ export class TcpConnectionService implements OnDestroy {
         bytesReceived: 0,
         bytesSent: 0,
         reconnectCount: 0,
-        lastDataSent: new Date(0) // Initialize to a very old date (epoch)
+        lastDataSent: new Date(0)
       });
     }
 
@@ -129,38 +127,27 @@ export class TcpConnectionService implements OnDestroy {
         const clientAddress = socket.remoteAddress;
         that.utilitiesService.logger('info', (new Date()) + ' : A remote client (' + clientAddress + ') has connected to the Interfacing Server', instrumentConnectionData.instrumentId);
 
+        // confirm socket connection from client
         sockets.push(socket);
+        that.socketClient = socket; // Restored from old code
 
-        socket.setKeepAlive(true, 60000); // Enable keep-alive with a 60-second interval
-        socket.setNoDelay(true); // Disable Nagle's algorithm for low latency
-        socket.setMaxListeners(0); // Remove listener limit
+        // Enable TCP keep-alive with a 1-minute interval (kept as it's essential)
+        socket.setKeepAlive(true, 60000);
 
-        try {
-          // Set socket to high priority if available
-          if (socket.setTOS) {
-            socket.setTOS(0x10); // IPTOS_LOWDELAY
-          }
-        } catch (e) {
-          // Ignore if not supported
-        }
-
-
-        // Set timeout for the server socket
-        socket.setTimeout(that.connectionTimeout);
+        // No timeout for medical devices - they can have hours-long silent periods
+        // TCP keep-alive will handle real disconnections
+        socket.setTimeout(0); // Infinite timeout
 
         socket.on('timeout', () => {
-          if (that.connectionTimeout === 300000) {
-            that.utilitiesService.logger('info', 'Increasing timeout to 10 minutes after timeout event', instrumentConnectionData.instrumentId);
-            that.connectionTimeout = 600000; // 10 minutes
-          }
-          that.utilitiesService.logger('info', 'Server socket timeout', instrumentConnectionData.instrumentId);
-          that._handleClientConnectionIssue(instrumentConnectionData, connectionParams, 'Client socket timeout', true);
-          socket.end();
+          // This should never fire now with setTimeout(0), but keep for safety
+          that.utilitiesService.logger('warn', 'Unexpected socket timeout event', instrumentConnectionData.instrumentId);
         });
 
         socket.on('data', function (data: any) {
-          instrumentConnectionData.statusSubject.next(true);
-          instrumentConnectionData.reconnectAttempts = 0;
+          // Only update status to true if it's currently false (connection recovery)
+          if (!instrumentConnectionData.statusSubject.value) {
+            instrumentConnectionData.statusSubject.next(true);
+          }
 
           // Update connection health
           const health = that.connectionHealth.get(connectionIdentifierKey);
@@ -170,13 +157,14 @@ export class TcpConnectionService implements OnDestroy {
           }
 
           that.handleTCPCallback(connectionIdentifierKey, data);
-          that.connectionTimeout = 300000; // Reset to 5 minutes
+          // No need to reset timeout since we're using infinite timeout
         });
 
-        instrumentConnectionData.connectionSocket = socket;
+        instrumentConnectionData.connectionSocket = that.socketClient;
         instrumentConnectionData.statusSubject.next(true);
 
-        socket.on('close', function () {
+        // Add a 'close' event handler to this instance of socket
+        socket.on('close', function (hadError) {
           if (instrumentConnectionData.errorOccurred) {
             instrumentConnectionData.errorOccurred = false;
             return;
@@ -187,7 +175,11 @@ export class TcpConnectionService implements OnDestroy {
           if (index !== -1) {
             sockets.splice(index, 1);
           }
-          console.log('CLOSED: ' + socket.remoteAddress + ' ' + socket.remotePort);
+          const msg = hadError
+            ? `Client ${socket.remoteAddress}:${socket.remotePort} disconnected with error`
+            : `Client ${socket.remoteAddress}:${socket.remotePort} disconnected normally`;
+
+          that.utilitiesService.logger('warn', msg, instrumentConnectionData.instrumentId);
         });
 
       });
@@ -198,77 +190,48 @@ export class TcpConnectionService implements OnDestroy {
 
       instrumentConnectionData.connectionServer.on('error', function (e) {
         instrumentConnectionData.errorOccurred = true;
-        if (e.code === 'EADDRINUSE') {
-          that.utilitiesService.logger('error', `Error: Port ${connectionParams.port} is already in use. Disconnecting to attempt again later.`, instrumentConnectionData.instrumentId);
-
-          const tempSocket = new that.net.Socket();
-          tempSocket.on('error', function () {
-            tempSocket.destroy();
-          });
-
-          tempSocket.connect(connectionParams.port, connectionParams.host, function () {
-            that.utilitiesService.logger('info', `Found process using port ${connectionParams.port}, sending reset signal`, instrumentConnectionData.instrumentId);
-            tempSocket.end();
-          });
-        } else {
-          that.utilitiesService.logger('error', 'Error while connecting ' + e.code, instrumentConnectionData.instrumentId);
-        }
+        that._handleClientConnectionIssue(instrumentConnectionData, connectionParams, 'Error while connecting ' + e.code, true);
       });
 
     } else if (connectionParams.connectionMode === 'tcpclient') {
-      instrumentConnectionData.connectionSocket = new that.net.Socket({
-        noDelay: true,
-        allowHalfOpen: false,
-        readable: true,
-        writable: true
-      });
+      instrumentConnectionData.connectionSocket = that.socketClient = new that.net.Socket();
       that.clientConnectionOptions = {
         port: connectionParams.port,
         host: connectionParams.host,
         reuseAddress: true
       };
 
+      // since this is a CLIENT connection, we don't need a server object, so we set it to null
       instrumentConnectionData.connectionServer = null;
 
       that.utilitiesService.logger('info', 'Trying to connect as client', instrumentConnectionData.instrumentId);
 
+      // Attempt to connect
       instrumentConnectionData.connectionSocket.connect(that.clientConnectionOptions);
-      instrumentConnectionData.connectionSocket.setTimeout(that.connectionTimeout);
+
+      // Set connection timeout for client - disabled for medical devices
+      instrumentConnectionData.connectionSocket.setTimeout(0); // Infinite timeout
+
+      // Enable TCP keep-alive with a 1-minute interval (kept as it's essential)
       instrumentConnectionData.connectionSocket.setKeepAlive(true, 60000);
 
       instrumentConnectionData.connectionSocket.on('timeout', () => {
-        if (that.connectionTimeout === 300000) {
-          that.utilitiesService.logger('info', 'Increasing timeout to 10 minutes after timeout event', instrumentConnectionData.instrumentId);
-          that.connectionTimeout = 600000;
-        }
-        that.utilitiesService.logger('info', 'Client socket timeout', instrumentConnectionData.instrumentId);
-        that._handleClientConnectionIssue(instrumentConnectionData, connectionParams, 'Server socket timeout', true);
+        // This should never fire now with setTimeout(0), but keep for safety
+        that.utilitiesService.logger('warn', 'Unexpected client socket timeout event', instrumentConnectionData.instrumentId);
       });
 
+      // Successful connection
       instrumentConnectionData.connectionSocket.on('connect', function () {
-        that.connectionTimeout = 300000;
         instrumentConnectionData.statusSubject.next(true);
-        instrumentConnectionData.reconnectAttempts = 0;
-
-        instrumentConnectionData.connectionSocket.setNoDelay(true);
-
-        try {
-          if (instrumentConnectionData.connectionSocket.setTOS) {
-            instrumentConnectionData.connectionSocket.setTOS(0x10); // IPTOS_LOWDELAY
-          }
-          // Disable socket buffering for immediate sends
-          instrumentConnectionData.connectionSocket.setMaxListeners(0);
-        } catch (e) {
-          // Ignore if not supported
-        }
-
-
+        instrumentConnectionData.reconnectAttempts = 0; // Reset retry attempts
         that.utilitiesService.logger('success', 'Connected as client successfully', instrumentConnectionData.instrumentId);
       });
 
       instrumentConnectionData.connectionSocket.on('data', function (data) {
-        instrumentConnectionData.statusSubject.next(true);
-        instrumentConnectionData.reconnectAttempts = 0;
+        // Only update status to true if it's currently false (connection recovery)
+        if (!instrumentConnectionData.statusSubject.value) {
+          instrumentConnectionData.statusSubject.next(true);
+        }
 
         // Update connection health
         const health = that.connectionHealth.get(connectionIdentifierKey);
@@ -280,6 +243,7 @@ export class TcpConnectionService implements OnDestroy {
         that.handleTCPCallback(connectionIdentifierKey, data);
       });
 
+      // Connection closed
       instrumentConnectionData.connectionSocket.on('error', (err) => {
         instrumentConnectionData.errorOccurred = true;
         that._handleClientConnectionIssue(instrumentConnectionData, connectionParams, `Connection error: ${err.message}`, true);
@@ -287,12 +251,15 @@ export class TcpConnectionService implements OnDestroy {
 
       instrumentConnectionData.connectionSocket.on('close', (hadError) => {
         if (instrumentConnectionData.errorOccurred) {
+          // Since the error has already been handled, reset the flag and exit
           instrumentConnectionData.errorOccurred = false;
           return;
         }
         const message = hadError ? 'Connection closed due to a transmission error' : 'Connection closed';
         that._handleClientConnectionIssue(instrumentConnectionData, connectionParams, message, hadError);
       });
+    } else {
+      // handle other connection modes if any
     }
   }
 
@@ -306,37 +273,11 @@ export class TcpConnectionService implements OnDestroy {
     }
 
     if (connectionParams.interfaceAutoConnect === 'yes') {
-      // Check if we've exceeded max reconnection attempts
-      if (instrumentConnectionData.reconnectAttempts >= that.MAX_RECONNECT_ATTEMPTS) {
-        that.utilitiesService.logger('error',
-          `Max reconnection attempts (${that.MAX_RECONNECT_ATTEMPTS}) reached for ${instrumentConnectionData.instrumentId}. Stopping auto-reconnect.`,
-          instrumentConnectionData.instrumentId
-        );
-
-        // Update connection health
-        const key = that._generateConnectionIdentifierKey(connectionParams);
-        const health = that.connectionHealth.get(key);
-        if (health) {
-          health.reconnectCount = instrumentConnectionData.reconnectAttempts;
-        }
-
-        // Reset attempts counter but don't try to reconnect
-        instrumentConnectionData.reconnectAttempts = 0;
-        instrumentConnectionData.connectionAttemptStatusSubject.next(false);
-        return;
-      }
-
       instrumentConnectionData.connectionAttemptStatusSubject.next(true);
       const attempt = instrumentConnectionData.reconnectAttempts || 0;
       const delay = that.getRetryDelay(attempt);
-
-      that.utilitiesService.logger('info',
-        `Interface AutoConnect is enabled: Will re-attempt connection in ${delay / 1000} seconds (attempt ${attempt + 1}/${that.MAX_RECONNECT_ATTEMPTS})`,
-        instrumentConnectionData.instrumentId
-      );
-
+      that.utilitiesService.logger('info', `Interface AutoConnect is enabled: Will re-attempt connection in ${delay / 1000} seconds`, instrumentConnectionData.instrumentId);
       instrumentConnectionData.reconnectAttempts = attempt + 1;
-
       setTimeout(() => {
         that.connect(connectionParams, that.handleTCPCallback);
       }, delay);
@@ -351,18 +292,11 @@ export class TcpConnectionService implements OnDestroy {
 
   reconnect(connectionParams: ConnectionParams, handleTCPCallback: (connectionIdentifierKey: string, data: any) => void) {
     let that = this;
-
-    // Reset reconnection attempts when manually reconnecting
-    const key = that._generateConnectionIdentifierKey(connectionParams);
-    const instrumentConnectionData = that.connectionStack.get(key);
-    if (instrumentConnectionData) {
-      instrumentConnectionData.reconnectAttempts = 0;
-    }
-
     that.disconnect(connectionParams);
     that.connect(connectionParams, handleTCPCallback);
   }
 
+  // Simplified disconnect method - back to original approach
   disconnect(connectionParams: ConnectionParams) {
     const that = this;
     const connectionIdentifierKey = that._generateConnectionIdentifierKey(connectionParams);
@@ -370,74 +304,49 @@ export class TcpConnectionService implements OnDestroy {
     const instrumentConnectionData = that.connectionStack.get(connectionIdentifierKey);
     if (instrumentConnectionData) {
       try {
-        console.log(`Disconnecting ${connectionParams.instrumentId} (${connectionParams.host}:${connectionParams.port})`);
-
         instrumentConnectionData.statusSubject.next(false);
         instrumentConnectionData.connectionAttemptStatusSubject.next(false);
-        instrumentConnectionData.transmissionStatusSubject.next(false);
-
-        if (instrumentConnectionData.connectionServer) {
-          try {
-            instrumentConnectionData.connectionServer.removeAllListeners();
-
-            instrumentConnectionData.connectionServer.close(() => {
-              console.log(`Server for ${connectionParams.instrumentId} closed`);
-              instrumentConnectionData.connectionServer = null;
-            });
-
-            instrumentConnectionData.connectionServer.unref();
-
-            setTimeout(() => {
-              if (instrumentConnectionData.connectionServer) {
-                console.warn(`Server for ${connectionParams.instrumentId} didn't close properly, forcing termination`);
-                instrumentConnectionData.connectionServer = null;
-              }
-            }, 1000);
-          } catch (serverError) {
-            console.error(`Error closing server for ${connectionParams.instrumentId}:`, serverError);
-            instrumentConnectionData.connectionServer = null;
-          }
-        }
 
         if (instrumentConnectionData.connectionSocket) {
-          try {
-            instrumentConnectionData.connectionSocket.removeAllListeners();
-            instrumentConnectionData.connectionSocket.unref();
+          // Remove all event listeners
+          instrumentConnectionData.connectionSocket.removeAllListeners();
 
-            instrumentConnectionData.connectionSocket.end(() => {
-              console.log(`Socket for ${connectionParams.instrumentId} ended`);
-
-              if (instrumentConnectionData.connectionSocket) {
-                instrumentConnectionData.connectionSocket.destroy();
-                instrumentConnectionData.connectionSocket = null;
-                console.log(`Socket for ${connectionParams.instrumentId} destroyed`);
-              }
-            });
-
-            setTimeout(() => {
-              if (instrumentConnectionData.connectionSocket) {
-                instrumentConnectionData.connectionSocket.destroy();
-                instrumentConnectionData.connectionSocket = null;
-                console.log(`Socket for ${connectionParams.instrumentId} force destroyed after timeout`);
-              }
-            }, 1000);
-          } catch (socketError) {
-            console.error(`Error closing socket for ${connectionParams.instrumentId}:`, socketError);
+          // Register the 'close' event listener before ending the socket
+          instrumentConnectionData.connectionSocket.on('close', () => {
+            // Check if the socket is not null before destroying
             if (instrumentConnectionData.connectionSocket) {
               instrumentConnectionData.connectionSocket.destroy();
-              instrumentConnectionData.connectionSocket = null;
             }
-          }
+          });
+
+          // Register an 'error' event listener
+          instrumentConnectionData.connectionSocket.on('error', (error) => {
+            that.utilitiesService.logger('error', `Socket error: ${error}`, instrumentConnectionData.instrumentId);
+          });
+
+          // End the socket connection
+          instrumentConnectionData.connectionSocket.end();
         }
 
-        that.connectionStack.delete(connectionIdentifierKey);
-        that.utilitiesService.logger('info', 'Disconnection complete', connectionParams.instrumentId);
+        if (instrumentConnectionData.connectionServer) {
+          // Remove all listeners for the server to avoid any leaks or potential issues
+          instrumentConnectionData.connectionServer.removeAllListeners();
 
+          instrumentConnectionData.connectionServer.close(() => {
+            that.utilitiesService.logger('info', 'Server Stopped', instrumentConnectionData.instrumentId);
+          });
+
+          // Handle errors during close
+          instrumentConnectionData.connectionServer.on('error', (error) => {
+            that.utilitiesService.logger('error', `Error while closing server: ${error.message}`, instrumentConnectionData.instrumentId);
+          });
+        }
       } catch (error) {
-        that.utilitiesService.logger('error', `Error during disconnection: ${error}`, connectionParams.instrumentId);
+        that.utilitiesService.logger('error', `Error during disconnection: ${error}`, instrumentConnectionData.instrumentId);
+      } finally {
+        // Clean up resources
         instrumentConnectionData.connectionSocket = null;
         instrumentConnectionData.connectionServer = null;
-        that.connectionStack.delete(connectionIdentifierKey);
       }
     }
   }
@@ -445,15 +354,14 @@ export class TcpConnectionService implements OnDestroy {
   sendData(connectionParams: ConnectionParams, data: string) {
     const that = this;
     const connectionIdentifierKey = that._generateConnectionIdentifierKey(connectionParams);
+
     const instrumentConnectionData = that.connectionStack.get(connectionIdentifierKey);
 
-    if (instrumentConnectionData && instrumentConnectionData.connectionSocket &&
-      instrumentConnectionData.connectionSocket.writable) {
-
-      instrumentConnectionData.transmissionStatusSubject.next(true);
+    if (instrumentConnectionData) {
+      instrumentConnectionData.transmissionStatusSubject.next(true); // Set flag when transmission starts
 
       instrumentConnectionData.connectionSocket.write(data, 'utf8', (err) => {
-        instrumentConnectionData.transmissionStatusSubject.next(false);
+        instrumentConnectionData.transmissionStatusSubject.next(false); // Reset flag when transmission ends
 
         if (err) {
           console.error('Failed to send data:', err);
@@ -468,8 +376,6 @@ export class TcpConnectionService implements OnDestroy {
           }
         }
       });
-    } else {
-      console.warn(`Connection not available for ${connectionParams.instrumentId}, cannot send data`);
     }
   }
 
@@ -495,82 +401,52 @@ export class TcpConnectionService implements OnDestroy {
     return instrumentConnectionData?.transmissionStatusSubject.asObservable();
   }
 
-  isActuallyConnected(connectionParams: ConnectionParams): boolean {
-    const key = this._generateConnectionIdentifierKey(connectionParams);
-    const instrumentConnectionData = this.connectionStack.get(key);
-
-    if (!instrumentConnectionData) return false;
-
-    if (connectionParams.connectionMode === 'tcpserver') {
-      if (instrumentConnectionData.connectionSocket) {
-        try {
-          return instrumentConnectionData.connectionSocket.writable &&
-            !instrumentConnectionData.connectionSocket.destroyed;
-        } catch (e) {
-          return false;
-        }
-      }
-      return false;
-    }
-
-    if (connectionParams.connectionMode === 'tcpclient') {
-      if (instrumentConnectionData.connectionSocket) {
-        try {
-          return instrumentConnectionData.connectionSocket.writable &&
-            !instrumentConnectionData.connectionSocket.destroyed &&
-            instrumentConnectionData.connectionSocket.connecting !== true;
-        } catch (e) {
-          return false;
-        }
-      }
-      return false;
-    }
-
-    return false;
-  }
-
-  // Get connection health metrics
+  // Keep the useful health tracking methods
   getConnectionHealth(connectionParams: ConnectionParams): ConnectionHealth | null {
     const key = this._generateConnectionIdentifierKey(connectionParams);
     return this.connectionHealth.get(key) || null;
   }
 
-  // Get all connection health metrics
   getAllConnectionHealth(): Map<string, ConnectionHealth> {
     return new Map(this.connectionHealth);
   }
 
+  // Conservative connection checking - only checks obvious failures
+  isActuallyConnected(connectionParams: ConnectionParams): boolean {
+    const key = this._generateConnectionIdentifierKey(connectionParams);
+    const instrumentConnectionData = this.connectionStack.get(key);
+
+    if (!instrumentConnectionData || !instrumentConnectionData.connectionSocket) {
+      return false;
+    }
+
+    try {
+      // Only check for obvious failures - don't check writable status as it can be temporarily false
+      return !instrumentConnectionData.connectionSocket.destroyed &&
+        instrumentConnectionData.connectionSocket.readyState !== 'closed';
+    } catch (e) {
+      return false;
+    }
+  }
+
+  // Safe verification for UI components - doesn't trigger automatic reconnections
   verifyConnection(connectionParams: ConnectionParams): boolean {
     const key = this._generateConnectionIdentifierKey(connectionParams);
     const instrumentConnectionData = this.connectionStack.get(key);
 
     if (!instrumentConnectionData) {
-      console.log(`No connection data found for ${connectionParams.instrumentId}`);
       return false;
     }
 
-    console.log(`Verifying connection for ${connectionParams.instrumentId}`);
-
-    // Check if the connection is actually valid
     const isConnected = this.isActuallyConnected(connectionParams);
 
-    if (!isConnected) {
-      console.warn(`Connection verification failed for ${connectionParams.instrumentId} - marking as disconnected`);
-
-      // Update the status to reflect the real state
+    // Only update status if there's an OBVIOUS problem (socket destroyed or closed)
+    // This is safe for UI components to call without disrupting connections
+    if (!isConnected && instrumentConnectionData.connectionSocket?.destroyed) {
       instrumentConnectionData.statusSubject.next(false);
-
-      // Optionally trigger reconnection if auto-connect is enabled
-      if (connectionParams.interfaceAutoConnect === 'yes') {
-        console.log(`Auto-reconnect enabled for ${connectionParams.instrumentId}, attempting reconnection`);
-        this._handleClientConnectionIssue(instrumentConnectionData, connectionParams, 'Connection verification failed', true);
-      }
-    } else {
-      console.log(`Connection verified successfully for ${connectionParams.instrumentId}`);
-      // Ensure status is correctly set to true
-      instrumentConnectionData.statusSubject.next(true);
     }
 
+    // Don't auto-trigger reconnections from verification - let the UI or natural error handling do it
     return isConnected;
   }
 }

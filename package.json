@@ -1,6 +1,6 @@
 {
   "main": "app/main.js",
-  "version": "3.0.0",
+  "version": "3.1.0",
   "private": true,
   "scripts": {
     "postinstall": "electron-builder install-app-deps",
@@ -42,7 +42,7 @@
     "electron-store": "^8.2.0",
     "hl7parser": "^1.0.1",
     "moment": "^2.30.1",
-    "mysql": "2.18.1",
+    "mysql2": "^3.14.1",
     "ngx-pagination": "^6.0.3",
     "rxjs": "7.8.1",
     "tslib": "2.6.2",

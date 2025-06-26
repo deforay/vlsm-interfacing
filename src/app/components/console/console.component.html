@@ -191,14 +191,14 @@
     <div class="stat-item">
       <i class="fa fa-sync"></i>
       <div class="stat-content">
-        <label>Last LIS Sync</label>
+        <span class="stat-content-label">Last LIS Sync</span>
         <span>{{ lastLimsSync || 'Never' }}</span>
       </div>
     </div>
     <div class="stat-item">
       <i class="fa fa-flask"></i>
       <div class="stat-content">
-        <label>Last Result</label>
+        <span class="stat-content-label">Last Result</span>
         <span>{{ lastResultReceived || 'None' }}</span>
       </div>
     </div>
@@ -226,7 +226,7 @@
     <!-- Search Bar -->
     <div class="search-bar">
       <i class="fa fa-search"></i>
-      <input type="text" #searchInput placeholder="Search by instrument, sample ID, or test type..."
+      <input type="text" #searchInput placeholder="Search by instrument, Sample ID, or test type..."
         [(ngModel)]="searchTerm" class="search-input">
     </div>
 
@@ -275,7 +275,9 @@
         <!-- Result Unit Column -->
         <ng-container matColumnDef="test_unit">
           <mat-header-cell *matHeaderCellDef mat-sort-header>Unit</mat-header-cell>
-          <mat-cell *matCellDef="let row">{{ row.test_unit }}</mat-cell>
+          <mat-cell *matCellDef="let row">
+            <span [title]="row.test_unit" class="result-unit truncate-with-tooltip">{{ row.test_unit }}</span>
+          </mat-cell>
         </ng-container>
 
         <!-- Test Type Column -->
@@ -287,7 +289,9 @@
         <!-- Tested By Column -->
         <ng-container matColumnDef="tested_by">
           <mat-header-cell *matHeaderCellDef mat-sort-header>Tested By</mat-header-cell>
-          <mat-cell *matCellDef="let row">{{ row.tested_by }}</mat-cell>
+          <mat-cell *matCellDef="let row">
+            <span [title]="row.tested_by" class="truncate-with-tooltip">{{ row.tested_by }}</span>
+          </mat-cell>
         </ng-container>
 
         <!-- Tested On Column -->

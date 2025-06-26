@@ -46,7 +46,7 @@ export class ConsoleComponent implements OnInit, OnDestroy {
   public lastOrders: any;
   private readonly ipc: IpcRenderer;
   public availableInstruments = [];
-  public instrumentLogs = [];
+  public instrumentLogs: { [instrumentId: string]: { logs: any[]; filteredLogs: any[] } } = {};
   public connectionParams: ConnectionParams = null;
   public selectedTabIndex = 0;
   private electronStoreSubscription: Subscription;
@@ -318,6 +318,11 @@ export class ConsoleComponent implements OnInit, OnDestroy {
           that.dataSource.data = that.lastOrders;
           that.dataSource.paginator = that.paginator;
           that.dataSource.sort = that.sort;
+
+          // Ensure the sort is set to 'added_on' descending by default
+          that.sort.active = 'added_on';
+          that.sort.direction = 'desc';
+          that.sort.sortChange.emit({ active: that.sort.active, direction: that.sort.direction });
         });
       },
       error: error => {
@@ -344,12 +349,10 @@ export class ConsoleComponent implements OnInit, OnDestroy {
   }
 
   updateLogsForInstrument(instrumentId: string, newLogs: any) {
-    if (!this.instrumentLogs[instrumentId]) {
-      this.instrumentLogs[instrumentId] = {
-        logs: [],
-        filteredLogs: []
-      };
-    }
+    this.instrumentLogs[instrumentId] ??= {
+      logs: [],
+      filteredLogs: []
+    };
 
     this.instrumentLogs[instrumentId].logs = newLogs;
     this.instrumentLogs[instrumentId].filteredLogs = newLogs;

@@ -1,7 +1,7 @@
 import { app, BrowserWindow, screen, ipcMain, dialog, Tray, Menu, nativeImage } from 'electron';
 import * as path from 'path';
 import * as fs from 'fs';
-import * as mysql from 'mysql';
+import * as mysql from 'mysql2';
 import * as sqlite3 from '@vscode/sqlite3';
 
 import * as log from 'electron-log/main';
@@ -15,6 +15,48 @@ let sqliteDbName: string = 'interface.db';
 const args = process.argv.slice(1),
   serve = args.some(val => val === '--serve');
 let tray: Tray = null;
+
+
+function createUniversalMySQLConfig(baseConfig: any) {
+  return {
+    ...baseConfig,
+    // Connection settings (valid for both pools and connections)
+    ssl: false,                    // Disable SSL to avoid cert issues
+    insecureAuth: true,           // Allow insecure auth for older versions
+    supportBigNumbers: true,      // Handle large numbers properly
+    bigNumberStrings: true,       // Return big numbers as strings
+
+    // Connection-specific timeout (valid for connections)
+    connectTimeout: 10000,        // 10 seconds to connect
+
+    // Date handling (consistent across versions)
+    dateStrings: ['DATE', 'DATETIME', 'TIMESTAMP'],
+
+    // Character set (important for MySQL 5.x compatibility)
+    charset: 'utf8mb4',
+
+    // SQL mode handling (MySQL 5.x vs 8.x differences)
+    typeCast: function (field: any, next: any) {
+      // Handle different data types consistently
+      if (field.type === 'BIT' && field.length === 1) {
+        return field.buffer()[0] === 1;
+      }
+      return next();
+    }
+  };
+}
+
+function createUniversalMySQLPoolConfig(baseConfig: any) {
+  return {
+    ...createUniversalMySQLConfig(baseConfig),
+    // Pool-specific settings
+    acquireTimeout: 10000,        // 10 seconds to get connection from pool
+    timeout: 600,                 // Query timeout (pool-specific)
+    connectionLimit: 10,
+    waitForConnections: true,
+    queueLimit: 0
+  };
+}
 
 
 function copyMigrationFiles() {
@@ -210,7 +252,39 @@ try {
       ipcMain.handle('mysql-create-pool', (event, config) => {
         const key = JSON.stringify(config);
         if (!mysqlPools[key]) {
-          mysqlPools[key] = mysql.createPool(config);
+          const universalConfig = createUniversalMySQLPoolConfig(config);
+
+          try {
+            mysqlPools[key] = mysql.createPool(universalConfig);
+
+            // Set up pool event handlers
+            mysqlPools[key].on('connection', (connection: any) => {
+              console.log('MySQL connection established');
+
+              // Set session variables for compatibility across versions
+              const compatibilityQueries = [
+                "SET SESSION sql_mode=(SELECT REPLACE(@@sql_mode, 'ONLY_FULL_GROUP_BY', ''))",
+                "SET SESSION INTERACTIVE_TIMEOUT=600",
+                "SET SESSION WAIT_TIMEOUT=600"
+              ];
+
+              compatibilityQueries.forEach(query => {
+                connection.query(query, (err: any) => {
+                  if (err) {
+                    console.warn(`Non-critical SQL mode warning: ${err.message}`);
+                  }
+                });
+              });
+            });
+
+            mysqlPools[key].on('error', (err: any) => {
+              console.error('MySQL pool error:', err.message);
+            });
+
+          } catch (error) {
+            console.error('Error creating MySQL pool:', error);
+            throw error;
+          }
         }
         return { status: 'ok' };
       });
@@ -219,26 +293,92 @@ try {
       ipcMain.handle('mysql-query', (event, config, query: string, values?: any[]) => {
         const key = JSON.stringify(config);
         if (!mysqlPools[key]) {
-          mysqlPools[key] = mysql.createPool(config);
+          const universalConfig = createUniversalMySQLPoolConfig(config);
+          mysqlPools[key] = mysql.createPool(universalConfig);
         }
 
         return new Promise((resolve, reject) => {
           mysqlPools[key].query(query, values ?? [], (err: any, results: any) => {
             if (err) {
-              // Log the detailed error in the main process for debugging
-              // console.error('MySQL error in main process:', {
-              //   message: err.message,
-              //   code: err.code,
-              //   sqlState: err.sqlState,
-              //   sqlMessage: err.sqlMessage,
-              //   fatal: err.fatal
-              // });
-              // Reject with the original MySQL error object
+              // Enhanced error handling for different MySQL versions
+              const errorInfo = {
+                message: err.message,
+                code: err.code,
+                errno: err.errno,
+                sqlState: err.sqlState,
+                sqlMessage: err.sqlMessage,
+                fatal: err.fatal
+              };
+
+              // Log different error types
+              if (err.code === 'ER_NOT_SUPPORTED_AUTH_MODE') {
+                console.error('MySQL Authentication Error - Try updating user auth method:', errorInfo);
+              } else if (err.code === 'ECONNREFUSED') {
+                console.error('MySQL Connection Refused - Check if MySQL is running:', errorInfo);
+              } else if (err.code === 'ER_ACCESS_DENIED_ERROR') {
+                console.error('MySQL Access Denied - Check credentials:', errorInfo);
+              } else {
+                console.error('MySQL Error:', errorInfo);
+              }
+
               reject(err);
             } else {
               resolve(results);
             }
           });
+        });
+      });
+
+
+      ipcMain.handle('mysql-test-connection', (event, config) => {
+        return new Promise((resolve, reject) => {
+          // Use connection config (not pool config) for single connection test
+          const universalConfig = createUniversalMySQLConfig(config);
+
+          // Create a temporary connection for testing
+          const testConnection = mysql.createConnection(universalConfig);
+
+          testConnection.connect((err: any) => {
+            if (err) {
+              testConnection.destroy();
+              reject({
+                success: false,
+                error: err.message,
+                code: err.code,
+                version: 'unknown'
+              });
+            } else {
+              // Get MySQL version for debugging
+              testConnection.query('SELECT VERSION() as version', (versionErr: any, results: any) => {
+                const version = results && results[0] ? results[0].version : 'unknown';
+                testConnection.destroy();
+
+                if (versionErr) {
+                  reject({
+                    success: false,
+                    error: versionErr.message,
+                    version: version
+                  });
+                } else {
+                  resolve({
+                    success: true,
+                    message: 'Connection successful',
+                    version: version
+                  });
+                }
+              });
+            }
+          });
+
+          // Timeout the test after 15 seconds
+          setTimeout(() => {
+            testConnection.destroy();
+            reject({
+              success: false,
+              error: 'Connection test timeout',
+              code: 'TIMEOUT'
+            });
+          }, 15000);
         });
       });
 

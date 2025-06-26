@@ -608,7 +608,7 @@ $background-color: #f9fafb;
     .stat-content {
       flex: 1;
 
-      label {
+      .stat-contentlabel {
         display: block;
         font-size: 0.6875rem; // Reduced from 0.75rem
         color: $text-light;
@@ -734,6 +734,13 @@ $background-color: #f9fafb;
       color: $text-color;
     }
 
+    .truncate-with-tooltip {
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      cursor: help;
+    }
+
     .mat-row {
       transition: all 0.2s ease;
       border-bottom: 1px solid lighten($border-color, 5%);
@@ -782,63 +789,59 @@ $background-color: #f9fafb;
     }
 
     .mat-column-select {
-      flex: 0 0 40px;
-      max-width: 40px;
+      flex: 0 0 50px;
+      max-width: 50px;
     }
 
+
     .mat-column-machine_used {
-      flex: 0 0 130px; // Reduced from 150px
-      max-width: 130px;
+      flex: 0 0 90px;
+      max-width: 90px;
     }
 
     .mat-column-order_id {
-      flex: 0 0 160px; // Reduced from 180px
-      max-width: 160px;
+      flex: 0 0 180px;
+      max-width: 180px;
     }
 
     .mat-column-results {
-      flex: 0 0 140px; // Reduced from 180px
-      max-width: 140px;
+      flex: 0 0 220px;
+      max-width: 220px;
     }
 
     .mat-column-test_unit {
-      flex: 0 0 50px; // Reduced from 60px
-      max-width: 50px;
+      flex: 0 0 80px;
+      max-width: 80px;
       text-align: center;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
     }
 
     .mat-column-test_type {
-      flex: 0 0 70px; // Reduced from 80px
-      max-width: 70px;
+      flex: 0 0 120px;
+      max-width: 120px;
     }
 
     .mat-column-tested_by {
-      flex: 1 1 100px; // Reduced from 120px
-      min-width: 100px;
+      flex: 0 0 130px;
+      max-width: 130px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
     }
 
-    .mat-column-analysed_date_time {
-      flex: 0 0 100px; // Reduced from 110px
-      max-width: 100px;
-      font-size: 0.6875rem; // Reduced from 0.75rem
-    }
-
-    .mat-column-added_on {
-      flex: 0 0 100px; // Reduced from 110px
-      max-width: 100px;
-      font-size: 0.6875rem; // Reduced from 0.75rem
+    .mat-column-analysed_date_time,
+    .mat-column-added_on,
+    .mat-column-lims_sync_date_time {
+      flex: 0 0 170px;
+      max-width: 170px;
     }
 
     .mat-column-lims_sync_status {
-      flex: 0 0 90px; // Reduced from 100px
+      flex: 0 0 90px;
       max-width: 90px;
       text-align: center;
-    }
-
-    .mat-column-lims_sync_date_time {
-      flex: 0 0 100px; // Reduced from 110px
-      max-width: 100px;
-      font-size: 0.6875rem; // Reduced from 0.75rem
     }
 
     .instrument-badge {
@@ -856,17 +859,19 @@ $background-color: #f9fafb;
     }
 
     .result-value {
-      font-weight: 700;
       color: $dark-color;
-      font-size: 0.875rem; // Reduced from 0.9375rem
       white-space: nowrap;
       overflow: hidden;
       text-overflow: ellipsis;
     }
 
+    .result-unit {
+      font-size: 0.6rem;
+    }
+
     .date-time {
       color: $text-light;
-      font-size: 0.6875rem; // Reduced from 0.75rem
+      font-size: 0.75rem; // Reduced from 0.75rem
       white-space: nowrap;
       overflow: hidden;
       text-overflow: ellipsis;
@@ -961,6 +966,7 @@ $background-color: #f9fafb;
     opacity: 0;
     transform: translateY(5px); // Reduced from 10px
   }
+
   to {
     opacity: 1;
     transform: translateY(0);
@@ -976,10 +982,12 @@ $background-color: #f9fafb;
     transform: scale(1);
     opacity: 1;
   }
+
   50% {
     transform: scale(1.1);
     opacity: 0.8;
   }
+
   100% {
     transform: scale(1);
     opacity: 1;
@@ -994,6 +1002,7 @@ $background-color: #f9fafb;
   from {
     transform: rotate(0deg);
   }
+
   to {
     transform: rotate(360deg);
   }
