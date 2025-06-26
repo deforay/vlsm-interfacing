@@ -27,7 +27,7 @@ export class TcpConnectionService implements OnDestroy {
   protected clientConnectionOptions: any = null;
 
   public connectionStack: Map<string, InstrumentConnectionStack> = new Map();
-  private connectionHealth: Map<string, ConnectionHealth> = new Map();
+  private readonly connectionHealth: Map<string, ConnectionHealth> = new Map();
 
   public connectionTimeout = 300000; // 5 minutes in milliseconds
 
@@ -114,7 +114,7 @@ export class TcpConnectionService implements OnDestroy {
     instrumentConnectionData.connectionAttemptStatusSubject.next(true);
 
     if (connectionParams.connectionMode === 'tcpserver') {
-      that.utilitiesService.logger('info', 'Listening for connection on port ' + connectionParams.port, instrumentConnectionData.instrumentId);
+      that.utilitiesService.logger('info', `Listening for connection on ${connectionParams.host}:${connectionParams.port}`, instrumentConnectionData.instrumentId);
       instrumentConnectionData.connectionServer = that.net.createServer();
       instrumentConnectionData.connectionServer.listen({
         port: connectionParams.port,
@@ -125,11 +125,11 @@ export class TcpConnectionService implements OnDestroy {
       const sockets = [];
       instrumentConnectionData.connectionServer.on('connection', function (socket) {
         const clientAddress = socket.remoteAddress;
-        that.utilitiesService.logger('info', (new Date()) + ' : A remote client (' + clientAddress + ') has connected to the Interfacing Server', instrumentConnectionData.instrumentId);
+        that.utilitiesService.logger('info', `Client ${clientAddress} has connected to the Interfacing Server ${connectionParams.host}:${connectionParams.port}`, instrumentConnectionData.instrumentId);
 
         // confirm socket connection from client
         sockets.push(socket);
-        that.socketClient = socket; // Restored from old code
+        instrumentConnectionData.connectionSocket = socket;
 
         // Enable TCP keep-alive with a 1-minute interval (kept as it's essential)
         socket.setKeepAlive(true, 60000);
@@ -160,8 +160,8 @@ export class TcpConnectionService implements OnDestroy {
           // No need to reset timeout since we're using infinite timeout
         });
 
-        instrumentConnectionData.connectionSocket = that.socketClient;
         instrumentConnectionData.statusSubject.next(true);
+
 
         // Add a 'close' event handler to this instance of socket
         socket.on('close', function (hadError) {
@@ -265,7 +265,7 @@ export class TcpConnectionService implements OnDestroy {
   }
 
   private _handleClientConnectionIssue(instrumentConnectionData, connectionParams, message, isError) {
-    let that = this;
+    const that = this;
     instrumentConnectionData.statusSubject.next(false);
     that.disconnect(connectionParams);
 
@@ -273,17 +273,40 @@ export class TcpConnectionService implements OnDestroy {
       that.utilitiesService.logger('error', message, instrumentConnectionData.instrumentId);
     }
 
-    if (connectionParams.interfaceAutoConnect === 'yes') {
+    // ✅ Always log for TCP server (even without autoconnect)
+    if (connectionParams.connectionMode === 'tcpserver') {
+      that.utilitiesService.logger(
+        'info',
+        `Listening for connection on ${connectionParams.host}:${connectionParams.port}`,
+        instrumentConnectionData.instrumentId
+      );
+    }
+
+    // ✅ Only reconnect (and log) for TCP client if autoconnect is enabled
+    if (connectionParams.connectionMode === 'tcpclient' && connectionParams.interfaceAutoConnect === 'yes') {
+      that.utilitiesService.logger(
+        'info',
+        `Attempting to connect to ${connectionParams.host}:${connectionParams.port} as client`,
+        instrumentConnectionData.instrumentId
+      );
+
       instrumentConnectionData.connectionAttemptStatusSubject.next(true);
-      const attempt = instrumentConnectionData.reconnectAttempts || 0;
+      const attempt = instrumentConnectionData.reconnectAttempts ?? 0;
       const delay = that.getRetryDelay(attempt);
-      that.utilitiesService.logger('info', `Interface AutoConnect is enabled: Will re-attempt connection in ${delay / 1000} seconds`, instrumentConnectionData.instrumentId);
+
+      that.utilitiesService.logger(
+        'info',
+        `Interface AutoConnect is enabled: Will re-attempt connection in ${delay / 1000} seconds`,
+        instrumentConnectionData.instrumentId
+      );
+
       instrumentConnectionData.reconnectAttempts = attempt + 1;
       setTimeout(() => {
         that.connect(connectionParams, that.handleTCPCallback);
       }, delay);
     }
   }
+
 
   private getRetryDelay(attempt: number): number {
     const maxDelay = 300000; // Maximum delay of 5 minutes
@@ -417,7 +440,7 @@ export class TcpConnectionService implements OnDestroy {
     const key = this._generateConnectionIdentifierKey(connectionParams);
     const instrumentConnectionData = this.connectionStack.get(key);
 
-    if (!instrumentConnectionData || !instrumentConnectionData.connectionSocket) {
+    if (!instrumentConnectionData?.connectionSocket) {
       return false;
     }
 
@@ -426,6 +449,7 @@ export class TcpConnectionService implements OnDestroy {
       return !instrumentConnectionData.connectionSocket.destroyed &&
         instrumentConnectionData.connectionSocket.readyState !== 'closed';
     } catch (e) {
+      this.utilitiesService.logger('error', `Error checking connection status: ${e}`, instrumentConnectionData.instrumentId);
       return false;
     }
   }
