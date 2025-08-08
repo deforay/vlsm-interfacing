@@ -169,6 +169,14 @@ export class HL7HelperService {
    * @returns Object containing result value and unit
    */
   processHL7ResultValue(singleObx: any, resultStatusType: string): { results: string, test_unit: string } {
+    const raw = (singleObx.get('OBX.5.1')?.toString() ?? '').trim();
+    const v = raw.toLowerCase();
+
+    // Preserve literal textual outcomes
+    if (['invalid', 'failed', 'not detected', 'target not detected'].includes(v)) {
+      return { results: raw, test_unit: '' };
+    }
+
     const resultOutcome = singleObx.get('OBX.5.1')?.toString() ?? '';
 
     if (resultStatusType === 'ERROR') {
@@ -337,6 +345,8 @@ export class HL7HelperService {
   cleanHL7RawText(rawText: string): string {
     // Remove specific control characters
     let cleaned = rawText.replace(/[\x0b\x1c]/g, '');
+    cleaned = cleaned.replace(/<SB>|<EB>/g, '');
+
     // Trim white space
     cleaned = cleaned.trim();
     // Normalize all line breaks to CR
