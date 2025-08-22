@@ -1,3 +1,5 @@
+// ASTM Helper Service
+
 import { Injectable } from '@angular/core';
 import { UtilitiesService } from './utilities.service';
 
@@ -222,7 +224,12 @@ export class ASTMHelperService {
           if (!sampleResult.test_type) {
             sampleResult.test_type = (rSegmentFields[2]) ? rSegmentFields[2].replace('^^^', '') : rSegmentFields[2];
           }
-          sampleResult.test_unit = rSegmentFields[4];
+
+          let testUnit = rSegmentFields[4];
+          if (testUnit) {
+            testUnit = this.utilitiesService.decodeHtmlEntities(testUnit);
+          }
+          sampleResult.test_unit = testUnit;
 
           let resultSegment = rSegmentFields[3];
 
@@ -235,6 +242,10 @@ export class ASTMHelperService {
             } else if (resultSegmentComponents.length > 1 && resultSegmentComponents[1].trim()) {
               finalResult = resultSegmentComponents[1].trim();
             }
+          }
+
+          if (finalResult) {
+            finalResult = this.utilitiesService.decodeHtmlEntities(finalResult);
           }
 
           sampleResult.results = finalResult;

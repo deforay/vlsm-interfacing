@@ -74,6 +74,22 @@ export class UtilitiesService {
     return key in search
   }
 
+  decodeHtmlEntities(text: string): string {
+    if (!text || typeof text !== 'string') return text;
+
+    // Only decode if HTML entities are detected
+    if (text.includes('&')) {
+      return text
+        .replace(/&lt;/g, '<')
+        .replace(/&gt;/g, '>')
+        .replace(/&amp;/g, '&')
+        .replace(/&quot;/g, '"')
+        .replace(/&#39;/g, "'")
+        .replace(/&nbsp;/g, ' ');
+    }
+    return text;
+  }
+
   formatRawDate(rawDate) {
 
     if (rawDate === false || rawDate === null || rawDate === '' || rawDate === undefined || rawDate.length === 0) {

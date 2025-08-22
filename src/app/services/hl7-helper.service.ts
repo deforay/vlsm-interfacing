@@ -1,3 +1,5 @@
+// HL7 Helper Service
+
 import { Injectable } from '@angular/core';
 import { UtilitiesService } from './utilities.service';
 import { randomUUID } from 'crypto';
@@ -108,25 +110,54 @@ export class HL7HelperService {
   }
 
   /**
-   * Finds the most appropriate OBX segment for processing HL7 test results
-   * @param obxArray Array of OBX segments
-   * @param sampleNumber Sample number to match
-   * @returns The most appropriate OBX segment or null if none found
-   */
+ * Finds the most appropriate OBX segment for processing HL7 test results
+ * Prioritizes test result segments over metadata segments
+ * @param obxArray Array of OBX segments
+ * @param sampleNumber Sample number to match
+ * @returns The most appropriate OBX segment or null if none found
+ */
   findAppropriateHL7OBXSegment(obxArray: any[], sampleNumber: number): any {
     // First try to find an OBX segment that matches this sample number in OBX.4
     for (const currentObx of obxArray) {
-      // Check if OBX.4 exists and matches sample number
       const obx4Value = currentObx.get('OBX.4')?.toString() ?? '';
       if (obx4Value && (obx4Value === sampleNumber.toString() || obx4Value === `${sampleNumber}/2`)) {
         return currentObx;
       }
     }
 
-    // If we didn't find a matching OBX, use the index calculation as a fallback
+    // Look for test result OBX segments (exclude runtime/metadata segments)
+    const testResultObxSegments = obxArray.filter(obx => {
+      const obxType = obx.get('OBX.2')?.toString() ?? '';
+      const obxIdentifier = obx.get('OBX.3.1')?.toString() ?? '';
+
+      // Skip runtime/metadata segments
+      if (obxType === 'DR' && obxIdentifier === 'RunTimeRange') {
+        return false;
+      }
+
+      // Look for actual test result segments (usually ST type with test identifiers)
+      return obxType === 'ST' || obxIdentifier.includes('HIV') || obxIdentifier.includes('0BHIV1');
+    });
+
+    // If we found test result segments, use them
+    if (testResultObxSegments.length > 0) {
+      // For the specific sample number, try to find the corresponding test result OBX
+      let targetIndex = sampleNumber - 1; // Convert to 0-based index
+
+      // If the calculated index is within bounds, use it
+      if (targetIndex >= 0 && targetIndex < testResultObxSegments.length) {
+        return testResultObxSegments[targetIndex];
+      }
+
+      // Otherwise, return the last available test result segment
+      return testResultObxSegments[testResultObxSegments.length - 1];
+    }
+
+    // FALLBACK: Use the original logic but prefer later OBX segments (which typically contain results)
     let index = (sampleNumber * 2) - 1;
     if (index >= obxArray.length) {
-      index = Math.min(obxArray.length - 1, 0); // Ensure we have a valid index or use the first segment
+      // Instead of defaulting to index 0, prefer the last OBX segment
+      index = obxArray.length - 1;
     }
 
     return index >= 0 && index < obxArray.length ? obxArray[index] : null;
@@ -169,7 +200,8 @@ export class HL7HelperService {
    * @returns Object containing result value and unit
    */
   processHL7ResultValue(singleObx: any, resultStatusType: string): { results: string, test_unit: string } {
-    const raw = (singleObx.get('OBX.5.1')?.toString() ?? '').trim();
+    let raw = (singleObx.get('OBX.5.1')?.toString() ?? '').trim();
+    raw = this.utilitiesService.decodeHtmlEntities(raw);
     const v = raw.toLowerCase();
 
     // Preserve literal textual outcomes
@@ -177,7 +209,8 @@ export class HL7HelperService {
       return { results: raw, test_unit: '' };
     }
 
-    const resultOutcome = singleObx.get('OBX.5.1')?.toString() ?? '';
+    const resultOutcome = raw; // Use decoded value
+
 
     if (resultStatusType === 'ERROR') {
       return { results: 'Failed', test_unit: '' };
@@ -187,9 +220,12 @@ export class HL7HelperService {
 
     // Process based on result value
     if (resultOutcome === 'Titer') {
+      let testUnit = singleObx.get('OBX.6.1')?.toString() ?? '';
+      testUnit = this.utilitiesService.decodeHtmlEntities(testUnit);
+
       return {
-        results: singleObx.get('OBX.5.1')?.toString() ?? '',
-        test_unit: singleObx.get('OBX.6.1')?.toString() ?? ''
+        results: resultOutcome,
+        test_unit: testUnit
       };
     } else if (resultOutcome === '<20' || resultOutcome === '< 20' || resultOutcome === 'Target Not Detected') {
       return { results: 'Target Not Detected', test_unit: '' };
@@ -202,9 +238,15 @@ export class HL7HelperService {
       resultOutcome === 'Not Detected') {
       return { results: resultOutcome, test_unit: '' };
     } else {
+      let testUnit = singleObx.get('OBX.6.1')?.toString() ??
+        singleObx.get('OBX.6.2')?.toString() ??
+        singleObx.get('OBX.6')?.toString() ?? '';
+
+      testUnit = this.utilitiesService.decodeHtmlEntities(testUnit);
+
       return {
         results: resultOutcome,
-        test_unit: singleObx.get('OBX.6.1')?.toString() ?? singleObx.get('OBX.6.2')?.toString() ?? singleObx.get('OBX.6')?.toString() ?? ''
+        test_unit: testUnit
       };
     }
   }
