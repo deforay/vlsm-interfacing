@@ -146,12 +146,31 @@ export class UtilitiesService {
 
   fetchRecentResults(searchParam?: string) {
     const that = this;
+    const trimmedSearchParam = (searchParam || '').trim();
+
+    console.log('UtilitiesService.fetchRecentResults called with:', {
+      original: `"${searchParam}"`,
+      trimmed: `"${trimmedSearchParam}"`,
+      isEmpty: trimmedSearchParam === ''
+    });
+
+    // Pass empty string if trimmed search is empty, otherwise pass trimmed value
+    const finalSearchParam = trimmedSearchParam === '' ? '' : trimmedSearchParam;
+
     that.dbService.fetchRecentResults((res) => {
+      console.log('Database returned results:', res?.length || 0, 'records for search:', `"${finalSearchParam}"`);
+
+      // Log first few results to see if search is working
+      if (res && res.length > 0) {
+        console.log('Sample results:', res.slice(0, 3).map(r => r.order_id));
+      }
+
       res = [res];
       that.lastOrdersSubject.next(res);
     }, (err) => {
+      console.error('Failed to fetch recent results:', err);
       that.logger('error', 'Failed to fetch recent results ' + JSON.stringify(err));
-    }, searchParam);
+    }, finalSearchParam);
   }
 
 

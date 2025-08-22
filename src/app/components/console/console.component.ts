@@ -301,9 +301,17 @@ export class ConsoleComponent implements OnInit, OnDestroy {
 
   fetchRecentResults(searchTerm?: string) {
     const that = this;
+    const trimmedTerm = (searchTerm || '').trim();
 
-    that.resyncTestResultsToMySQL();
-    that.utilitiesService.fetchRecentResults(searchTerm);
+    // Only sync when NOT searching (i.e., when getting all results)
+    if (trimmedTerm === '') {
+      console.log('Fetching all results with sync');
+      that.resyncTestResultsToMySQL();
+    } else {
+      console.log('Fetching search results without sync');
+    }
+
+    that.utilitiesService.fetchRecentResults(trimmedTerm);
 
     that.utilitiesService.fetchLastSyncTimes((data: { lastLimsSync: string; lastResultReceived: string; }) => {
       that.lastLimsSync = data.lastLimsSync;
@@ -319,16 +327,27 @@ export class ConsoleComponent implements OnInit, OnDestroy {
           that.dataSource.paginator = that.paginator;
           that.dataSource.sort = that.sort;
 
-          // Ensure the sort is set to 'added_on' descending by default
           that.sort.active = 'added_on';
           that.sort.direction = 'desc';
           that.sort.sortChange.emit({ active: that.sort.active, direction: that.sort.direction });
+
+          that.cdRef.detectChanges();
         });
       },
       error: error => {
         console.error('Error fetching last orders:', error);
       }
     });
+  }
+
+  clearSearch() {
+    console.log('Clearing search');
+    this.searchTerm = '';
+    if (this.searchInput && this.searchInput.nativeElement) {
+      this.searchInput.nativeElement.value = '';
+    }
+    // Get all results without syncing (since it's just clearing search)
+    this.searchResults('');
   }
 
   openModal() {
@@ -339,12 +358,106 @@ export class ConsoleComponent implements OnInit, OnDestroy {
     this.router.navigate(['/dashboard']);
   }
 
+  /**
+   * Search method - ONLY searches, no syncing
+   */
+  searchResults(searchTerm: string) {
+    const that = this;
+    const trimmedTerm = (searchTerm || '').trim();
+
+    console.log('Searching with trimmed term:', `"${trimmedTerm}"`);
+
+    // Pass the trimmed term to the service
+    that.utilitiesService.fetchRecentResults(trimmedTerm);
+
+    that.utilitiesService.lastOrders.subscribe({
+      next: lastFewOrders => {
+        that._ngZone.run(() => {
+          that.lastOrders = lastFewOrders[0];
+          that.data = lastFewOrders[0];
+          that.dataSource.data = that.lastOrders;
+          that.dataSource.paginator = that.paginator;
+          that.dataSource.sort = that.sort;
+
+          that.sort.active = 'added_on';
+          that.sort.direction = 'desc';
+          that.sort.sortChange.emit({ active: that.sort.active, direction: that.sort.direction });
+
+          that.cdRef.detectChanges();
+
+          console.log(`Search completed: ${that.lastOrders?.length || 0} results for "${trimmedTerm}"`);
+        });
+      },
+      error: error => {
+        console.error('Error fetching search results:', error);
+      }
+    });
+  }
+
+  /**
+   * Refresh method - Syncs AND fetches all results
+   */
+  refreshResults() {
+    const that = this;
+    console.log('Refreshing all results with sync');
+
+    // Do the sync first, then fetch all results
+    that.resyncTestResultsToMySQL();
+    that.utilitiesService.fetchRecentResults(''); // Empty string = get all
+
+    that.utilitiesService.fetchLastSyncTimes((data: { lastLimsSync: string; lastResultReceived: string; }) => {
+      that.lastLimsSync = data.lastLimsSync;
+      that.lastResultReceived = data.lastResultReceived;
+    });
+
+    that.utilitiesService.lastOrders.subscribe({
+      next: lastFewOrders => {
+        that._ngZone.run(() => {
+          that.lastOrders = lastFewOrders[0];
+          that.data = lastFewOrders[0];
+          that.dataSource.data = that.lastOrders;
+          that.dataSource.paginator = that.paginator;
+          that.dataSource.sort = that.sort;
+
+          that.sort.active = 'added_on';
+          that.sort.direction = 'desc';
+          that.sort.sortChange.emit({ active: that.sort.active, direction: that.sort.direction });
+
+          that.cdRef.detectChanges();
+        });
+      },
+      error: error => {
+        console.error('Error fetching refreshed results:', error);
+      }
+    });
+  }
+
   filterData($event: any) {
-    const searchTerm = $event.target.value;
-    if (searchTerm.length >= 2) {
-      this.fetchRecentResults(searchTerm);
+    const rawSearchTerm = $event.target.value || '';
+    const trimmedSearchTerm = rawSearchTerm.trim();
+
+    // Update the model with trimmed value for consistency
+    this.searchTerm = trimmedSearchTerm;
+
+    console.log('Search input:', {
+      raw: `"${rawSearchTerm}"`,
+      trimmed: `"${trimmedSearchTerm}"`,
+      length: trimmedSearchTerm.length
+    });
+
+    if (trimmedSearchTerm === '') {
+      // Empty or whitespace-only search - get all results WITHOUT syncing
+      console.log('Empty search - fetching all results without sync');
+      this.searchResults('');
+    } else if (trimmedSearchTerm.length >= 2) {
+      // Valid search term - perform search
+      console.log('Valid search term - performing search');
+      this.searchResults(trimmedSearchTerm);
     } else {
-      this.fetchRecentResults('');
+      // Single character - don't search (avoid too many requests)
+      console.log('Search term too short - ignoring');
+      // Optionally clear results or keep current results
+      // this.dataSource.data = []; // Uncomment if you want to clear on single char
     }
   }
 

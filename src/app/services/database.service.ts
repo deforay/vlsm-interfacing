@@ -544,8 +544,21 @@ export class DatabaseService {
   }
 
   fetchRecentResults(success: any, errorf: any, searchParam = '') {
+    const trimmedSearchParam = (searchParam || '').trim();
+
+    console.log('DatabaseService.fetchRecentResults called with:', {
+      original: `"${searchParam}"`,
+      trimmed: `"${trimmedSearchParam}"`,
+      willSearch: trimmedSearchParam !== ''
+    });
+
     let recentResultsQuery = 'SELECT * FROM orders';
-    if (searchParam) {
+    let queryParams = [];
+
+    // Only add WHERE clause if we have a non-empty trimmed search term
+    if (trimmedSearchParam !== '') {
+      const searchTerm = `%${trimmedSearchParam}%`;
+
       const columns = [
         'order_id', 'test_id', 'test_type', 'created_date', 'test_unit',
         'results', 'tested_by', 'analysed_date_time', 'specimen_date_time',
@@ -553,15 +566,36 @@ export class DatabaseService {
         'test_location', 'test_description', 'raw_text', 'added_on',
         'lims_sync_status', 'lims_sync_date_time'
       ];
-      const searchConditions = columns.map(col => `${col} LIKE '%${searchParam}%'`).join(' OR ');
+
+      const searchConditions = columns.map(col => `${col} LIKE ?`).join(' OR ');
       recentResultsQuery += ` WHERE ${searchConditions}`;
+
+      // Add the search term for each column condition
+      queryParams = new Array(columns.length).fill(searchTerm);
+
+      console.log('Executing search query with', columns.length, 'conditions');
+    } else {
+      console.log('Executing query for all records (no search filter)');
     }
 
     recentResultsQuery += ' ORDER BY added_on DESC';
 
-    this.electronService.execSqliteQuery(recentResultsQuery, null)
-      .then(success)
-      .catch(errorf);
+    // Add LIMIT to prevent excessive results
+    const limit = trimmedSearchParam !== '' ? 500 : 1000; // Smaller limit for searches
+    recentResultsQuery += ` LIMIT ${limit}`;
+
+    console.log('Final query:', recentResultsQuery);
+    console.log('Query params count:', queryParams.length);
+
+    this.electronService.execSqliteQuery(recentResultsQuery, queryParams)
+      .then(results => {
+        console.log(`Query returned ${results?.length || 0} results for "${trimmedSearchParam}"`);
+        success(results);
+      })
+      .catch(error => {
+        console.error('Database query error:', error);
+        errorf(error);
+      });
   }
 
   reSyncRecord(orderId: string): void {
