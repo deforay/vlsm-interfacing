@@ -316,6 +316,14 @@ export class TcpConnectionService implements OnDestroy {
 
   reconnect(connectionParams: ConnectionParams, handleTCPCallback: (connectionIdentifierKey: string, data: any) => void) {
     let that = this;
+    const connectionIdentifierKey = that._generateConnectionIdentifierKey(connectionParams);
+    const instrumentConnectionData = that.connectionStack.get(connectionIdentifierKey);
+
+    // Reset reconnect attempts on manual reconnection
+    if (instrumentConnectionData) {
+      instrumentConnectionData.reconnectAttempts = 0;
+    }
+
     that.disconnect(connectionParams);
     that.connect(connectionParams, handleTCPCallback);
   }

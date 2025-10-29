@@ -282,16 +282,15 @@ export class HL7HelperService {
   /**
    * Extracts and formats datetime fields from HL7 message
    * @param obxSegment OBX segment containing datetime
-   * @param utils Utilities service for date formatting
    * @returns Object with formatted datetime fields
    */
-  extractHL7DateTimeFields(obxSegment: any, utils: any): {
+  extractHL7DateTimeFields(obxSegment: any): {
     analysed_date_time: string,
     authorised_date_time: string,
     result_accepted_date_time: string
   } {
     const dateTimeValue = obxSegment.get('OBX.19')?.toString() ?? '';
-    const formattedDateTime = utils.formatRawDate(dateTimeValue);
+    const formattedDateTime = this.utilitiesService.formatRawDate(dateTimeValue);
 
     return {
       analysed_date_time: formattedDateTime,

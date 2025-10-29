@@ -147,7 +147,7 @@ export class InstrumentInterfaceService {
         sampleResult.lims_sync_status = 0;
 
         // Extract datetime fields
-        const dateTimeFields = that.hl7Helper.extractHL7DateTimeFields(singleObx, that.utilitiesService);
+        const dateTimeFields = that.hl7Helper.extractHL7DateTimeFields(singleObx);
         sampleResult.analysed_date_time = dateTimeFields.analysed_date_time;
         sampleResult.authorised_date_time = dateTimeFields.authorised_date_time;
         sampleResult.result_accepted_date_time = dateTimeFields.result_accepted_date_time;
@@ -225,7 +225,7 @@ export class InstrumentInterfaceService {
         sampleResult.lims_sync_status = 0;
 
         // Extract datetime fields
-        const dateTimeFields = that.hl7Helper.extractHL7DateTimeFields(singleObx, that.utilitiesService);
+        const dateTimeFields = that.hl7Helper.extractHL7DateTimeFields(singleObx);
         sampleResult.analysed_date_time = dateTimeFields.analysed_date_time;
         sampleResult.authorised_date_time = dateTimeFields.authorised_date_time;
         sampleResult.result_accepted_date_time = dateTimeFields.result_accepted_date_time;
@@ -303,7 +303,7 @@ export class InstrumentInterfaceService {
         sampleResult.lims_sync_status = 0;
 
         // Extract datetime fields
-        const dateTimeFields = that.hl7Helper.extractHL7DateTimeFields(singleObx, that.utilitiesService);
+        const dateTimeFields = that.hl7Helper.extractHL7DateTimeFields(singleObx);
         sampleResult.analysed_date_time = dateTimeFields.analysed_date_time;
         sampleResult.authorised_date_time = dateTimeFields.authorised_date_time;
         sampleResult.result_accepted_date_time = dateTimeFields.result_accepted_date_time;
@@ -395,7 +395,7 @@ export class InstrumentInterfaceService {
         sampleResult.lims_sync_status = 0;
 
         // Extract datetime fields
-        const dateTimeFields = that.hl7Helper.extractHL7DateTimeFields(singleObx, that.utilitiesService);
+        const dateTimeFields = that.hl7Helper.extractHL7DateTimeFields(singleObx);
         sampleResult.analysed_date_time = dateTimeFields.analysed_date_time;
         sampleResult.authorised_date_time = dateTimeFields.authorised_date_time;
         sampleResult.result_accepted_date_time = dateTimeFields.result_accepted_date_time;
@@ -413,74 +413,57 @@ export class InstrumentInterfaceService {
   private receiveASTM(astmProtocolType: string, instrumentConnectionData: InstrumentConnectionStack, data: Buffer) {
     const that = this;
     instrumentConnectionData.transmissionStatusSubject.next(true);
-    //that.utilitiesService.logger('info', 'Receiving ' + astmProtocolType, instrumentConnectionData.instrumentId);
-    let astmText = that.utilitiesService.hex2ascii(data.toString('hex'));
+    const astmText = that.utilitiesService.hex2ascii(data.toString('hex'));
 
-    // Use the helper to process ASTM text
-    const processedText = that.astmHelper.processASTMText(astmText);
+    // Inspect the chunk so we know how to handle it
+    const processedInfo = that.astmHelper.processASTMText(astmText);
 
-    if (processedText.isEOT) {
+    if (processedInfo.isNAK) {
       that.astmHelper.sendACK(instrumentConnectionData, 'Sending ACK');
-      that.utilitiesService.logger('info', 'Received EOT. Sending ACK.', instrumentConnectionData.instrumentId);
-      that.utilitiesService.logger('info', 'Processing ' + astmProtocolType, instrumentConnectionData.instrumentId);
-      that.utilitiesService.logger('info', 'Received  ' + that.strData, instrumentConnectionData.instrumentId);
+      that.utilitiesService.logger('error', 'NAK Received', instrumentConnectionData.instrumentId);
+      return;
+    }
 
-      const rawData: RawMachineData = {
-        data: that.strData,
-        machine: instrumentConnectionData.instrumentId,
-        instrument_id: instrumentConnectionData.instrumentId
-      };
-      process.nextTick(() => {
+    // ACK before we do any heavy work
+    that.astmHelper.sendACK(instrumentConnectionData, 'Sending ACK');
+
+    // Append payload or finalise the transmission via the helper
+    const parsingResult = that.astmHelper.appendASTMChunk(instrumentConnectionData, astmText, astmProtocolType, processedInfo);
+
+    if (parsingResult.completed) {
+      instrumentConnectionData.transmissionStatusSubject.next(false);
+      const rawDataPayload = parsingResult.rawData ?? '';
+
+      that.utilitiesService.logger('info', 'Received EOT. ASTM payload length: ' + rawDataPayload.length, instrumentConnectionData.instrumentId);
+      that.utilitiesService.logger('info', 'Processing ' + astmProtocolType, instrumentConnectionData.instrumentId);
+
+      if (rawDataPayload) {
+        const rawData: RawMachineData = {
+          data: rawDataPayload,
+          machine: instrumentConnectionData.instrumentId,
+          instrument_id: instrumentConnectionData.instrumentId
+        };
+
         that.dbService.recordRawData(rawData, () => {
           that.utilitiesService.logger('success', 'Successfully saved raw ASTM data', instrumentConnectionData.instrumentId);
         }, (err: any) => {
           that.utilitiesService.logger('error', 'Failed to save raw data : ' + JSON.stringify(err), instrumentConnectionData.instrumentId);
         });
-      });
-
-      let origAstmData = that.strData;
-
-      let withChecksum = astmProtocolType !== 'astm-nonchecksum'; // true unless astm-nonchecksum
-
-      let astmData = that.utilitiesService.removeControlCharacters(origAstmData, withChecksum);
-      const fullDataArray = astmData.split(that.astmHelper.getStartMarker());
-
-      for (const partData of fullDataArray) {
-        if (partData) {
-          const astmArray = partData.split(/<CR>/);
-
-          if (Array.isArray(astmArray) && astmArray.length > 0) {
-            const dataArray = that.astmHelper.getASTMDataBlock(astmArray);
-
-            // Check if dataArray is empty
-            if (Object.keys(dataArray).length === 0) {
-              that.utilitiesService.logger('info', 'No ASTM data received for following:', instrumentConnectionData.instrumentId);
-              that.utilitiesService.logger('info', astmArray, instrumentConnectionData.instrumentId);
-              continue;
-            }
-
-            that.saveASTMDataBlock(dataArray, partData, instrumentConnectionData);
-          }
-        }
       }
 
-      that.strData = '';
-      instrumentConnectionData.transmissionStatusSubject.next(false);
-    } else if (processedText.isNAK) {
-      that.astmHelper.sendACK(instrumentConnectionData, 'Sending ACK');
-      that.utilitiesService.logger('error', 'NAK Received', instrumentConnectionData.instrumentId);
-      that.utilitiesService.logger('info', 'Sending ACK', instrumentConnectionData.instrumentId);
+      const sampleResults = parsingResult.sampleResults ?? [];
+      if (sampleResults.length === 0) {
+        that.utilitiesService.logger('warn', 'No ASTM results extracted from transmission', instrumentConnectionData.instrumentId);
+        return;
+      }
+
+      for (const sampleResult of sampleResults) {
+        sampleResult.test_location = instrumentConnectionData.labName;
+        sampleResult.machine_used = instrumentConnectionData.instrumentId;
+        that.saveResult(sampleResult, instrumentConnectionData);
+      }
     } else {
-      that.astmHelper.sendACK(instrumentConnectionData, 'Sending ACK');
-      // If it's a header, it's already been processed in processASTMText
-      if (processedText.isHeader) {
-        that.strData += processedText.text;
-      } else {
-        that.strData += astmText;
-      }
-
       that.utilitiesService.logger('info', astmProtocolType.toUpperCase() + ' | Receiving....' + astmText, instrumentConnectionData.instrumentId);
-      that.utilitiesService.logger('info', 'Sending ACK', instrumentConnectionData.instrumentId);
     }
   }
 
@@ -505,12 +488,10 @@ export class InstrumentInterfaceService {
         machine: instrumentConnectionData.instrumentId,
         instrument_id: instrumentConnectionData.instrumentId
       };
-      process.nextTick(() => {
-        that.dbService.recordRawData(rawData, () => {
-          that.utilitiesService.logger('success', 'Successfully saved raw HL7 data', instrumentConnectionData.instrumentId);
-        }, (err: any) => {
-          that.utilitiesService.logger('error', 'Failed to save raw data ' + JSON.stringify(err), instrumentConnectionData.instrumentId);
-        });
+      that.dbService.recordRawData(rawData, () => {
+        that.utilitiesService.logger('success', 'Successfully saved raw HL7 data', instrumentConnectionData.instrumentId);
+      }, (err: any) => {
+        that.utilitiesService.logger('error', 'Failed to save raw data ' + JSON.stringify(err), instrumentConnectionData.instrumentId);
       });
 
 
@@ -562,17 +543,15 @@ export class InstrumentInterfaceService {
     const that = this;
     if (sampleResult) {
       const data = { ...sampleResult, instrument_id: instrumentConnectionData.instrumentId };
-      process.nextTick(() => {
-        that.dbService.recordTestResults(data,
-          (res) => {
-            that.utilitiesService.logger('success', 'Successfully saved result : ' + sampleResult.test_id + '|' + sampleResult.order_id, instrumentConnectionData.instrumentId);
-            return true;
-          },
-          (err) => {
-            that.utilitiesService.logger('error', 'Failed to save result : ' + sampleResult.test_id + '|' + sampleResult.order_id + ' | ' + JSON.stringify(err), instrumentConnectionData.instrumentId);
-            return false;
-          });
-      });
+      that.dbService.recordTestResults(data,
+        (res) => {
+          that.utilitiesService.logger('success', 'Successfully saved result : ' + sampleResult.test_id + '|' + sampleResult.order_id, instrumentConnectionData.instrumentId);
+          return true;
+        },
+        (err) => {
+          that.utilitiesService.logger('error', 'Failed to save result : ' + sampleResult.test_id + '|' + sampleResult.order_id + ' | ' + JSON.stringify(err), instrumentConnectionData.instrumentId);
+          return false;
+        });
     } else {
       that.utilitiesService.logger('error', 'Failed to save result into the database : ' + JSON.stringify(sampleResult), instrumentConnectionData.instrumentId);
       return false;
@@ -582,8 +561,8 @@ export class InstrumentInterfaceService {
   private saveASTMDataBlock(dataArray: {}, partData: string, instrumentConnectionData: InstrumentConnectionStack) {
     const that = this;
 
-    that.utilitiesService.logger('info', 'Processing following ASTM Data to save into database...', instrumentConnectionData.instrumentId);
-    that.utilitiesService.logger('info', JSON.stringify(dataArray), instrumentConnectionData.instrumentId);
+    const segmentTypes = Object.keys(dataArray);
+    that.utilitiesService.logger('info', 'Processing ASTM segments: ' + (segmentTypes.length ? segmentTypes.join(', ') : 'none'), instrumentConnectionData.instrumentId);
 
     // Extract sample result from the ASTM data
     const sampleResult = that.astmHelper.extractSampleResultFromASTM(dataArray, partData);

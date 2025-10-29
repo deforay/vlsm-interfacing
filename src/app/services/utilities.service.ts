@@ -90,25 +90,81 @@ export class UtilitiesService {
     return text;
   }
 
-  formatRawDate(rawDate) {
-
-    if (rawDate === false || rawDate === null || rawDate === '' || rawDate === undefined || rawDate.length === 0) {
+  /**
+ * Formats raw date strings from medical instruments (YYYYMMDD or YYYYMMDDHHmmss format)
+ * @param rawDate Raw date string from instrument
+ * @returns Formatted date string (YYYY-MM-DD HH:mm:ss) or null if invalid
+ */
+  /**
+ * Universal date formatter - handles raw instrument dates, ISO dates, Date objects, and more
+ * @param rawDate Date in any format (YYYYMMDD, YYYYMMDDHHmmss, ISO string, Date object, etc.)
+ * @param outputFormat Optional output format (defaults to 'YYYY-MM-DD HH:mm:ss')
+ * @returns Formatted date string or null if invalid
+ */
+  formatRawDate(rawDate: string | Date | null | undefined, outputFormat: string = 'YYYY-MM-DD HH:mm:ss'): string | null {
+    // Early return for falsy values
+    if (!rawDate) {
       return null;
     }
 
-    const len = rawDate.length;
-    const year = rawDate.substring(0, 4);
-    const month = rawDate.substring(4, 6);
-    const day = rawDate.substring(6, 8);
-    let d = year + '-' + month + '-' + day;
-    if (len > 9) {
-      const h = rawDate.substring(8, 10);
-      const m = rawDate.substring(10, 12);
-      let s = '00';
-      if (len > 11) { s = rawDate.substring(12, 14); }
-      d += ' ' + h + ':' + m + ':' + s;
+    try {
+      let momentDate;
+
+      // Handle Date objects directly
+      if (rawDate instanceof Date) {
+        momentDate = this.moment(rawDate);
+      }
+      // Handle strings
+      else if (typeof rawDate === 'string') {
+        const trimmed = rawDate.trim();
+
+        if (trimmed === '') {
+          return null;
+        }
+
+        // Define all possible input formats
+        const formats = [
+          // Raw instrument formats (most specific first)
+          'YYYYMMDDHHmmss',     // 20250110111212
+          'YYYYMMDDHHmm',       // 202501101112
+          'YYYYMMDD',           // 20250110
+
+          // ISO and common formats
+          'YYYY-MM-DD HH:mm:ss',
+          'YYYY-MM-DDTHH:mm:ss',
+          'YYYY-MM-DDTHH:mm:ssZ',
+          'YYYY-MM-DD',
+
+          // Other common formats
+          'DD-MMM-YYYY HH:mm:ss',
+          'DD/MM/YYYY HH:mm:ss',
+          'MM/DD/YYYY HH:mm:ss',
+        ];
+
+        // Try strict parsing with known formats first
+        momentDate = this.moment(trimmed, formats, true);
+
+        // If strict parsing fails, try lenient parsing as fallback
+        if (!momentDate.isValid()) {
+          momentDate = this.moment(trimmed);
+        }
+      } else {
+        // Unsupported type
+        return null;
+      }
+
+      // Validate the parsed date
+      if (!momentDate.isValid()) {
+        this.logger('warn', `Invalid date - failed validation: ${rawDate}`, null);
+        return null;
+      }
+
+      // Return in requested format
+      return momentDate.format(outputFormat);
+    } catch (error) {
+      this.logger('error', `Error parsing date: ${rawDate} - ${error}`, null);
+      return null;
     }
-    return d;
   }
 
   removeControlCharacters(astmData: string, withChecksum = true) {
@@ -263,11 +319,19 @@ export class UtilitiesService {
 
     // THE ONLY CHANGE: Make database logging async
     if (logType !== 'ignore') {
-      process.nextTick(() => {
+      setTimeout(() => {
         const dbLog: any = { log: logMessage };
         that.dbService.recordConsoleLogs(dbLog, () => { }, () => { });
-      });
+      }, 0);
     }
+  }
+
+  humanReadableDateTime(date: Date | string | null): string {
+    if (!date) {
+      return '';
+    }
+
+    return this.formatRawDate(date, 'DD-MMM-YYYY HH:mm:ss') || '';
   }
 
 }

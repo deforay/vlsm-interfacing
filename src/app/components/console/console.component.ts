@@ -201,7 +201,7 @@ export class ConsoleComponent implements OnInit, OnDestroy {
     that.recentResultsInterval = setInterval(() => {
       that.fetchRecentResults();
       that.resyncTestResultsToMySQL();
-    }, 1000 * 60 * 5);
+    }, 1000 * 60 * 1);
 
     // SQLite WAL checkpoint every 30 minutes
     that.walCheckpointInterval = setInterval(() => {
@@ -314,8 +314,8 @@ export class ConsoleComponent implements OnInit, OnDestroy {
     that.utilitiesService.fetchRecentResults(trimmedTerm);
 
     that.utilitiesService.fetchLastSyncTimes((data: { lastLimsSync: string; lastResultReceived: string; }) => {
-      that.lastLimsSync = data.lastLimsSync;
-      that.lastResultReceived = data.lastResultReceived;
+      that.lastLimsSync = that.utilitiesService.humanReadableDateTime(data.lastLimsSync);
+      that.lastResultReceived = that.utilitiesService.humanReadableDateTime(data.lastResultReceived);
     });
 
     that.utilitiesService.lastOrders.subscribe({

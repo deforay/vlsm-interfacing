@@ -156,6 +156,9 @@ try {
             console.info('SQLite setup complete');
             createWindow();
             copyMigrationFiles(); // Ensure migration files are moved
+            // Log app startup to both console and file
+            const startupTime = new Date().toISOString();
+            console.log(`\n${'='.repeat(80)}\n🚀 APPLICATION STARTED - ${startupTime}\n${'='.repeat(80)}\n`);
             const trayIconPath = 'dist/assets/icons/favicon.png';
             try {
                 const icon = electron_1.nativeImage.createFromPath(trayIconPath);

@@ -3,6 +3,12 @@
 import { Injectable } from '@angular/core';
 import { UtilitiesService } from './utilities.service';
 
+export interface ASTMProcessingResult {
+  completed: boolean;
+  rawData?: string;
+  sampleResults?: any[];
+}
+
 @Injectable({
   providedIn: 'root'
 })
@@ -25,6 +31,8 @@ export class ASTMHelperService {
 
   // Track sequence numbers for different instruments
   private astmSequenceNumbers: Map<string, number> = new Map();
+  // Buffer ASTM payloads per instrument until we receive EOT
+  private astmBuffers: Map<string, string> = new Map();
 
   constructor(private utilitiesService: UtilitiesService) { }
 
@@ -165,6 +173,85 @@ export class ASTMHelperService {
   resetSequenceNumber(instrumentId: string): void {
     console.error("Resetting sequence number for " + instrumentId);
     this.astmSequenceNumbers.set(instrumentId, 100);
+  }
+
+  /**
+   * Appends an ASTM data chunk to the instrument buffer and, when EOT is received,
+   * returns the accumulated payload together with parsed sample results.
+   */
+  appendASTMChunk(
+    instrumentConnectionData: any,
+    astmText: string,
+    protocolType: string,
+    processedInfo: { text: string; isHeader: boolean; isEOT: boolean; isNAK: boolean }
+  ): ASTMProcessingResult {
+    const instrumentId = instrumentConnectionData?.instrumentId;
+    if (!instrumentId) {
+      return { completed: false };
+    }
+
+    // Initialize buffer if needed
+    if (!this.astmBuffers.has(instrumentId)) {
+      this.astmBuffers.set(instrumentId, '');
+    }
+
+    // When EOT is received, process the accumulated payload and reset the buffer
+    if (processedInfo.isEOT) {
+      const accumulatedPayload = this.astmBuffers.get(instrumentId) ?? '';
+      this.astmBuffers.delete(instrumentId);
+
+      if (!accumulatedPayload) {
+        this.utilitiesService.logger('warn', 'EOT received without accumulated ASTM payload', instrumentId);
+        return { completed: true, rawData: '' };
+      }
+
+      this.utilitiesService.logger('info', 'Processing completed ASTM transmission', instrumentId);
+
+      const withChecksum = protocolType !== 'astm-nonchecksum';
+      let astmData = this.utilitiesService.removeControlCharacters(accumulatedPayload, withChecksum);
+      const fullDataArray = astmData.split(this.START);
+
+      const sampleResults: any[] = [];
+
+      for (const partData of fullDataArray) {
+        if (!partData) {
+          continue;
+        }
+
+        const astmArray = partData.split(/<CR>/);
+
+        if (!Array.isArray(astmArray) || astmArray.length === 0) {
+          continue;
+        }
+
+        const dataArray = this.getASTMDataBlock(astmArray);
+
+        if (Object.keys(dataArray).length === 0) {
+          this.utilitiesService.logger('info', 'No ASTM data extracted from chunk', instrumentId);
+          continue;
+        }
+
+        const sampleResult = this.extractSampleResultFromASTM(dataArray, partData);
+        if (sampleResult) {
+          sampleResults.push(sampleResult);
+        } else {
+          this.utilitiesService.logger('warn', 'Failed to extract sample result from ASTM chunk', instrumentId);
+        }
+      }
+
+      return {
+        completed: true,
+        rawData: accumulatedPayload,
+        sampleResults
+      };
+    }
+
+    // For normal payload frames, append the data (header frames are pre-processed)
+    const payloadToAppend = processedInfo.isHeader ? processedInfo.text : astmText;
+    const updatedPayload = (this.astmBuffers.get(instrumentId) ?? '') + payloadToAppend;
+    this.astmBuffers.set(instrumentId, updatedPayload);
+
+    return { completed: false };
   }
 
   /**

@@ -246,6 +246,14 @@ export class DatabaseService {
           // Clean and split SQL statements
           const statements = migrationSql
             .split(';')
+            .map(stmt => {
+              // Remove comment lines (lines starting with --)
+              return stmt
+                .split('\n')
+                .filter(line => !line.trim().startsWith('--'))
+                .join('\n')
+                .trim();
+            })
             .map(stmt => stmt.trim())
             .filter(stmt => stmt.length > 0)
             .filter(stmt => !stmt.match(/^\s*--/)) // Skip comment lines
@@ -266,10 +274,13 @@ export class DatabaseService {
               await that.execQueryPromise(statement, []);
               console.log(`  ✅ Statement ${i + 1} completed`);
             } catch (stmtErr) {
-              console.error(`  ❌ Statement ${i + 1} failed:`);
+              // ✅ Log the error but ALWAYS continue to next statement
+              console.error(`  ❌ Statement ${i + 1} failed (continuing anyway):`);
               console.error(`     Error: ${stmtErr.message}`);
-              console.error(`     SQL: ${statement.substring(0, 150)}${statement.length > 150 ? '...' : ''}`);
+              console.error(`     Code: ${stmtErr.code || 'unknown'}`);
+              console.error(`     SQL: ${statement.substring(0, 200)}${statement.length > 200 ? '...' : ''}`);
               statementErrors++;
+              // ⚠️ DO NOT throw or break - just continue to next iteration
             }
           }
 
@@ -280,10 +291,10 @@ export class DatabaseService {
           );
 
           if (statementErrors === 0) {
-            console.log(`✅ Migration ${migration.file} completed successfully`);
+            console.log(`✅ Migration ${migration.file} completed successfully (${statements.length} statements)`);
             successCount++;
           } else {
-            console.log(`⚠️ Migration ${migration.file} completed with ${statementErrors} statement errors`);
+            console.log(`⚠️ Migration ${migration.file} completed with ${statementErrors}/${statements.length} statement errors`);
             successCount++; // Still count as processed
           }
 
