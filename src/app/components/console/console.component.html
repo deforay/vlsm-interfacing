@@ -99,7 +99,7 @@
                 <span>Cancel</span>
               </button>
               <button *ngIf="!instrument.isConnected &&
-                     (instrument.statusText.includes('Error') ||
+                      (instrument.statusText.includes('Error') ||
                       instrument.statusText.includes('EADDRINUSE') ||
                       (instrument.statusText.includes('Listening') && instrument.connectionInProcess))"
                 class="btn btn-outline-warning btn-sm" (click)="forceRestartConnection(instrument)">
@@ -191,7 +191,7 @@
     <div class="stat-item">
       <i class="fa fa-sync"></i>
       <div class="stat-content">
-        <span class="stat-content-label">Last LIS Sync&nbsp;:&nbsp;</span>
+        <span class="stat-content-label">Last Results Synced to LIS&nbsp;:&nbsp;</span>
         <span>{{ lastLimsSync || 'Never' }}</span>
       </div>
     </div>

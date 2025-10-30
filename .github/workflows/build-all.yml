@@ -2,9 +2,11 @@ name: Build All Platforms
 
 on:
   push:
-    tags:
-      - 'v*'
+    tags: ['v*']
   workflow_dispatch:
+
+permissions:
+  contents: write  # ensures release can be created
 
 jobs:
   build:
@@ -16,7 +18,6 @@ jobs:
             build-command: npx electron-builder --linux deb --x64 --publish never
             artifact-name: linux-x64
             artifact-path: release/*.deb
-
           - os: windows-latest
             name: Windows x64
             build-command: npx electron-builder --win portable nsis --x64 --publish never
@@ -27,39 +28,50 @@ jobs:
     name: Build ${{ matrix.name }}
 
     steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: '18', cache: 'npm' }
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/electron
+            ~/.cache/electron-builder
+          key: ${{ runner.os }}-electron-${{ hashFiles('**/package-lock.json') }}
+      - run: npm ci
+      - run: npm run postinstall
+      - run: npm run build:prod
+      - name: Build ${{ matrix.name }} package
+        run: ${{ matrix.build-command }}
+      - run: ls -lh release/ || true
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact-name }}
+          path: ${{ matrix.artifact-path }}
+          if-no-files-found: error
+          retention-days: 7
 
-    - name: Setup Node.js
-      uses: actions/setup-node@v4
-      with:
-        node-version: '18'
-        cache: 'npm'
-
-    - name: Install dependencies
-      run: npm ci
-
-    - name: Build application
-      run: npm run build:prod
-
-    - name: Build ${{ matrix.name }} package
-      run: ${{ matrix.build-command }}
-
-    - name: List build artifacts
-      run: ls -lh release/
-      shell: bash
-
-    - name: Upload artifacts
-      uses: actions/upload-artifact@v4
-      with:
-        name: ${{ matrix.artifact-name }}
-        path: ${{ matrix.artifact-path }}
-        if-no-files-found: error
-
-    - name: Create Release
-      if: startsWith(github.ref, 'refs/tags/v')
-      uses: softprops/action-gh-release@v1
-      with:
-        files: release/*
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+  release:
+    name: Create GitHub Release with all assets
+    needs: build
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/v')
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with: { name: linux-x64, path: dist/linux }
+      - uses: actions/download-artifact@v4
+        with: { name: windows-x64, path: dist/windows }
+      - run: |
+          echo "Linux:" && ls -lh dist/linux || true
+          echo "Windows:" && ls -lh dist/windows || true
+      - name: Publish release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            dist/linux/*
+            dist/windows/*
+          tag_name: ${{ github.ref_name }}
+          generate_release_notes: true
+          fail_on_unmatched_files: true

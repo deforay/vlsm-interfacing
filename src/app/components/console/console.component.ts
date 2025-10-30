@@ -33,6 +33,7 @@ export enum SelectType {
 })
 export class ConsoleComponent implements OnInit, OnDestroy {
   searchTerm: string = '';
+  private pickedInitialTab = false; // run-once guard
   public commonSettings = null;
   public instrumentsSettings = null;
   public appVersion: string = null;
@@ -166,6 +167,19 @@ export class ConsoleComponent implements OnInit, OnDestroy {
       .subscribe(instruments => {
         that._ngZone.run(() => {
           that.availableInstruments = instruments;
+
+          // pick first connected tab once (or first item if none connected)
+          if (!that.pickedInitialTab && that.availableInstruments?.length) {
+            const idx = that.availableInstruments.findIndex(i => i?.isConnected === true);
+            if (idx >= 0) {
+              that.selectTab(idx);
+              that.pickedInitialTab = true;
+            } else if (that.selectedTabIndex >= that.availableInstruments.length) {
+              // still ensure a valid tab if array changed
+              that.selectTab(0);
+            }
+          }
+
 
           // Check if we should auto-reconnect instruments
           that.checkForAutoReconnect();

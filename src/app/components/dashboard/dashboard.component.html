@@ -18,12 +18,12 @@
   <div class="status-overview">
     <div class="status-card" *ngFor="let instrument of availableInstruments">
       <div class="status-indicator"
-           [ngClass]="{'connected': instrument.isConnected, 'disconnected': !instrument.isConnected}">
+        [ngClass]="{'connected': instrument.isConnected, 'disconnected': !instrument.isConnected}">
       </div>
       <div class="status-info">
         <span class="instrument-name">{{ instrument.connectionParams.instrumentId }}</span>
         <span class="status-text"
-              [ngClass]="{'connected-text': instrument.isConnected, 'disconnected-text': !instrument.isConnected}">
+          [ngClass]="{'connected-text': instrument.isConnected, 'disconnected-text': !instrument.isConnected}">
           {{ instrument.statusText }}
         </span>
       </div>
@@ -36,7 +36,8 @@
       <label class="filter-label">Select Instrument</label>
       <div class="select-wrapper">
         <i class="fa fa-microscope select-icon"></i>
-        <select id="instrumentSelect" [(ngModel)]="selectedInstrument" (change)="filterByInstrument()" class="modern-select">
+        <select id="instrumentSelect" [(ngModel)]="selectedInstrument" (change)="filterByInstrument()"
+          class="modern-select">
           <option value="">All Instruments</option>
           <option *ngFor="let instrument of instruments" [value]="instrument">
             {{ instrument }}
@@ -51,7 +52,7 @@
     <div class="stat-card results-received">
       <div class="stat-header">
         <i class="fa fa-chart-line"></i>
-        <h3>Results Received</h3>
+        <h3>Results Received from Instruments</h3>
       </div>
       <div class="stat-value">{{ totalResults }}</div>
       <div class="stat-subtitle" *ngIf="selectedInstrument">{{ selectedInstrument }}</div>
@@ -69,7 +70,7 @@
     <div class="stat-card results-pending">
       <div class="stat-header">
         <i class="fa fa-clock"></i>
-        <h3>Pending Sync</h3>
+        <h3>Pending Sync to LIS</h3>
       </div>
       <div class="stat-value">{{ notYetSyncedResults }}</div>
       <div class="stat-subtitle" *ngIf="selectedInstrument">{{ selectedInstrument }}</div>
@@ -78,7 +79,7 @@
     <div class="stat-card results-failed">
       <div class="stat-header">
         <i class="fa fa-exclamation-triangle"></i>
-        <h3>Failed to Sync</h3>
+        <h3>Failed to Sync to LIS</h3>
       </div>
       <div class="stat-value">{{ failedtosync }}</div>
       <div class="stat-subtitle" *ngIf="selectedInstrument">{{ selectedInstrument }}</div>
@@ -103,7 +104,7 @@
           <i class="fa fa-sync"></i>
         </div>
         <div class="activity-content">
-          <h4>Last LIS Sync</h4>
+          <h4>Last Results Synced to LIS</h4>
           <p class="activity-time">{{ latestResult?.lims_sync_date_time || 'No sync data' }}</p>
           <span class="activity-label" *ngIf="selectedInstrument">{{ selectedInstrument }}</span>
         </div>
@@ -114,7 +115,7 @@
           <i class="fa fa-flask"></i>
         </div>
         <div class="activity-content">
-          <h4>Last Result Received</h4>
+          <h4>Last Result Received from Instrument</h4>
           <p class="activity-time">{{ latestResult?.added_on || 'No results yet' }}</p>
           <span class="activity-label" *ngIf="selectedInstrument">{{ selectedInstrument }}</span>
         </div>
@@ -145,11 +146,13 @@
                 <i class="fa fa-stop-circle"></i>
                 <span>{{ session.endTime }}</span>
               </div>
-              <div class="time-block active" *ngIf="session.endTime === 'N/A' && isInstrumentCurrentlyAvailable(session.mode)">
+              <div class="time-block active"
+                *ngIf="session.endTime === 'N/A' && isInstrumentCurrentlyAvailable(session.mode)">
                 <i class="fa fa-circle active-indicator"></i>
                 <span>Active</span>
               </div>
-              <div class="time-block unknown" *ngIf="session.endTime === 'N/A' && !isInstrumentCurrentlyAvailable(session.mode)">
+              <div class="time-block unknown"
+                *ngIf="session.endTime === 'N/A' && !isInstrumentCurrentlyAvailable(session.mode)">
                 <i class="fa fa-question-circle"></i>
                 <span>No end time recorded</span>
               </div>
