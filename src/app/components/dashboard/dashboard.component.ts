@@ -33,10 +33,10 @@ export class DashboardComponent implements OnInit {
   public availableInstruments = [];
   private instrumentsSubscription: Subscription;
 
-  totalResults: number = 0;
-  syncedResults: number = 0;
-  notYetSyncedResults: number = 0;
-  failedtosync: number = 0;
+  totalReceivedFromInstrument: number = 0;
+  syncedToLIS: number = 0;
+  pendingSyncToLIS: number = 0;
+  unableSyncToLIS: number = 0;
 
   sessionDatasArray: { mode: string; sessionId: string; startTime: string; endTime?: string }[] = [];
   filteredSessionDatasArray: { mode: string; sessionId: string; startTime: string; endTime?: string }[] = [];
@@ -104,10 +104,10 @@ export class DashboardComponent implements OnInit {
   }
 
   private updateCounts(data: ResultData[]) {
-    this.totalResults = data.length;
-    this.syncedResults = data.filter(item => item.lims_sync_status === 1).length;
-    this.notYetSyncedResults = data.filter(item => item.lims_sync_status === 0).length;
-    this.failedtosync = data.filter(item => item.lims_sync_status === 2).length;
+    this.totalReceivedFromInstrument = data.length;
+    this.syncedToLIS = data.filter(item => item.lims_sync_status === 1).length;
+    this.pendingSyncToLIS = data.filter(item => item.lims_sync_status === 0).length;
+    this.unableSyncToLIS = data.filter(item => item.lims_sync_status === 2).length;
 
     this.latestResult = this.getLatestResult(data);
   }

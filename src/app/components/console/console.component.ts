@@ -52,6 +52,7 @@ export class ConsoleComponent implements OnInit, OnDestroy {
   public selectedTabIndex = 0;
   private electronStoreSubscription: Subscription;
   private instrumentsSubscription: Subscription;
+  private resultSavedSubscription: Subscription;
 
   private checkConnectionsAfterInactivity() {
     console.log('Checking connection status after inactivity');
@@ -206,6 +207,15 @@ export class ConsoleComponent implements OnInit, OnDestroy {
       that.fetchRecentLogs();
     }, 600);
 
+    // Refresh recent results when new samples are saved
+    that.resultSavedSubscription = that.instrumentInterfaceService.resultSaved$
+      .pipe(debounceTime(250))
+      .subscribe(() => {
+        that._ngZone.run(() => {
+          that.refreshRecentResultsAfterSave();
+        });
+      });
+
     // Check MySQL connection on regular intervals
     that.mysqlCheckInterval = setInterval(() => {
       that.checkMysqlConnection();
@@ -221,6 +231,21 @@ export class ConsoleComponent implements OnInit, OnDestroy {
     that.walCheckpointInterval = setInterval(() => {
       that.runSQLiteWalCheckpoint();
     }, 1000 * 60 * 30); // 30 minutes
+  }
+
+  private refreshRecentResultsAfterSave(): void {
+    const trimmedSearch = (this.searchTerm || '').trim();
+
+    const effectiveSearch = trimmedSearch.length >= 2 ? trimmedSearch : '';
+    this.utilitiesService.fetchRecentResults(effectiveSearch);
+
+    this.utilitiesService.fetchLastSyncTimes((data: { lastLimsSync: string; lastResultReceived: string; }) => {
+      this._ngZone.run(() => {
+        this.lastLimsSync = this.utilitiesService.humanReadableDateTime(data.lastLimsSync);
+        this.lastResultReceived = this.utilitiesService.humanReadableDateTime(data.lastResultReceived);
+        this.cdRef.detectChanges();
+      });
+    });
   }
 
   private checkForAutoReconnect() {
@@ -650,7 +675,8 @@ export class ConsoleComponent implements OnInit, OnDestroy {
       this.mysqlCheckInterval,
       this.walCheckpointInterval,
       this.electronStoreSubscription,
-      this.instrumentsSubscription
+      this.instrumentsSubscription,
+      this.resultSavedSubscription
     ].forEach(item => {
       if (typeof item === 'number') {
         clearInterval(item);

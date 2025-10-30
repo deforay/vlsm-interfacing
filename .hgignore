@@ -3,6 +3,7 @@
 
 # System #
 .DS_Store
+snyk_rules.instructions.md
 
 # Mercurial #
 .orig

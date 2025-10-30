@@ -6,7 +6,7 @@ import { UtilitiesService } from './utilities.service';
 import { TcpConnectionService } from './tcp-connection.service';
 import { HL7HelperService } from './hl7-helper.service';
 import { ASTMHelperService } from './astm-helper.service';
-import { BehaviorSubject, Observable } from 'rxjs';
+import { BehaviorSubject, Observable, Subject } from 'rxjs';
 
 
 @Injectable({
@@ -17,6 +17,8 @@ export class InstrumentInterfaceService {
 
   protected strData = '';
   private connectedInstruments = new Map<string, BehaviorSubject<boolean>>();
+  private readonly resultSavedSubject = new Subject<{ sampleResult: any; instrumentId: string }>();
+  public readonly resultSaved$ = this.resultSavedSubject.asObservable();
 
   constructor(public dbService: DatabaseService,
     public tcpService: TcpConnectionService,
@@ -546,6 +548,7 @@ export class InstrumentInterfaceService {
       that.dbService.recordTestResults(data,
         (res) => {
           that.utilitiesService.logger('success', 'Successfully saved result : ' + sampleResult.test_id + '|' + sampleResult.order_id, instrumentConnectionData.instrumentId);
+          that.resultSavedSubject.next({ sampleResult: data, instrumentId: instrumentConnectionData.instrumentId });
           return true;
         },
         (err) => {

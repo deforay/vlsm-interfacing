@@ -54,7 +54,7 @@
         <i class="fa fa-chart-line"></i>
         <h3>Results Received from Instruments</h3>
       </div>
-      <div class="stat-value">{{ totalResults }}</div>
+      <div class="stat-value">{{ totalReceivedFromInstrument }}</div>
       <div class="stat-subtitle" *ngIf="selectedInstrument">{{ selectedInstrument }}</div>
     </div>
 
@@ -63,25 +63,25 @@
         <i class="fa fa-check-circle"></i>
         <h3>Results Synced to LIS</h3>
       </div>
-      <div class="stat-value">{{ syncedResults }}</div>
+      <div class="stat-value">{{ syncedToLIS }}</div>
       <div class="stat-subtitle" *ngIf="selectedInstrument">{{ selectedInstrument }}</div>
     </div>
 
     <div class="stat-card results-pending">
       <div class="stat-header">
         <i class="fa fa-clock"></i>
-        <h3>Pending Sync to LIS</h3>
+        <h3>Awaiting Sync to LIS</h3>
       </div>
-      <div class="stat-value">{{ notYetSyncedResults }}</div>
+      <div class="stat-value">{{ pendingSyncToLIS }}</div>
       <div class="stat-subtitle" *ngIf="selectedInstrument">{{ selectedInstrument }}</div>
     </div>
 
     <div class="stat-card results-failed">
       <div class="stat-header">
         <i class="fa fa-exclamation-triangle"></i>
-        <h3>Failed to Sync to LIS</h3>
+        <h3>Unable to Sync to LIS</h3>
       </div>
-      <div class="stat-value">{{ failedtosync }}</div>
+      <div class="stat-value">{{ unableSyncToLIS }}</div>
       <div class="stat-subtitle" *ngIf="selectedInstrument">{{ selectedInstrument }}</div>
     </div>
   </div>
