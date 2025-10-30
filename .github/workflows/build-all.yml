@@ -13,7 +13,7 @@ jobs:
     runs-on: ubuntu-latest
     name: Build Linux x64
     container:
-      image: electronuserland/builder:focal
+      image: electronuserland/builder:latest
 
     steps:
       - uses: actions/checkout@v4
