@@ -486,10 +486,15 @@ select.form-control {
   text-align: center;
   padding: 4rem 2rem;
 
-  i {
+  /* only the top illustration icon */
+  >i,
+  .empty-illustration {
+    display: inline-block;
     font-size: 4rem;
     color: lighten($text-light, 20%);
     margin-bottom: 1.5rem;
+    line-height: 1;
+    /* avoids vertical stretch on some browsers */
   }
 
   h3 {
@@ -504,6 +509,7 @@ select.form-control {
     color: $text-light;
   }
 }
+
 
 // Instruments grid
 .instruments-grid {
@@ -622,6 +628,7 @@ select.form-control {
     opacity: 0;
     transform: translateY(10px);
   }
+
   to {
     opacity: 1;
     transform: translateY(0);

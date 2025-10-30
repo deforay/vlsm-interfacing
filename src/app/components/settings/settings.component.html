@@ -22,12 +22,12 @@
   <div class="status-overview">
     <div class="status-card" *ngFor="let instrument of availableInstruments">
       <div class="status-indicator"
-           [ngClass]="{'connected': instrument.isConnected, 'disconnected': !instrument.isConnected}">
+        [ngClass]="{'connected': instrument.isConnected, 'disconnected': !instrument.isConnected}">
       </div>
       <div class="status-info">
         <span class="instrument-name">{{ instrument.connectionParams.instrumentId }}</span>
         <span class="status-text"
-              [ngClass]="{'connected-text': instrument.isConnected, 'disconnected-text': !instrument.isConnected}">
+          [ngClass]="{'connected-text': instrument.isConnected, 'disconnected-text': !instrument.isConnected}">
           {{ instrument.statusText }}
         </span>
       </div>
@@ -49,24 +49,18 @@
         <div class="card-body">
           <div class="form-group">
             <label>Testing Lab Code/ID</label>
-            <input type="text"
-                   formControlName="labID"
-                   class="form-control"
-                   placeholder="Lab Code/ID"
-                   required>
-            <div class="error-message" *ngIf="settingsForm.get('commonSettings.labID')?.touched && settingsForm.get('commonSettings.labID')?.errors?.['required']">
+            <input type="text" formControlName="labID" class="form-control" placeholder="Lab Code/ID" required>
+            <div class="error-message"
+              *ngIf="settingsForm.get('commonSettings.labID')?.touched && settingsForm.get('commonSettings.labID')?.errors?.['required']">
               Lab ID is required
             </div>
           </div>
 
           <div class="form-group">
             <label>Testing Lab Name</label>
-            <input type="text"
-                   formControlName="labName"
-                   class="form-control"
-                   placeholder="Lab Name"
-                   required>
-            <div class="error-message" *ngIf="settingsForm.get('commonSettings.labName')?.touched && settingsForm.get('commonSettings.labName')?.errors?.['required']">
+            <input type="text" formControlName="labName" class="form-control" placeholder="Lab Name" required>
+            <div class="error-message"
+              *ngIf="settingsForm.get('commonSettings.labName')?.touched && settingsForm.get('commonSettings.labName')?.errors?.['required']">
               Lab Name is required
             </div>
           </div>
@@ -84,14 +78,9 @@
           <div class="form-group">
             <label>SQLite Database Path</label>
             <div class="input-group">
-              <input type="text"
-                     class="form-control readonly"
-                     [value]="appPath"
-                     readonly>
-              <button class="btn btn-icon"
-                      type="button"
-                      title="Copy path to clipboard"
-                      (click)="copyToClipboard(appPath)">
+              <input type="text" class="form-control readonly" [value]="appPath" readonly>
+              <button class="btn btn-icon" type="button" title="Copy path to clipboard"
+                (click)="copyToClipboard(appPath)">
                 <i class="fas fa-copy"></i>
               </button>
             </div>
@@ -112,18 +101,12 @@
           <div class="form-row">
             <div class="form-group half-width">
               <label>MySQL Host</label>
-              <input type="text"
-                     formControlName="mysqlHost"
-                     class="form-control"
-                     placeholder="localhost">
+              <input type="text" formControlName="mysqlHost" class="form-control" placeholder="localhost">
             </div>
             <div class="form-group half-width">
               <label>MySQL Port</label>
-              <input type="text"
-                     formControlName="mysqlPort"
-                     class="form-control"
-                     placeholder="3306"
-                     (input)="cleanPortNumber($event, 'mysqlPort')">
+              <input type="text" formControlName="mysqlPort" class="form-control" placeholder="3306"
+                (input)="cleanPortNumber($event, 'mysqlPort')">
               <div class="error-message" *ngIf="settingsForm.get('commonSettings.mysqlPort')?.hasError('pattern')">
                 Port must be between 1-65535
               </div>
@@ -133,41 +116,28 @@
           <div class="form-row">
             <div class="form-group half-width">
               <label>Database Name</label>
-              <input type="text"
-                     formControlName="mysqlDb"
-                     class="form-control"
-                     placeholder="database_name">
+              <input type="text" formControlName="mysqlDb" class="form-control" placeholder="database_name">
             </div>
             <div class="form-group half-width">
               <label>Database User</label>
-              <input type="text"
-                     formControlName="mysqlUser"
-                     class="form-control"
-                     placeholder="username">
+              <input type="text" formControlName="mysqlUser" class="form-control" placeholder="username">
             </div>
           </div>
 
           <div class="form-group">
             <label>Database Password</label>
             <div class="input-group">
-              <input type="password"
-                     formControlName="mysqlPassword"
-                     name="mysqlPassword"
-                     class="form-control"
-                     placeholder="••••••••">
-              <button class="btn btn-icon"
-                      type="button"
-                      title="Toggle password visibility"
-                      (click)="togglePasswordVisibility()">
+              <input type="password" formControlName="mysqlPassword" name="mysqlPassword" class="form-control"
+                placeholder="••••••••">
+              <button class="btn btn-icon" type="button" title="Toggle password visibility"
+                (click)="togglePasswordVisibility()">
                 <i class="fas fa-eye"></i>
               </button>
             </div>
           </div>
 
           <div class="form-actions">
-            <button type="button"
-                    class="btn btn-secondary"
-                    (click)="checkMysqlConnection()">
+            <button type="button" class="btn btn-secondary" (click)="checkMysqlConnection()">
               <i class="fas fa-plug"></i>
               <span>Test Connection</span>
             </button>
@@ -192,7 +162,7 @@
       <div formArrayName="instrumentsSettings">
         <!-- No instruments message -->
         <div class="empty-state" *ngIf="instrumentsSettings.controls.length === 0">
-          <i class="fas fa-tools"></i>
+          <i class="fas fa-tools empty-illustration"></i>
           <h3>No instruments configured</h3>
           <p>Add your first instrument to get started with the interface tool.</p>
           <button type="button" class="btn btn-primary" (click)="addInstrument()">
@@ -201,20 +171,19 @@
           </button>
         </div>
 
+
         <!-- Instruments list -->
         <div class="instruments-grid">
-          <div *ngFor="let instrument of instrumentsSettings.controls; let i = index"
-               class="instrument-card"
-               [formGroupName]="i">
+          <div *ngFor="let instrument of instrumentsSettings.controls; let i = index" class="instrument-card"
+            [formGroupName]="i">
 
             <div class="instrument-header">
               <div class="instrument-title">
                 <span class="instrument-number">{{ instrument.get('displayorder')?.value || i + 1 }}</span>
                 <h3>{{ instrument.get('analyzerMachineName')?.value || 'New Instrument' }}</h3>
               </div>
-              <button type="button"
-                      class="btn btn-sm btn-danger"
-                      (click)="confirmRemoval(i, instrument.get('analyzerMachineName')?.value || 'New Instrument', $event)">
+              <button type="button" class="btn btn-sm btn-danger"
+                (click)="confirmRemoval(i, instrument.get('analyzerMachineName')?.value || 'New Instrument', $event)">
                 <i class="fas fa-trash"></i>
                 <span>Remove</span>
               </button>
@@ -227,10 +196,8 @@
                 <div class="form-group">
                   <label>Connection Mode</label>
                   <div class="custom-select-wrapper">
-                    <select formControlName="interfaceConnectionMode"
-                            class="form-control"
-                            required
-                            (change)="onConnectionModeChange(i, $event)">
+                    <select formControlName="interfaceConnectionMode" class="form-control" required
+                      (change)="onConnectionModeChange(i, $event)">
                       <option value="tcpclient">TCP Client - Connect to instrument</option>
                       <option value="tcpserver">TCP Server - Instrument connects to me</option>
                     </select>
@@ -240,9 +207,7 @@
                 <div class="form-group">
                   <label>Communication Protocol</label>
                   <div class="custom-select-wrapper">
-                    <select formControlName="interfaceCommunicationProtocol"
-                            class="form-control"
-                            required>
+                    <select formControlName="interfaceCommunicationProtocol" class="form-control" required>
                       <option value="astm-nonchecksum">ASTM (without checksum)</option>
                       <option value="astm-checksum">ASTM (with checksum)</option>
                       <option value="hl7">HL7</option>
@@ -253,26 +218,19 @@
                 <div class="form-row">
                   <div class="form-group half-width">
                     <label>IP Address</label>
-                    <div class="custom-select-wrapper" *ngIf="instrument.get('interfaceConnectionMode')?.value === 'tcpserver'">
+                    <div class="custom-select-wrapper"
+                      *ngIf="instrument.get('interfaceConnectionMode')?.value === 'tcpserver'">
                       <select formControlName="analyzerMachineHost" class="form-control" required>
                         <option *ngFor="let ip of machineIps" [value]="ip">{{ ip }}</option>
                       </select>
                     </div>
-                    <input *ngIf="instrument.get('interfaceConnectionMode')?.value !== 'tcpserver'"
-                           type="text"
-                           formControlName="analyzerMachineHost"
-                           class="form-control"
-                           placeholder="192.168.1.100"
-                           required>
+                    <input *ngIf="instrument.get('interfaceConnectionMode')?.value !== 'tcpserver'" type="text"
+                      formControlName="analyzerMachineHost" class="form-control" placeholder="192.168.1.100" required>
                   </div>
                   <div class="form-group half-width">
                     <label>Port Number</label>
-                    <input type="text"
-                           formControlName="analyzerMachinePort"
-                           class="form-control"
-                           placeholder="3120"
-                           required
-                           (input)="cleanPortNumber($event, i)">
+                    <input type="text" formControlName="analyzerMachinePort" class="form-control" placeholder="3120"
+                      required (input)="cleanPortNumber($event, i)">
                     <div class="error-message" *ngIf="instrument.get('analyzerMachinePort')?.hasError('pattern')">
                       Port must be between 1-65535
                     </div>
@@ -314,12 +272,10 @@
 
                 <div class="form-group">
                   <label>Instrument Name/Code</label>
-                  <input type="text"
-                         formControlName="analyzerMachineName"
-                         class="form-control"
-                         placeholder="e.g., Roche-Cobas-01"
-                         required>
-                  <div class="error-message" *ngIf="instrument.get('analyzerMachineName')?.hasError('duplicateInstrumentName')">
+                  <input type="text" formControlName="analyzerMachineName" class="form-control"
+                    placeholder="e.g., Roche-Cobas-01" required>
+                  <div class="error-message"
+                    *ngIf="instrument.get('analyzerMachineName')?.hasError('duplicateInstrumentName')">
                     This instrument name is already in use
                   </div>
                 </div>
@@ -328,10 +284,7 @@
                   <label>Display Order</label>
                   <div class="input-with-icon">
                     <i class="fas fa-sort-numeric-down input-icon"></i>
-                    <input type="number"
-                           formControlName="displayorder"
-                           class="form-control with-icon"
-                           placeholder="1">
+                    <input type="number" formControlName="displayorder" class="form-control with-icon" placeholder="1">
                   </div>
                   <small class="help-text">Instruments will be sorted by this value</small>
                 </div>
@@ -352,15 +305,11 @@
 
     <!-- Form Actions -->
     <div class="form-footer">
-      <button type="button"
-              class="btn btn-outline-secondary"
-              routerLink="/console">
+      <button type="button" class="btn btn-outline-secondary" routerLink="/console">
         <i class="fas fa-times"></i>
         <span>Cancel</span>
       </button>
-      <button type="submit"
-              class="btn btn-primary"
-              [disabled]="settingsForm.invalid">
+      <button type="submit" class="btn btn-primary" [disabled]="settingsForm.invalid">
         <i class="fas fa-save"></i>
         <span>Save Settings</span>
       </button>
