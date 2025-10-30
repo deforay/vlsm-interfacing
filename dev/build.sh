@@ -19,8 +19,8 @@ nvm install 18
 nvm use 18
 node -v
 
-# Navigate to web directory
-cd /var/www
+# Navigate to home directory
+cd ~
 
 # Remove old application directory if exists
 sudo rm -rf vlsm-interfacing
@@ -30,16 +30,22 @@ echo "Cloning repository..."
 git clone https://github.com/deforay/vlsm-interfacing
 cd vlsm-interfacing/
 
-# Clean existing node modules and lock files
-echo "Cleaning existing node modules and lock files..."
-rm -rf node_modules/ app/node_modules/ package-lock.json app/package-lock.json
-
-# Install dependencies and rebuild native modules
+# Install dependencies (npm ci automatically deletes node_modules first)
 echo "Installing dependencies..."
-npm i && npm run postinstall
+npm ci
+
+# Rebuild native modules for current platform
+echo "Rebuilding native modules..."
+npm run postinstall
 
 # Build electron application
 echo "Building electron application..."
 npm run electron:build
 
 echo "Build process completed successfully!"
+echo "Changing to release directory..."
+cd release/
+
+# List the built packages
+echo "Built packages:"
+ls -lh

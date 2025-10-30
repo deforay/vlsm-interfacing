@@ -2,8 +2,8 @@ name: Build All Platforms
 
 on:
   push:
-    tags: ['v*']
-  workflow_dispatch:
+    tags: ['v*']           # still supports tag pushes
+  workflow_dispatch:        # and manual runs
 
 permissions:
   contents: write
@@ -54,7 +54,6 @@ jobs:
       - name: Build ${{ matrix.name }} package
         run: ${{ matrix.build-command }}
 
-      # Upload first so a later cosmetic step can't block publishing
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
@@ -63,28 +62,39 @@ jobs:
           if-no-files-found: error
           retention-days: 7
 
-      # Cross-platform listing (won’t fail the job)
-      - name: List build artifacts
+      - name: List build artifacts (non-blocking)
         if: always()
         shell: bash
         run: |
           echo "Runner OS: ${{ runner.os }}"
-          if [ -d release ]; then
-            ls -la release || true
-          else
-            echo "No release/ dir found"
-          fi
+          [ -d release ] && ls -la release || echo "no release/ dir"
 
   release:
     name: Create GitHub Release with all assets
     needs: build
-    # run even if one matrix leg failed; still require tag
-    if: startsWith(github.ref, 'refs/tags/v') && always()
+    # run for tag pushes OR manual runs (even if a build leg failed)
+    if: always() && (startsWith(github.ref, 'refs/tags/v') || github.event_name == 'workflow_dispatch')
     runs-on: ubuntu-latest
     permissions:
       contents: write
 
     steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+
+      # Read version from package.json and set tag = v<version>
+      - name: Derive release tag from package.json
+        id: ver
+        shell: bash
+        run: |
+          PKG_VERSION=$(node -p "require('./package.json').version")
+          echo "pkg_version=$PKG_VERSION" >> "$GITHUB_OUTPUT"
+          echo "RELEASE_TAG=v$PKG_VERSION" >> "$GITHUB_ENV"
+          echo "Will release tag: v$PKG_VERSION"
+
       - id: dl-linux
         uses: actions/download-artifact@v4
         with:
@@ -104,13 +114,14 @@ jobs:
           echo "Linux:" && ls -lh dist/linux || true
           echo "Windows:" && ls -lh dist/windows || true
 
-      - name: Publish release
-        # only publish if at least one download succeeded
+      - name: Publish release v${{ steps.ver.outputs.pkg_version }}
         if: steps.dl-linux.outcome == 'success' || steps.dl-win.outcome == 'success'
         uses: softprops/action-gh-release@v2
         with:
+          tag_name: ${{ env.RELEASE_TAG }}        # e.g. v3.1.5 from package.json
+          name: ${{ env.RELEASE_TAG }}
+          generate_release_notes: true
+          fail_on_unmatched_files: true
           files: |
             dist/linux/*
             dist/windows/*
-          generate_release_notes: true
-          fail_on_unmatched_files: true
