@@ -19,6 +19,7 @@ import { IpcRenderer } from 'electron';
 import { MatDialog } from '@angular/material/dialog';
 import { ChangeDetectionStrategy } from '@angular/core';
 import { debounceTime, distinctUntilChanged, shareReplay, map, filter } from 'rxjs/operators';
+import { LogDisplayService, LogEntry } from '../../services/log-display.service';
 
 export enum SelectType {
   single,
@@ -53,6 +54,8 @@ export class ConsoleComponent implements OnInit, OnDestroy {
   private electronStoreSubscription: Subscription;
   private instrumentsSubscription: Subscription;
   private resultSavedSubscription: Subscription;
+  private logSubscription: Subscription;
+  private logClearSubscription: Subscription;
 
   private checkConnectionsAfterInactivity() {
     console.log('Checking connection status after inactivity');
@@ -107,6 +110,7 @@ export class ConsoleComponent implements OnInit, OnDestroy {
     private readonly connectionManagerService: ConnectionManagerService,
     private readonly tcpService: TcpConnectionService,
     private readonly utilitiesService: UtilitiesService,
+    private readonly logDisplayService: LogDisplayService,
     private readonly router: Router) {
     if ((<any>window).require) {
       this.ipc = (<any>window).require('electron').ipcRenderer;
@@ -185,26 +189,16 @@ export class ConsoleComponent implements OnInit, OnDestroy {
           // Check if we should auto-reconnect instruments
           that.checkForAutoReconnect();
 
-          // Initialize the logs for each instrument
-          that.availableInstruments.forEach(instrument => {
-            that.utilitiesService.getInstrumentLogSubject(instrument.connectionParams.instrumentId)
-              .subscribe(logs => {
-                that._ngZone.run(() => {
-                  that.updateLogsForInstrument(instrument.connectionParams.instrumentId, logs);
-                  that.filterInstrumentLogs(instrument);
-                  that.cdRef.detectChanges();
-                });
-              });
-          });
-
+          // We don't need to subscribe to logs here anymore,
+          // it's handled by the global logSubscription
+          that.fetchRecentLogs();
           that.cdRef.detectChanges();
         });
       });
 
-    // Fetch last few orders and logs on load
+    // Fetch last few orders on load
     setTimeout(() => {
       that.fetchRecentResults();
-      that.fetchRecentLogs();
     }, 600);
 
     // Refresh recent results when new samples are saved
@@ -231,20 +225,86 @@ export class ConsoleComponent implements OnInit, OnDestroy {
     that.walCheckpointInterval = setInterval(() => {
       that.runSQLiteWalCheckpoint();
     }, 1000 * 60 * 30); // 30 minutes
+
+    // Subscribe to logs from the display service
+    that.logSubscription = that.logDisplayService.log$.subscribe(logEntry => {
+      that._ngZone.run(() => {
+        that.updateLogUI(logEntry);
+      });
+    });
+
+    // Subscribe to clear events
+    that.logClearSubscription = that.logDisplayService.clear$.subscribe(instrumentId => {
+      that._ngZone.run(() => {
+        if (instrumentId) {
+          // Clear logs for a specific instrument
+          if (that.instrumentLogs[instrumentId]) {
+            that.instrumentLogs[instrumentId].logs = [];
+            that.instrumentLogs[instrumentId].filteredLogs = [];
+          }
+        } else {
+          // Clear all logs if no ID is specified
+          Object.keys(that.instrumentLogs).forEach(id => {
+            that.instrumentLogs[id].logs = [];
+            that.instrumentLogs[id].filteredLogs = [];
+          });
+        }
+        that.cdRef.detectChanges();
+      });
+    });
+  }
+
+  private updateLogUI(logEntry: LogEntry) {
+    const instrumentId = logEntry.instrumentId;
+    if (!instrumentId) return;
+
+    // Ensure the log structure exists
+    this.instrumentLogs[instrumentId] ??= { logs: [], filteredLogs: [] };
+
+    // Add the new log and re-sort
+    this.instrumentLogs[instrumentId].logs.push(logEntry);
+    this.instrumentLogs[instrumentId].logs.sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime());
+
+
+    // Re-filter logs
+    this.filterInstrumentLogs({ connectionParams: { instrumentId } });
+
+    // Limit the number of logs to prevent memory issues
+    const MAX_LOG_ENTRIES = 5000;
+    if (this.instrumentLogs[instrumentId].logs.length > MAX_LOG_ENTRIES) {
+      this.instrumentLogs[instrumentId].logs.length = MAX_LOG_ENTRIES;
+    }
+    if (this.instrumentLogs[instrumentId].filteredLogs.length > MAX_LOG_ENTRIES) {
+      this.instrumentLogs[instrumentId].filteredLogs.length = MAX_LOG_ENTRIES;
+    }
+
+    this.cdRef.detectChanges();
   }
 
   private refreshRecentResultsAfterSave(): void {
     const trimmedSearch = (this.searchTerm || '').trim();
 
     const effectiveSearch = trimmedSearch.length >= 2 ? trimmedSearch : '';
-    this.utilitiesService.fetchRecentResults(effectiveSearch);
+    this.utilitiesService.fetchRecentResults(effectiveSearch).subscribe({
+      next: (results) => {
+        this._ngZone.run(() => {
+          this.lastOrders = results;
+          this.dataSource.data = this.lastOrders;
+          this.cdRef.detectChanges();
+        });
+      },
+      error: (err) => console.error('Error refreshing results after save:', err)
+    });
 
-    this.utilitiesService.fetchLastSyncTimes((data: { lastLimsSync: string; lastResultReceived: string; }) => {
-      this._ngZone.run(() => {
-        this.lastLimsSync = this.utilitiesService.humanReadableDateTime(data.lastLimsSync);
-        this.lastResultReceived = this.utilitiesService.humanReadableDateTime(data.lastResultReceived);
-        this.cdRef.detectChanges();
-      });
+    this.utilitiesService.fetchLastSyncTimes().subscribe({
+      next: (data) => {
+        this._ngZone.run(() => {
+          this.lastLimsSync = this.utilitiesService.humanReadableDateTime(data.lastLimsSync);
+          this.lastResultReceived = this.utilitiesService.humanReadableDateTime(data.lastResultReceived);
+          this.cdRef.detectChanges();
+        });
+      },
+      error: (err) => console.error('Error fetching last sync times:', err)
     });
   }
 
@@ -322,7 +382,7 @@ export class ConsoleComponent implements OnInit, OnDestroy {
     that.selection.selected.forEach(selectedRow => {
       if (that.utilitiesService) {
         that.utilitiesService.reSyncRecord(selectedRow.order_id).subscribe({
-          next: (response) => {
+          next: () => {
             selectedRow.lims_sync_status = '0';
             that.dataSource.data = [...that.dataSource.data];
             // Clear selection after re-sync
@@ -350,18 +410,11 @@ export class ConsoleComponent implements OnInit, OnDestroy {
       console.log('Fetching search results without sync');
     }
 
-    that.utilitiesService.fetchRecentResults(trimmedTerm);
-
-    that.utilitiesService.fetchLastSyncTimes((data: { lastLimsSync: string; lastResultReceived: string; }) => {
-      that.lastLimsSync = that.utilitiesService.humanReadableDateTime(data.lastLimsSync);
-      that.lastResultReceived = that.utilitiesService.humanReadableDateTime(data.lastResultReceived);
-    });
-
-    that.utilitiesService.lastOrders.subscribe({
+    that.utilitiesService.fetchRecentResults(trimmedTerm).subscribe({
       next: lastFewOrders => {
         that._ngZone.run(() => {
-          that.lastOrders = lastFewOrders[0];
-          that.data = lastFewOrders[0];
+          that.lastOrders = lastFewOrders;
+          that.data = lastFewOrders;
           that.dataSource.data = that.lastOrders;
           that.dataSource.paginator = that.paginator;
           that.dataSource.sort = that.sort;
@@ -376,6 +429,14 @@ export class ConsoleComponent implements OnInit, OnDestroy {
       error: error => {
         console.error('Error fetching last orders:', error);
       }
+    });
+
+    that.utilitiesService.fetchLastSyncTimes().subscribe({
+      next: (data) => {
+        that.lastLimsSync = that.utilitiesService.humanReadableDateTime(data.lastLimsSync);
+        that.lastResultReceived = that.utilitiesService.humanReadableDateTime(data.lastResultReceived);
+      },
+      error: (err) => console.error('Error fetching last sync times:', err)
     });
   }
 
@@ -407,13 +468,11 @@ export class ConsoleComponent implements OnInit, OnDestroy {
     console.log('Searching with trimmed term:', `"${trimmedTerm}"`);
 
     // Pass the trimmed term to the service
-    that.utilitiesService.fetchRecentResults(trimmedTerm);
-
-    that.utilitiesService.lastOrders.subscribe({
-      next: lastFewOrders => {
+    that.utilitiesService.fetchRecentResults(trimmedTerm).subscribe({
+      next: (results) => {
         that._ngZone.run(() => {
-          that.lastOrders = lastFewOrders[0];
-          that.data = lastFewOrders[0];
+          that.lastOrders = results;
+          that.data = results;
           that.dataSource.data = that.lastOrders;
           that.dataSource.paginator = that.paginator;
           that.dataSource.sort = that.sort;
@@ -427,9 +486,7 @@ export class ConsoleComponent implements OnInit, OnDestroy {
           console.log(`Search completed: ${that.lastOrders?.length || 0} results for "${trimmedTerm}"`);
         });
       },
-      error: error => {
-        console.error('Error fetching search results:', error);
-      }
+      error: (error) => console.error('Error fetching search results:', error)
     });
   }
 
@@ -442,18 +499,11 @@ export class ConsoleComponent implements OnInit, OnDestroy {
 
     // Do the sync first, then fetch all results
     that.resyncTestResultsToMySQL();
-    that.utilitiesService.fetchRecentResults(''); // Empty string = get all
-
-    that.utilitiesService.fetchLastSyncTimes((data: { lastLimsSync: string; lastResultReceived: string; }) => {
-      that.lastLimsSync = data.lastLimsSync;
-      that.lastResultReceived = data.lastResultReceived;
-    });
-
-    that.utilitiesService.lastOrders.subscribe({
-      next: lastFewOrders => {
+    that.utilitiesService.fetchRecentResults('').subscribe({
+      next: (results) => {
         that._ngZone.run(() => {
-          that.lastOrders = lastFewOrders[0];
-          that.data = lastFewOrders[0];
+          that.lastOrders = results;
+          that.data = results;
           that.dataSource.data = that.lastOrders;
           that.dataSource.paginator = that.paginator;
           that.dataSource.sort = that.sort;
@@ -465,9 +515,15 @@ export class ConsoleComponent implements OnInit, OnDestroy {
           that.cdRef.detectChanges();
         });
       },
-      error: error => {
-        console.error('Error fetching refreshed results:', error);
-      }
+      error: (error) => console.error('Error fetching refreshed results:', error)
+    });
+
+    that.utilitiesService.fetchLastSyncTimes().subscribe({
+      next: (data) => {
+        that.lastLimsSync = that.utilitiesService.humanReadableDateTime(data.lastLimsSync);
+        that.lastResultReceived = that.utilitiesService.humanReadableDateTime(data.lastResultReceived);
+      },
+      error: (err) => console.error('Error fetching last sync times:', err)
     });
   }
 
@@ -500,24 +556,29 @@ export class ConsoleComponent implements OnInit, OnDestroy {
     }
   }
 
-  updateLogsForInstrument(instrumentId: string, newLogs: any) {
+  updateLogsForInstrument(instrumentId: string, newLogs: LogEntry[]) {
     this.instrumentLogs[instrumentId] ??= {
       logs: [],
       filteredLogs: []
     };
 
+    // Sort logs by timestamp descending (newest first)
+    newLogs.sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime());
+
     this.instrumentLogs[instrumentId].logs = newLogs;
-    this.instrumentLogs[instrumentId].filteredLogs = newLogs;
+    this.filterInstrumentLogs({ connectionParams: { instrumentId } });
   }
 
   fetchRecentLogs() {
     const that = this;
     that.availableInstruments.forEach(instrument => {
-      let logs = that.utilitiesService.fetchRecentLogs(instrument.connectionParams.instrumentId);
-      that.updateLogsForInstrument(instrument.connectionParams.instrumentId, logs);
+      that.utilitiesService.fetchRecentLogs(instrument.connectionParams.instrumentId)
+        .subscribe(logs => {
+          that._ngZone.run(() => {
+            that.updateLogsForInstrument(instrument.connectionParams.instrumentId, logs);
+          });
+        });
     });
-
-    that.cdRef.detectChanges(); // Trigger change detection
   }
 
   // Use connection manager service for connect/disconnect functions
@@ -568,8 +629,8 @@ export class ConsoleComponent implements OnInit, OnDestroy {
       that.instrumentLogs[instrument.connectionParams.instrumentId].filteredLogs = [...that.instrumentLogs[instrument.connectionParams.instrumentId].logs];
     } else {
       // Apply filter on the original logs
-      that.instrumentLogs[instrument.connectionParams.instrumentId].filteredLogs = that.instrumentLogs[instrument.connectionParams.instrumentId].logs.filter((log: string) =>
-        log.toLowerCase().includes(instrument.searchText.trim().toLowerCase())
+      that.instrumentLogs[instrument.connectionParams.instrumentId].filteredLogs = that.instrumentLogs[instrument.connectionParams.instrumentId].logs.filter((log: LogEntry) =>
+        log.message.toLowerCase().includes(instrument.searchText.trim().toLowerCase())
       );
     }
 
@@ -579,7 +640,7 @@ export class ConsoleComponent implements OnInit, OnDestroy {
   copyLog(instrument: { connectionParams: { instrumentId: string | number; }; }) {
     if (this.instrumentLogs[instrument.connectionParams.instrumentId]) {
       // Join the filtered logs with a newline character
-      const logContent = this.instrumentLogs[instrument.connectionParams.instrumentId].filteredLogs.join('\n');
+      const logContent = this.instrumentLogs[instrument.connectionParams.instrumentId].filteredLogs.map(l => l.message).join('\n');
       this.copyTextToClipboard(logContent);
     } else {
       console.error('No logs found for instrument:', instrument.connectionParams.instrumentId);
@@ -587,15 +648,9 @@ export class ConsoleComponent implements OnInit, OnDestroy {
   }
 
   clearLiveLog(instrument: any) {
-    const that = this;
-    that.utilitiesService.clearLiveLog(instrument.connectionParams.instrumentId);
-    // Clear logs and filtered logs for the specific instrument
-    if (that.instrumentLogs[instrument.connectionParams.instrumentId]) {
-      that.instrumentLogs[instrument.connectionParams.instrumentId].logs = [];
-      that.instrumentLogs[instrument.connectionParams.instrumentId].filteredLogs = [];
-    }
-
-    that.cdRef.detectChanges(); // Trigger change detection if needed
+    const instrumentId = instrument.connectionParams.instrumentId;
+    // This will trigger the subscription to clear the UI
+    this.logDisplayService.clearLogs(instrumentId);
   }
 
   resyncTestResultsToMySQL() {
@@ -627,8 +682,8 @@ export class ConsoleComponent implements OnInit, OnDestroy {
     });
   }
 
-  getSafeHtml(logEntry: string) {
-    return this.sanitizer.bypassSecurityTrustHtml(logEntry);
+  getSafeHtml(logEntry: LogEntry) {
+    return this.sanitizer.bypassSecurityTrustHtml(logEntry.message);
   }
 
   checkMysqlConnection() {
@@ -673,15 +728,23 @@ export class ConsoleComponent implements OnInit, OnDestroy {
     [
       this.recentResultsInterval,
       this.mysqlCheckInterval,
-      this.walCheckpointInterval,
+      this.walCheckpointInterval
+    ].forEach(interval => {
+      if (interval) {
+        clearInterval(interval);
+      }
+    });
+
+    // Unsubscribe from all subscriptions
+    [
       this.electronStoreSubscription,
       this.instrumentsSubscription,
-      this.resultSavedSubscription
-    ].forEach(item => {
-      if (typeof item === 'number') {
-        clearInterval(item);
-      } else if (item && typeof item.unsubscribe === 'function') {
-        item.unsubscribe();
+      this.resultSavedSubscription,
+      this.logSubscription,
+      this.logClearSubscription
+    ].forEach(subscription => {
+      if (subscription) {
+        subscription.unsubscribe();
       }
     });
   }

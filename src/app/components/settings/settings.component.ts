@@ -10,6 +10,7 @@ import { CryptoService } from '../../services/crypto.service';
 import { v4 as uuidv4 } from 'uuid';
 import { ConnectionManagerService } from '../../services/connection-manager.service';
 import { Subscription } from 'rxjs';
+import { DatabaseService } from '../../services/database.service';
 
 @Component({
   selector: 'app-settings',
@@ -31,7 +32,8 @@ export class SettingsComponent implements OnInit {
     private readonly electronStoreService: ElectronStoreService,
     private readonly utilitiesService: UtilitiesService,
     private readonly cryptoService: CryptoService,
-    private connectionManagerService: ConnectionManagerService
+    private connectionManagerService: ConnectionManagerService,
+    private readonly databaseService: DatabaseService
   ) {
 
     const commonSettingsStore = this.electronStoreService.get('commonConfig');
@@ -148,6 +150,44 @@ export class SettingsComponent implements OnInit {
     return this.settingsForm.get('instrumentsSettings') as FormArray;
   }
 
+  public async forceRerunMigrations(): Promise<void> {
+    try {
+      const result = await this.electronService.ipcRenderer.invoke('show-confirm-dialog', {
+        type: 'warning',
+        buttons: ['Cancel', 'Yes, Proceed'],
+        defaultId: 0,
+        title: 'Confirm Migration Reset',
+        message: 'Are you sure you want to force re-run all migrations?',
+        detail: 'This action is irreversible. It will delete the migration history from both the local and server databases and restart the application. All migrations will be re-applied on startup.'
+      });
+
+      if (result.response === 1) { // Corresponds to 'Yes, Proceed'
+        try {
+          await this.databaseService.dropMySQLVersionsTable().toPromise();
+          // On successful drop of MySQL table, trigger the main process to handle the rest
+          this.electronService.ipcRenderer.send('force-rerun-migrations');
+        } catch (err) {
+          // If MySQL is not connected or there's an error, ask user if they want to proceed
+          const errorResult = await this.electronService.ipcRenderer.invoke('show-confirm-dialog', {
+            type: 'error',
+            buttons: ['Cancel', 'Proceed Anyway'],
+            defaultId: 0,
+            title: 'MySQL Error',
+            message: 'Could not drop the versions table on the MySQL server. This might be because MySQL is not configured or is unreachable.',
+            detail: `Error: ${err.message}\n\nDo you want to proceed with resetting the local database only?`
+          });
+
+          if (errorResult.response === 1) { // 'Proceed Anyway'
+            this.electronService.ipcRenderer.send('force-rerun-migrations');
+          }
+        }
+      }
+    } catch (error) {
+      console.error('Error showing confirmation dialog:', error);
+    }
+  }
+
+
   createInstrumentFormGroup(): FormGroup {
     const instrumentId = uuidv4();
     return this.formBuilder.group({
@@ -194,7 +234,26 @@ export class SettingsComponent implements OnInit {
 
 
   addInstrument(): void {
-    this.instrumentsSettings.push(this.createInstrumentFormGroup());
+    const newInstrument = this.formBuilder.group({
+      analyzerMachineType: ['', Validators.required],
+      interfaceCommunicationProtocol: ['', Validators.required],
+      analyzerMachineName: ['', Validators.required],
+      analyzerMachineHost: ['', Validators.required],
+      analyzerMachinePort: ['', [
+        Validators.required,
+        Validators.pattern('^[0-9]+$'),
+        (control) => {
+          const value = control.value;
+          if (!value) return null;
+          const portNum = parseInt(value);
+          return (isNaN(portNum) || portNum < 1 || portNum > 65535) ? { pattern: true } : null;
+        }
+      ]],
+      interfaceConnectionMode: ['', Validators.required],
+      displayorder: ['']
+    });
+
+    this.instrumentsSettings.push(newInstrument);
   }
 
   confirmRemoval(index: number, analyzerMachineName: string, event: Event): void {

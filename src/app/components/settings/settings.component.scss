@@ -731,3 +731,26 @@ select.form-control {
     background-color: rgba($danger-color, 0.9);
   }
 }
+
+.section-spacer {
+  height: 2rem;
+  width: 100%;
+}
+
+.troubleshooting-section {
+  margin-bottom: 2rem;
+}
+
+.troubleshooting-card {
+  border-left: 4px solid var(--danger-color);
+
+  .card-header {
+    h2 {
+      color: var(--danger-color);
+    }
+
+    i {
+      color: var(--danger-color);
+    }
+  }
+}

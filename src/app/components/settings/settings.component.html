@@ -316,6 +316,35 @@
     </div>
   </form>
 
+  <!-- Spacer -->
+  <div class="section-spacer"></div>
+
+  <!-- Troubleshooting Section -->
+  <div class="troubleshooting-section">
+    <div class="config-card troubleshooting-card">
+      <div class="card-header">
+        <div class="header-content">
+          <i class="fas fa-wrench"></i>
+          <h2>Troubleshooting</h2>
+        </div>
+      </div>
+      <div class="card-body">
+        <div class="form-group">
+          <label>Force Re-run Migrations</label>
+          <p class="help-text">
+            This will delete the migration history from both SQLite and MySQL and restart the application.
+            All migrations will be re-applied on next startup. Use this if you suspect the database schema is out of
+            sync.
+          </p>
+          <button type="button" class="btn btn-danger" (click)="forceRerunMigrations()">
+            <i class="fas fa-sync-alt"></i>
+            <span>Force Re-run All Migrations</span>
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <!-- Version Info -->
   <div class="version-info" *ngIf="appVersion">
     Version {{ appVersion }}

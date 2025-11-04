@@ -2,6 +2,9 @@ import { Injectable } from '@angular/core';
 import { DatabaseService } from './database.service';
 import { BehaviorSubject, Observable, of } from 'rxjs';
 import { ElectronService } from '../core/services';
+import { LoggingService } from './logging.service';
+
+type LogLevel = 'info' | 'success' | 'warn' | 'error' | 'verbose';
 
 @Injectable({
   providedIn: 'root'
@@ -25,7 +28,8 @@ export class UtilitiesService {
 
   constructor(
     private readonly electronService: ElectronService,
-    private readonly dbService: DatabaseService
+    private readonly dbService: DatabaseService,
+    private readonly loggingService: LoggingService
   ) {
   }
 
@@ -48,6 +52,18 @@ export class UtilitiesService {
 
   sleep(ms) {
     return new Promise(resolve => setTimeout(resolve, ms));
+  }
+
+  logger(type: LogLevel, message: string, instrumentId: string) {
+    this.loggingService.log(type, message, instrumentId);
+  }
+
+  humanReadableDateTime(date: Date | string | null): string {
+    if (!date) {
+      return '';
+    }
+
+    return this.formatRawDate(date, 'DD-MMM-YYYY HH:mm:ss') || '';
   }
 
   hex2ascii(hexx) {
@@ -200,33 +216,9 @@ export class UtilitiesService {
   }
 
 
-  fetchRecentResults(searchParam?: string) {
-    const that = this;
+  fetchRecentResults(searchParam?: string): Observable<any[]> {
     const trimmedSearchParam = (searchParam || '').trim();
-
-    console.log('UtilitiesService.fetchRecentResults called with:', {
-      original: `"${searchParam}"`,
-      trimmed: `"${trimmedSearchParam}"`,
-      isEmpty: trimmedSearchParam === ''
-    });
-
-    // Pass empty string if trimmed search is empty, otherwise pass trimmed value
-    const finalSearchParam = trimmedSearchParam === '' ? '' : trimmedSearchParam;
-
-    that.dbService.fetchRecentResults((res) => {
-      console.log('Database returned results:', res?.length || 0, 'records for search:', `"${finalSearchParam}"`);
-
-      // Log first few results to see if search is working
-      if (res && res.length > 0) {
-        console.log('Sample results:', res.slice(0, 3).map(r => r.order_id));
-      }
-
-      res = [res];
-      that.lastOrdersSubject.next(res);
-    }, (err) => {
-      console.error('Failed to fetch recent results:', err);
-      that.logger('error', 'Failed to fetch recent results ' + JSON.stringify(err));
-    }, finalSearchParam);
+    return this.dbService.fetchRecentResults(trimmedSearchParam);
   }
 
 
@@ -236,18 +228,13 @@ export class UtilitiesService {
       res = [res];
       that.lastrawDataSubject.next(res);
     }, (err) => {
-      that.logger('error', 'Failed to fetch raw data ' + JSON.stringify(err));
+      that.logger('error', 'Failed to fetch raw data ' + JSON.stringify(err), null);
     }, searchParam)
   }
 
 
-  fetchRecentLogs(instrumentId = null) {
-    this.dbService.fetchRecentLogs(instrumentId, (res) => {
-      const logs = res.map(r => r.log); // Assuming r.log is the log message
-      this.getInstrumentLogSubject(instrumentId).next(logs);
-    }, (err) => {
-      this.logger('error', 'Failed to fetch recent logs: ' + JSON.stringify(err));
-    });
+  fetchRecentLogs(instrumentId: string): Observable<any[]> {
+    return this.dbService.fetchRecentLogs(instrumentId);
   }
 
   clearLiveLog(instrumentId = null) {
@@ -267,71 +254,17 @@ export class UtilitiesService {
     return of(this.dbService.reSyncRecord(orderId));
   }
 
-  fetchLastSyncTimes(callback): any {
-    const that = this;
-    that.dbService.fetchLastSyncTimes((res) => {
-      callback(res[0]);
-    }, (err) => {
-      that.logger('error', 'Failed to fetch last sync time ' + JSON.stringify(err));
-    });
+  fetchLastSyncTimes(): Observable<any> {
+    return this.dbService.fetchLastSyncTimes();
   }
 
   getInstrumentLogSubject(instrumentId: string): BehaviorSubject<string[]> {
+    if (!instrumentId) {
+      instrumentId = 'general';
+    }
     if (!this.logTextMap.has(instrumentId)) {
       this.logTextMap.set(instrumentId, new BehaviorSubject<string[]>([]));
     }
     return this.logTextMap.get(instrumentId);
   }
-
-  logger(logType = null, message = null, instrumentId = null) {
-    const that = this;
-    if (!message) return;
-
-    // Generate timestamp and format message
-    const date = this.moment(new Date()).format('DD-MMM-YYYY HH:mm:ss');
-    let logFor = ` [${date}] `;
-    if (instrumentId) {
-      logFor = ` [${instrumentId}] [${date}] `;
-    }
-
-    let logMessage = '';
-    if (logType === 'info') {
-      that.electronService.logInfo(message, instrumentId);
-      logMessage = `<span style="color:rgb(129, 209, 247) !important;">[info]</span>${logFor}${message}`;
-    } else if (logType === 'error') {
-      that.electronService.logError(message, instrumentId);
-      logMessage = `<span style="color: #ff5252 !important;">[error]</span>${logFor}${message}`;
-    } else if (logType === 'success') {
-      that.electronService.logInfo(message, instrumentId);
-      logMessage = `<span style="color: #00e676 !important;">[success]</span>${logFor}${message}`;
-    } else if (logType === 'ignore') {
-      logMessage = `${message}`;
-    } else if (logType === 'warn') {
-      that.electronService.logWarning(message, instrumentId);
-      logMessage = `<span style="color:orange !important;">[warn]</span>${logFor}${message}`;
-    }
-
-
-    // Update UI immediately
-    const logSubject = that.getInstrumentLogSubject(instrumentId);
-    const currentLogs = logSubject.value;
-    logSubject.next([logMessage, ...currentLogs]);
-
-    // THE ONLY CHANGE: Make database logging async
-    if (logType !== 'ignore') {
-      setTimeout(() => {
-        const dbLog: any = { log: logMessage };
-        that.dbService.recordConsoleLogs(dbLog, () => { }, () => { });
-      }, 0);
-    }
-  }
-
-  humanReadableDateTime(date: Date | string | null): string {
-    if (!date) {
-      return '';
-    }
-
-    return this.formatRawDate(date, 'DD-MMM-YYYY HH:mm:ss') || '';
-  }
-
 }

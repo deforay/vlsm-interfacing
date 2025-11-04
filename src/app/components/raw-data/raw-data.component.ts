@@ -9,7 +9,6 @@ import { MatSort } from '@angular/material/sort';
 import { MatDialog } from '@angular/material/dialog';
 import { SelectionModel } from '@angular/cdk/collections';
 import { Subscription } from 'rxjs';
-import { MatSnackBar } from '@angular/material/snack-bar';
 
 @Component({
   selector: 'app-raw-data',
@@ -60,8 +59,7 @@ export class RawDataComponent implements OnInit, OnDestroy {
     private rawDataProcessor: RawDataProcessorService,
     private cdRef: ChangeDetectorRef,
     private router: Router,
-    private dialog: MatDialog,
-    private snackBar: MatSnackBar
+    private dialog: MatDialog
   ) { }
 
   ngOnInit() {
@@ -93,7 +91,7 @@ export class RawDataComponent implements OnInit, OnDestroy {
         this.isReprocessing = status.inProgress;
         this.cdRef.detectChanges();
 
-        // If processing just completed, show results in a snackbar
+        // If processing just completed, show results
         if (this.processingStartTime && !status.inProgress &&
           (status.processedCount > 0)) {
           const processingTime = this.formatProcessingTime(Date.now() - this.processingStartTime);
@@ -317,16 +315,7 @@ export class RawDataComponent implements OnInit, OnDestroy {
    */
   showMessage(message: string) {
     console.log('Message:', message);
-
-    if (this.snackBar) {
-      this.snackBar.open(message, 'Dismiss', {
-        duration: 5000,
-        verticalPosition: 'bottom',
-        horizontalPosition: 'center',
-      });
-    } else {
-      alert(message);
-    }
+    alert(message);
   }
 
   formatProcessingTime(ms: number): string {
@@ -347,7 +336,7 @@ export class RawDataComponent implements OnInit, OnDestroy {
 
     // Log results
     if (status.failed > 0) {
-      this.utilitiesService.logger('warning',
+      this.utilitiesService.logger('warn',
         `Reprocessing completed with ${status.failed} failures. ${status.errors.length} errors occurred.`,
         null);
 

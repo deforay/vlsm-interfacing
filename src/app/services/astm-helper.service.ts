@@ -55,9 +55,14 @@ export class ASTMHelperService {
         instrumentConnectionData.connectionSocket &&
         instrumentConnectionData.connectionSocket.writable) {
 
-        // Send pre-created ACK buffer immediately
-        instrumentConnectionData.connectionSocket.write(this.ACK_BUFFER);
+        const startTime = Date.now();
         this.utilitiesService.logger('info', logMessage || 'Sending ASTM ACK', instrumentConnectionData.instrumentId);
+        // Send pre-created ACK buffer immediately
+        instrumentConnectionData.connectionSocket.write(this.ACK_BUFFER, 'binary', () => {
+          const endTime = Date.now();
+          const duration = endTime - startTime;
+          this.utilitiesService.logger('info', `ACK sent in ${duration}ms`, instrumentConnectionData.instrumentId);
+        });
       }
     } catch (error) {
       this.utilitiesService.logger('error', 'Failed to send ASTM ACK: ' + error, instrumentConnectionData.instrumentId);

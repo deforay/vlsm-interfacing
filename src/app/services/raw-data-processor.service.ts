@@ -141,7 +141,7 @@ export class RawDataProcessorService {
     }
 
     if (this.instrumentsSettings.length > 0) {
-      this.utilsService.logger('warning', `Fallback to first instrument setting for ${analyzerMachineName}`, analyzerMachineName);
+      this.utilsService.logger('warn', `Fallback to first instrument setting for ${analyzerMachineName}`, analyzerMachineName);
       return this.instrumentsSettings[0];
     }
 

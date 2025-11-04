@@ -22,6 +22,94 @@ let sqlite3Obj = null;
 let sqliteDbName = 'interface.db';
 const args = process.argv.slice(1), serve = args.some(val => val === '--serve');
 let tray = null;
+function getSQLiteDBConnection() {
+    return sqlite3Obj;
+}
+function restartApp() {
+    electron_1.app.relaunch();
+    electron_1.app.exit();
+}
+function runSqliteMigrations(db, migrationsPath) {
+    return __awaiter(this, void 0, void 0, function* () {
+        console.log('Running SQLite migrations from:', migrationsPath);
+        try {
+            // 1. Ensure versions table exists
+            yield new Promise((resolve, reject) => {
+                db.run('CREATE TABLE IF NOT EXISTS versions (version INTEGER PRIMARY KEY, filename TEXT, applied_at DATETIME DEFAULT CURRENT_TIMESTAMP)', (err) => {
+                    if (err)
+                        return reject(err);
+                    resolve();
+                });
+            });
+            // 2. Add filename column for backward compatibility
+            yield new Promise((resolve, reject) => {
+                db.run('ALTER TABLE versions ADD COLUMN filename TEXT', (err) => {
+                    if (err && !err.message.includes('duplicate column name')) {
+                        console.error('Error altering versions table:', err);
+                        return reject(err);
+                    }
+                    resolve();
+                });
+            });
+            // 3. Get migration files
+            const migrationFiles = fs.readdirSync(migrationsPath)
+                .filter(file => file.endsWith('.sql'))
+                .sort();
+            // 4. Get applied migrations
+            const appliedFilenames = yield new Promise((resolve, reject) => {
+                db.all('SELECT filename FROM versions WHERE filename IS NOT NULL', (err, rows) => {
+                    if (err)
+                        return reject(err);
+                    resolve(new Set(rows.map(row => row.filename)));
+                });
+            });
+            // 5. Run new migrations
+            for (const file of migrationFiles) {
+                if (appliedFilenames.has(file)) {
+                    continue;
+                }
+                console.log(`Applying SQLite migration: ${file}`);
+                const filePath = path.join(migrationsPath, file);
+                const sql = fs.readFileSync(filePath, 'utf8');
+                // 1. Remove comment lines, 2. Split by semicolon, 3. Trim and filter empty statements
+                const statements = sql.split('\n')
+                    .filter(line => !line.trim().startsWith('--'))
+                    .join('\n')
+                    .split(';')
+                    .map(s => s.trim())
+                    .filter(s => s.length > 0);
+                console.log(`Executing ${statements.length} statements from migration file: ${file}`);
+                console.log(`Statements:`, statements);
+                for (const statement of statements) {
+                    yield new Promise((resolve) => {
+                        db.run(statement, (err) => {
+                            if (err) {
+                                console.warn(`Warning executing statement in ${file}: "${statement}". Error: ${err.message}`);
+                            }
+                            resolve(); // Always resolve, even if there's an error
+                        });
+                    });
+                }
+                // Record the migration as complete, regardless of statement errors, to prevent re-running.
+                const version = parseInt(file.split('.')[0], 10);
+                yield new Promise((resolve, reject) => {
+                    db.run('INSERT INTO versions (version, filename) VALUES (?, ?)', [version, file], (err) => {
+                        if (err) {
+                            // If we fail to record the version, that's a critical error.
+                            return reject(new Error(`Failed to record migration version for ${file}: ${err.message}`));
+                        }
+                        console.log(`Finished applying SQLite migration: ${file}`);
+                        resolve();
+                    });
+                });
+            }
+            console.log('SQLite migrations check complete.');
+        }
+        catch (err) {
+            console.error('A critical error occurred during the SQLite migration process:', err);
+        }
+    });
+}
 function createUniversalMySQLConfig(baseConfig) {
     return Object.assign(Object.assign({}, baseConfig), { 
         // Connection settings (valid for both pools and connections)
@@ -44,35 +132,34 @@ function createUniversalMySQLConfig(baseConfig) {
 function createUniversalMySQLPoolConfig(baseConfig) {
     return Object.assign(Object.assign({}, createUniversalMySQLConfig(baseConfig)), { 
         // Pool-specific settings
-        acquireTimeout: 10000, timeout: 600, connectionLimit: 10, waitForConnections: true, queueLimit: 0 });
+        // acquireTimeout: 10000,        // 10 seconds to get connection from pool
+        // timeout: 600,                 // Query timeout (pool-specific)
+        connectionLimit: 10, waitForConnections: true, queueLimit: 0 });
 }
-function copyMigrationFiles() {
-    const migrationSourceDir = path.join(__dirname, 'mysql-migrations');
-    const migrationTargetDir = path.join(electron_1.app.getPath('userData'), 'mysql-migrations');
-    if (!fs.existsSync(migrationSourceDir)) {
-        console.error(`Migration source directory not found: ${migrationSourceDir}`);
-        return;
-    }
-    const sourceFiles = fs.readdirSync(migrationSourceDir);
-    // Create the target directory if it doesn't exist
-    if (!fs.existsSync(migrationTargetDir)) {
-        fs.mkdirSync(migrationTargetDir, { recursive: true });
-    }
-    // Check each file in the source directory
-    sourceFiles.forEach(file => {
-        const sourceFile = path.join(migrationSourceDir, file);
-        const targetFile = path.join(migrationTargetDir, file);
-        if (!fs.existsSync(targetFile)) {
-            // If the target file doesn't exist, copy it
-            fs.copyFileSync(sourceFile, targetFile);
-        }
-        else {
-            // Check if the source file is newer than the target file
-            const sourceStat = fs.statSync(sourceFile);
-            const targetStat = fs.statSync(targetFile);
-            if (sourceStat.mtime > targetStat.mtime) {
-                fs.copyFileSync(sourceFile, targetFile);
+function copySqliteMigrationFiles() {
+    return __awaiter(this, void 0, void 0, function* () {
+        const sourceDir = path.join(serve ? __dirname : process.resourcesPath, 'sqlite-migrations');
+        const targetDir = path.join(electron_1.app.getPath('userData'), 'sqlite-migrations');
+        try {
+            if (!fs.existsSync(sourceDir)) {
+                console.error(`SQLite migration source directory not found: ${sourceDir}`);
+                return;
             }
+            if (!fs.existsSync(targetDir)) {
+                yield fs.promises.mkdir(targetDir, { recursive: true });
+            }
+            const files = yield fs.promises.readdir(sourceDir);
+            for (const file of files) {
+                const sourceFile = path.join(sourceDir, file);
+                const targetFile = path.join(targetDir, file);
+                if (!fs.existsSync(targetFile)) {
+                    yield fs.promises.copyFile(sourceFile, targetFile);
+                    console.log(`Copied SQLite migration file: ${file}`);
+                }
+            }
+        }
+        catch (err) {
+            console.error('Error copying SQLite migration files:', err);
         }
     });
 }
@@ -147,15 +234,209 @@ try {
         });
     }
     const mysqlPools = {}; // simple in-memory cache of pools
-    electron_1.app.on('ready', () => {
-        (0, sqlite3helper_main_1.setupSqlite)(store, (db, err) => {
-            if (err) {
-                console.error('Error during SQLite setup:', err);
+    function registerIpcHandlers() {
+        electron_1.ipcMain.handle('export-settings', (event, settingsJSON) => __awaiter(this, void 0, void 0, function* () {
+            try {
+                const today = new Date();
+                const timestamp = `${today.getFullYear()}${(today.getMonth() + 1).toString().padStart(2, '0')}${today.getDate().toString().padStart(2, '0')}-${today.getHours().toString().padStart(2, '0')}${today.getMinutes().toString().padStart(2, '0')}`;
+                const defaultPath = `interface-settings-${timestamp}.json`;
+                const { filePath, canceled } = yield electron_1.dialog.showSaveDialog({
+                    title: 'Export Settings',
+                    defaultPath: defaultPath,
+                    filters: [{ name: 'JSON Files', extensions: ['json'] }]
+                });
+                if (canceled) {
+                    return { status: 'cancelled', message: 'Export cancelled.' };
+                }
+                else {
+                    fs.writeFileSync(filePath, settingsJSON, 'utf8');
+                    return { status: 'success', message: 'Settings successfully exported.' };
+                }
             }
-            sqlite3Obj = db;
-            console.info('SQLite setup complete');
+            catch (err) {
+                console.error('Failed to save settings:', err);
+                return { status: 'error', message: 'Failed to export settings.' };
+            }
+        }));
+        electron_1.ipcMain.handle('getUserDataPath', () => {
+            return electron_1.app.getPath('userData');
+        });
+        electron_1.ipcMain.handle('mysql-create-pool', (event, config) => {
+            const key = JSON.stringify(config);
+            if (!mysqlPools[key]) {
+                const universalConfig = createUniversalMySQLPoolConfig(config);
+                try {
+                    mysqlPools[key] = mysql.createPool(universalConfig);
+                    mysqlPools[key].on('connection', (connection) => {
+                        console.log('MySQL connection established');
+                        const compatibilityQueries = [
+                            "SET SESSION sql_mode=(SELECT REPLACE(@@sql_mode, 'ONLY_FULL_GROUP_BY', ''))",
+                            "SET SESSION INTERACTIVE_TIMEOUT=600",
+                            "SET SESSION WAIT_TIMEOUT=600"
+                        ];
+                        compatibilityQueries.forEach(query => {
+                            connection.query(query, (err) => {
+                                if (err) {
+                                    console.warn(`Non-critical SQL mode warning: ${err.message}`);
+                                }
+                            });
+                        });
+                    });
+                    mysqlPools[key].on('error', (err) => {
+                        console.error('MySQL pool error:', err.message);
+                    });
+                }
+                catch (error) {
+                    console.error('Error creating MySQL pool:', error);
+                    throw error;
+                }
+            }
+            return { status: 'ok' };
+        });
+        electron_1.ipcMain.handle('mysql-query', (event, config, query, values) => {
+            const key = JSON.stringify(config);
+            if (!mysqlPools[key]) {
+                const universalConfig = createUniversalMySQLPoolConfig(config);
+                mysqlPools[key] = mysql.createPool(universalConfig);
+            }
+            return new Promise((resolve, reject) => {
+                mysqlPools[key].query(query, values !== null && values !== void 0 ? values : [], (err, results) => {
+                    if (err) {
+                        const errorInfo = {
+                            message: err.message,
+                            code: err.code,
+                            errno: err.errno,
+                            sqlState: err.sqlState,
+                            sqlMessage: err.sqlMessage,
+                            fatal: err.fatal
+                        };
+                        if (err.code === 'ER_NOT_SUPPORTED_AUTH_MODE') {
+                            console.error('MySQL Authentication Error - Try updating user auth method:', errorInfo);
+                        }
+                        else if (err.code === 'ECONNREFUSED') {
+                            console.error('MySQL Connection Refused - Check if MySQL is running:', errorInfo);
+                        }
+                        else if (err.code === 'ER_ACCESS_DENIED_ERROR') {
+                            console.error('MySQL Access Denied - Check credentials:', errorInfo);
+                        }
+                        else {
+                            console.error('MySQL Error:', errorInfo);
+                        }
+                        reject(err);
+                    }
+                    else {
+                        resolve(results);
+                    }
+                });
+            });
+        });
+        electron_1.ipcMain.handle('mysql-test-connection', (event, config) => {
+            return new Promise((resolve, reject) => {
+                const universalConfig = createUniversalMySQLConfig(config);
+                const testConnection = mysql.createConnection(universalConfig);
+                testConnection.connect((err) => {
+                    if (err) {
+                        testConnection.destroy();
+                        reject({ success: false, error: err.message, code: err.code, version: 'unknown' });
+                    }
+                    else {
+                        testConnection.query('SELECT VERSION() as version', (versionErr, results) => {
+                            const version = results && results[0] ? results[0].version : 'unknown';
+                            testConnection.destroy();
+                            if (versionErr) {
+                                reject({ success: false, error: versionErr.message, version: version });
+                            }
+                            else {
+                                resolve({ success: true, message: 'Connection successful', version: version });
+                            }
+                        });
+                    }
+                });
+                setTimeout(() => {
+                    testConnection.destroy();
+                    reject({ success: false, error: 'Connection test timeout', code: 'TIMEOUT' });
+                }, 15000);
+            });
+        });
+        electron_1.ipcMain.handle('import-settings', (event) => __awaiter(this, void 0, void 0, function* () {
+            try {
+                const { filePaths, canceled } = yield electron_1.dialog.showOpenDialog({
+                    title: 'Import Settings',
+                    filters: [{ name: 'JSON Files', extensions: ['json'] }],
+                    properties: ['openFile']
+                });
+                if (canceled || !filePaths || filePaths.length === 0) {
+                    return { status: 'cancelled', message: 'Import cancelled.' };
+                }
+                const filePath = filePaths[0];
+                const data = fs.readFileSync(filePath, 'utf-8');
+                const importedSettings = JSON.parse(data);
+                win.webContents.send('imported-settings', importedSettings);
+                for (const key in importedSettings) {
+                    if (importedSettings.hasOwnProperty(key)) {
+                        store.set(key, importedSettings[key]);
+                    }
+                }
+                return { status: 'success', message: 'Settings successfully imported.' };
+            }
+            catch (err) {
+                console.error('Failed to import settings:', err);
+                return { status: 'error', message: 'Failed to import settings.' };
+            }
+        }));
+        electron_1.ipcMain.handle('dialog', (event, method, params) => {
+            return electron_1.dialog[method](params);
+        });
+        electron_1.ipcMain.on('force-rerun-migrations', (event) => {
+            try {
+                const db = getSQLiteDBConnection();
+                if (db) {
+                    db.exec('DROP TABLE IF EXISTS versions', (err) => {
+                        if (err) {
+                            console.error('Failed to drop SQLite versions table:', err);
+                        }
+                        restartApp();
+                    });
+                }
+                else {
+                    console.error('SQLite DB connection not available.');
+                    restartApp();
+                }
+            }
+            catch (error) {
+                console.error('Error during SQLite table drop:', error);
+                restartApp();
+            }
+        });
+        electron_1.ipcMain.handle('show-confirm-dialog', (event, options) => __awaiter(this, void 0, void 0, function* () {
+            const focusedWindow = electron_1.BrowserWindow.getFocusedWindow();
+            if (focusedWindow) {
+                return electron_1.dialog.showMessageBox(focusedWindow, options);
+            }
+            return electron_1.dialog.showMessageBox(null, options);
+        }));
+    }
+    electron_1.app.on('ready', () => __awaiter(void 0, void 0, void 0, function* () {
+        try {
+            // First, set up the SQLite database connection
+            sqlite3Obj = yield new Promise((resolve, reject) => {
+                (0, sqlite3helper_main_1.setupSqlite)(store, (db, err) => {
+                    if (err) {
+                        console.error('Error during SQLite setup:', err);
+                        return reject(err);
+                    }
+                    console.info('SQLite setup complete');
+                    resolve(db);
+                });
+            });
+            // Then, copy and run the migrations
+            const migrationsPath = path.join(electron_1.app.getPath('userData'), 'sqlite-migrations');
+            yield copySqliteMigrationFiles();
+            yield runSqliteMigrations(sqlite3Obj, migrationsPath);
+            // IMPORTANT: Register all IPC handlers BEFORE creating the window
+            registerIpcHandlers();
+            // Now that the database and IPC are ready, create the main window
             createWindow();
-            copyMigrationFiles(); // Ensure migration files are moved
             // Log app startup to both console and file
             const startupTime = new Date().toISOString();
             console.log(`\n${'='.repeat(80)}\n🚀 APPLICATION STARTED - ${startupTime}\n${'='.repeat(80)}\n`);
@@ -184,356 +465,32 @@ try {
             catch (error) {
                 console.error('Error setting up tray icon:', error);
             }
-            electron_1.ipcMain.handle('export-settings', (event, settingsJSON) => __awaiter(void 0, void 0, void 0, function* () {
-                try {
-                    const today = new Date();
-                    const timestamp = `${today.getFullYear()}${(today.getMonth() + 1).toString().padStart(2, '0')}${today.getDate().toString().padStart(2, '0')}-${today.getHours().toString().padStart(2, '0')}${today.getMinutes().toString().padStart(2, '0')}`;
-                    const defaultPath = `interface-settings-${timestamp}.json`;
-                    const { filePath, canceled } = yield electron_1.dialog.showSaveDialog({
-                        title: 'Export Settings',
-                        defaultPath: defaultPath,
-                        filters: [{ name: 'JSON Files', extensions: ['json'] }]
-                    });
-                    if (canceled) {
-                        return { status: 'cancelled', message: 'Export cancelled.' };
-                    }
-                    else {
-                        fs.writeFileSync(filePath, settingsJSON, 'utf8');
-                        return { status: 'success', message: 'Settings successfully exported.' };
-                    }
-                }
-                catch (err) {
-                    console.error('Failed to save settings:', err);
-                    return { status: 'error', message: 'Failed to export settings.' };
-                }
-            }));
-            // Register the 'getUserDataPath' handler after window creation
-            electron_1.ipcMain.handle('getUserDataPath', () => {
-                return electron_1.app.getPath('userData');
-            });
-            electron_1.ipcMain.handle('mysql-create-pool', (event, config) => {
-                const key = JSON.stringify(config);
-                if (!mysqlPools[key]) {
-                    const universalConfig = createUniversalMySQLPoolConfig(config);
-                    try {
-                        mysqlPools[key] = mysql.createPool(universalConfig);
-                        // Set up pool event handlers
-                        mysqlPools[key].on('connection', (connection) => {
-                            console.log('MySQL connection established');
-                            // Set session variables for compatibility across versions
-                            const compatibilityQueries = [
-                                "SET SESSION sql_mode=(SELECT REPLACE(@@sql_mode, 'ONLY_FULL_GROUP_BY', ''))",
-                                "SET SESSION INTERACTIVE_TIMEOUT=600",
-                                "SET SESSION WAIT_TIMEOUT=600"
-                            ];
-                            compatibilityQueries.forEach(query => {
-                                connection.query(query, (err) => {
-                                    if (err) {
-                                        console.warn(`Non-critical SQL mode warning: ${err.message}`);
-                                    }
-                                });
-                            });
-                        });
-                        mysqlPools[key].on('error', (err) => {
-                            console.error('MySQL pool error:', err.message);
-                        });
-                    }
-                    catch (error) {
-                        console.error('Error creating MySQL pool:', error);
-                        throw error;
-                    }
-                }
-                return { status: 'ok' };
-            });
-            electron_1.ipcMain.handle('mysql-query', (event, config, query, values) => {
-                const key = JSON.stringify(config);
-                if (!mysqlPools[key]) {
-                    const universalConfig = createUniversalMySQLPoolConfig(config);
-                    mysqlPools[key] = mysql.createPool(universalConfig);
-                }
-                return new Promise((resolve, reject) => {
-                    mysqlPools[key].query(query, values !== null && values !== void 0 ? values : [], (err, results) => {
-                        if (err) {
-                            // Enhanced error handling for different MySQL versions
-                            const errorInfo = {
-                                message: err.message,
-                                code: err.code,
-                                errno: err.errno,
-                                sqlState: err.sqlState,
-                                sqlMessage: err.sqlMessage,
-                                fatal: err.fatal
-                            };
-                            // Log different error types
-                            if (err.code === 'ER_NOT_SUPPORTED_AUTH_MODE') {
-                                console.error('MySQL Authentication Error - Try updating user auth method:', errorInfo);
-                            }
-                            else if (err.code === 'ECONNREFUSED') {
-                                console.error('MySQL Connection Refused - Check if MySQL is running:', errorInfo);
-                            }
-                            else if (err.code === 'ER_ACCESS_DENIED_ERROR') {
-                                console.error('MySQL Access Denied - Check credentials:', errorInfo);
-                            }
-                            else {
-                                console.error('MySQL Error:', errorInfo);
-                            }
-                            reject(err);
-                        }
-                        else {
-                            resolve(results);
-                        }
-                    });
-                });
-            });
-            electron_1.ipcMain.handle('mysql-test-connection', (event, config) => {
-                return new Promise((resolve, reject) => {
-                    // Use connection config (not pool config) for single connection test
-                    const universalConfig = createUniversalMySQLConfig(config);
-                    // Create a temporary connection for testing
-                    const testConnection = mysql.createConnection(universalConfig);
-                    testConnection.connect((err) => {
-                        if (err) {
-                            testConnection.destroy();
-                            reject({
-                                success: false,
-                                error: err.message,
-                                code: err.code,
-                                version: 'unknown'
-                            });
-                        }
-                        else {
-                            // Get MySQL version for debugging
-                            testConnection.query('SELECT VERSION() as version', (versionErr, results) => {
-                                const version = results && results[0] ? results[0].version : 'unknown';
-                                testConnection.destroy();
-                                if (versionErr) {
-                                    reject({
-                                        success: false,
-                                        error: versionErr.message,
-                                        version: version
-                                    });
-                                }
-                                else {
-                                    resolve({
-                                        success: true,
-                                        message: 'Connection successful',
-                                        version: version
-                                    });
-                                }
-                            });
-                        }
-                    });
-                    // Timeout the test after 15 seconds
-                    setTimeout(() => {
-                        testConnection.destroy();
-                        reject({
-                            success: false,
-                            error: 'Connection test timeout',
-                            code: 'TIMEOUT'
-                        });
-                    }, 15000);
-                });
-            });
-            electron_1.ipcMain.handle('import-settings', (event) => __awaiter(void 0, void 0, void 0, function* () {
-                try {
-                    const { filePaths, canceled } = yield electron_1.dialog.showOpenDialog({
-                        title: 'Import Settings',
-                        filters: [{ name: 'JSON Files', extensions: ['json'] }],
-                        properties: ['openFile']
-                    });
-                    if (canceled || !filePaths || filePaths.length === 0) {
-                        return { status: 'cancelled', message: 'Import cancelled.' };
-                    }
-                    const filePath = filePaths[0];
-                    const data = fs.readFileSync(filePath, 'utf-8');
-                    const importedSettings = JSON.parse(data);
-                    win.webContents.send('imported-settings', importedSettings);
-                    for (const key in importedSettings) {
-                        if (importedSettings.hasOwnProperty(key)) {
-                            store.set(key, importedSettings[key]);
-                        }
-                    }
-                    return { status: 'success', message: 'Settings successfully imported.' };
-                }
-                catch (err) {
-                    console.error('Failed to import settings:', err);
-                    return { status: 'error', message: 'Failed to import settings.' };
-                }
-            }));
-            // Register a 'dialog' event listener.
-            electron_1.ipcMain.handle('dialog', (event, method, params) => {
-                return electron_1.dialog[method](params);
-            });
-            electron_1.ipcMain.on('sqlite3-query', (event, sql, args, uniqueEvent) => {
-                try {
-                    if (!sqlite3Obj) {
-                        throw new Error('Database not initialized');
-                    }
-                    const isSelect = sql.trim().toLowerCase().startsWith('select');
-                    const isInsert = sql.trim().toLowerCase().startsWith('insert');
-                    if (isSelect) {
-                        // For SELECT queries, use db.all() to get all results
-                        if (args === null || args === undefined) {
-                            sqlite3Obj.all(sql, (err, rows) => {
-                                var _a;
-                                if (err) {
-                                    console.error(`SQLite error for query [${sql}]:`, err);
-                                    event.reply(uniqueEvent, {
-                                        error: err.message,
-                                        code: (_a = err.code) !== null && _a !== void 0 ? _a : 'SQLITE_ERROR',
-                                        sql: sql
-                                    });
-                                }
-                                else {
-                                    event.reply(uniqueEvent, rows);
-                                }
-                            });
-                        }
-                        else {
-                            sqlite3Obj.all(sql, args, (err, rows) => {
-                                var _a;
-                                if (err) {
-                                    console.error(`SQLite error for query [${sql}]:`, err);
-                                    event.reply(uniqueEvent, {
-                                        error: err.message,
-                                        code: (_a = err.code) !== null && _a !== void 0 ? _a : 'SQLITE_ERROR',
-                                        sql: sql
-                                    });
-                                }
-                                else {
-                                    event.reply(uniqueEvent, rows);
-                                }
-                            });
-                        }
-                    }
-                    else if (isInsert) {
-                        // For INSERT queries, use db.run() and return the lastID
-                        if (args === null || args === undefined) {
-                            sqlite3Obj.run(sql, function (err) {
-                                var _a;
-                                if (err) {
-                                    console.error(`SQLite error for query [${sql}]:`, err);
-                                    event.reply(uniqueEvent, {
-                                        error: err.message,
-                                        code: (_a = err.code) !== null && _a !== void 0 ? _a : 'SQLITE_ERROR',
-                                        sql: sql
-                                    });
-                                }
-                                else {
-                                    event.reply(uniqueEvent, {
-                                        changes: this.changes,
-                                        lastInsertRowid: this.lastID
-                                    });
-                                    console.log(`Insert operation completed. Changes: ${this.changes}, Last ID: ${this.lastID}`);
-                                }
-                            });
-                        }
-                        else {
-                            sqlite3Obj.run(sql, args, function (err) {
-                                var _a;
-                                if (err) {
-                                    console.error(`SQLite error for query [${sql}]:`, err);
-                                    event.reply(uniqueEvent, {
-                                        error: err.message,
-                                        code: (_a = err.code) !== null && _a !== void 0 ? _a : 'SQLITE_ERROR',
-                                        sql: sql
-                                    });
-                                }
-                                else {
-                                    event.reply(uniqueEvent, {
-                                        changes: this.changes,
-                                        lastInsertRowid: this.lastID
-                                    });
-                                    console.log(`Insert operation completed. Changes: ${this.changes}, Last ID: ${this.lastID}`);
-                                }
-                            });
-                        }
-                    }
-                    else {
-                        // For UPDATE, DELETE, etc., use db.run()
-                        if (args === null || args === undefined) {
-                            sqlite3Obj.run(sql, function (err) {
-                                var _a;
-                                if (err) {
-                                    console.error(`SQLite error for query [${sql}]:`, err);
-                                    event.reply(uniqueEvent, {
-                                        error: err.message,
-                                        code: (_a = err.code) !== null && _a !== void 0 ? _a : 'SQLITE_ERROR',
-                                        sql: sql
-                                    });
-                                }
-                                else {
-                                    event.reply(uniqueEvent, { changes: this.changes });
-                                }
-                            });
-                        }
-                        else {
-                            sqlite3Obj.run(sql, args, function (err) {
-                                var _a;
-                                if (err) {
-                                    console.error(`SQLite error for query [${sql}]:`, err);
-                                    event.reply(uniqueEvent, {
-                                        error: err.message,
-                                        code: (_a = err.code) !== null && _a !== void 0 ? _a : 'SQLITE_ERROR',
-                                        sql: sql
-                                    });
-                                }
-                                else {
-                                    event.reply(uniqueEvent, { changes: this.changes });
-                                }
-                            });
-                        }
-                    }
-                }
-                catch (err) {
-                    console.error(`SQLite general error:`, err);
-                    event.reply(uniqueEvent, {
-                        error: err.message,
-                        code: 'SQLITE_ERROR',
-                        sql: sql
-                    });
+            // Quit when all windows are closed.
+            electron_1.app.on('window-all-closed', () => {
+                // On OS X it is common for applications and their menu bar
+                // to stay active until the user quits explicitly with Cmd + Q
+                if (process.platform !== 'darwin') {
+                    electron_1.app.quit();
                 }
             });
-            electron_1.ipcMain.handle('log-info', (event, message, instrumentId = null) => {
-                let appLog = log.scope('app');
-                if (instrumentId) {
-                    appLog = log.scope(instrumentId);
+            electron_1.app.on('activate', () => {
+                if (win === null) {
+                    createWindow();
                 }
-                appLog.info(message);
             });
-            electron_1.ipcMain.handle('log-warning', (event, message, instrumentId = null) => {
-                let appLog = log.scope('app');
-                if (instrumentId) {
-                    appLog = log.scope(instrumentId);
-                }
-                appLog.warn(message);
-            });
-            electron_1.ipcMain.handle('log-error', (event, message, instrumentId = null) => {
-                let appLog = log.scope('app');
-                if (instrumentId) {
-                    appLog = log.scope(instrumentId);
-                }
-                appLog.error(message);
-            });
-            // Add WAL checkpoint handler for sqlite3
-            electron_1.ipcMain.handle('sqlite3-wal-checkpoint', () => {
-                return new Promise((resolve, reject) => {
-                    if (!sqlite3Obj) {
-                        reject(new Error('Database not initialized'));
-                        return;
-                    }
-                    sqlite3Obj.run("PRAGMA wal_checkpoint(PASSIVE)", function (err) {
-                        if (err) {
-                            console.error('Error running WAL checkpoint:', err);
-                            reject(err);
-                        }
-                        else {
-                            console.log('WAL checkpoint completed successfully');
-                            resolve({ success: true });
-                        }
-                    });
-                });
-            });
-        });
+        }
+        catch (error) {
+            console.error('Failed to initialize the application:', error);
+            // If initialization fails, quit the app to prevent it from running in a broken state
+            electron_1.app.quit();
+        }
+    }));
+    electron_1.app.on('window-all-closed', () => {
+        if (tray) {
+            tray.destroy();
+            tray = null;
+        }
+        electron_1.app.quit();
     });
 }
 catch (e) {

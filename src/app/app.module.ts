@@ -24,6 +24,8 @@ import { ElectronService } from './core/services';
 import { InstrumentInterfaceService } from './services/instrument-interface.service';
 import { ElectronStoreService } from './services/electron-store.service';
 import { ConnectionManagerService } from './services/connection-manager.service';
+import { LogDisplayService } from './services/log-display.service';
+import { LoggingService } from './services/logging.service';
 
 
 import { NgxPaginationModule } from 'ngx-pagination';
@@ -82,6 +84,8 @@ export function httpLoaderFactory(http: HttpClient) {
     ElectronStoreService,
     ConnectionManagerService,
     { provide: MAT_FORM_FIELD_DEFAULT_OPTIONS, useValue: { appearance: 'fill' } },
+    LogDisplayService,
+    LoggingService
   ],
   bootstrap: [AppComponent]
 })

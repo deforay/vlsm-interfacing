@@ -4,6 +4,7 @@ import { ElectronStoreService } from './electron-store.service';
 import { CryptoService } from './crypto.service'
 import * as path from 'path';
 import * as fs from 'fs';
+import { Observable, Subject } from 'rxjs';
 
 @Injectable({
   providedIn: 'root'
@@ -15,6 +16,7 @@ export class DatabaseService {
   private commonSettings = null;
   private migrationDir: string; // Path for migrations
   private hasRunMigrations = false;
+  private readonly moment = require('moment');
 
   constructor(private readonly electronService: ElectronService,
     private readonly store: ElectronStoreService,
@@ -45,9 +47,7 @@ export class DatabaseService {
         connectionLimit: 10,
         waitForConnections: true,
         queueLimit: 0,
-        acquireTimeout: 10000,
         connectTimeout: 10000,
-        timeout: 600,
         enableKeepAlive: true,
         host: that.commonSettings.mysqlHost,
         user: that.commonSettings.mysqlUser,
@@ -554,22 +554,15 @@ export class DatabaseService {
     });
   }
 
-  fetchRecentResults(success: any, errorf: any, searchParam = '') {
+  fetchRecentResults(searchParam: string = ''): Observable<any[]> {
+    const subject = new Subject<any[]>();
     const trimmedSearchParam = (searchParam || '').trim();
-
-    console.log('DatabaseService.fetchRecentResults called with:', {
-      original: `"${searchParam}"`,
-      trimmed: `"${trimmedSearchParam}"`,
-      willSearch: trimmedSearchParam !== ''
-    });
 
     let recentResultsQuery = 'SELECT * FROM orders';
     let queryParams = [];
 
-    // Only add WHERE clause if we have a non-empty trimmed search term
     if (trimmedSearchParam !== '') {
       const searchTerm = `%${trimmedSearchParam}%`;
-
       const columns = [
         'order_id', 'test_id', 'test_type', 'created_date', 'test_unit',
         'results', 'tested_by', 'analysed_date_time', 'specimen_date_time',
@@ -577,50 +570,45 @@ export class DatabaseService {
         'test_location', 'test_description', 'raw_text', 'added_on',
         'lims_sync_status', 'lims_sync_date_time'
       ];
-
       const searchConditions = columns.map(col => `${col} LIKE ?`).join(' OR ');
       recentResultsQuery += ` WHERE ${searchConditions}`;
-
-      // Add the search term for each column condition
       queryParams = new Array(columns.length).fill(searchTerm);
-
-      console.log('Executing search query with', columns.length, 'conditions');
-    } else {
-      console.log('Executing query for all records (no search filter)');
     }
 
-    recentResultsQuery += ' ORDER BY added_on DESC';
-
-    // Add LIMIT to prevent excessive results
-    const limit = trimmedSearchParam !== '' ? 500 : 1000; // Smaller limit for searches
-    recentResultsQuery += ` LIMIT ${limit}`;
-
-    console.log('Final query:', recentResultsQuery);
-    console.log('Query params count:', queryParams.length);
+    recentResultsQuery += ' ORDER BY added_on DESC LIMIT 1000';
 
     this.electronService.execSqliteQuery(recentResultsQuery, queryParams)
       .then(results => {
-        console.log(`Query returned ${results?.length || 0} results for "${trimmedSearchParam}"`);
-        success(results);
+        subject.next(results);
+        subject.complete();
       })
       .catch(error => {
         console.error('Database query error:', error);
-        errorf(error);
+        subject.error(error);
+        subject.complete();
       });
+
+    return subject.asObservable();
   }
 
-  reSyncRecord(orderId: string): void {
+  reSyncRecord(orderId: string): Observable<any> {
+    const subject = new Subject<any>();
     const updateQuery = `UPDATE orders SET lims_sync_status = '0', lims_sync_date_time = CURRENT_TIMESTAMP WHERE order_id = ?`;
     this.execQuery(
       updateQuery,
       [orderId],
       (result) => {
         console.log('Record re-synced successfully:', result);
+        subject.next(result);
+        subject.complete();
       },
       (error) => {
         console.error('Error while re-syncing record:', error);
+        subject.error(error);
+        subject.complete();
       }
     );
+    return subject.asObservable();
   }
 
   syncLimsStatusToSQLite(success: any, errorf: any) {
@@ -695,20 +683,31 @@ export class DatabaseService {
   }
 
 
-  fetchLastSyncTimes(success, errorf) {
-    const that = this;
+  fetchLastSyncTimes(): Observable<any> {
+    const subject = new Subject<any>();
     const query = 'SELECT MAX(lims_sync_date_time) as lastLimsSync, MAX(added_on) as lastResultReceived FROM `orders`';
 
     this.checkMysqlConnection(null, () => {
-      // MySQL connected
-      that.execQuery(query, null, success, errorf);
+      this.execQuery(query, null, (res) => {
+        subject.next(res[0]);
+        subject.complete();
+      }, (err) => {
+        subject.error(err);
+        subject.complete();
+      });
     }, (err) => {
-      // MySQL connection failed, fallback to SQLite
-      //console.error('MySQL connection error:', err.message);
-      that.electronService.execSqliteQuery(query, null)
-        .then(results => success(results))
-        .catch(errorf);
+      this.electronService.execSqliteQuery(query, null)
+        .then(res => {
+          subject.next(res[0]);
+          subject.complete();
+        })
+        .catch(error => {
+          subject.error(error);
+          subject.complete();
+        });
     });
+
+    return subject.asObservable();
   }
 
 
@@ -717,72 +716,78 @@ export class DatabaseService {
   // In database.service.ts, update the recordRawData method:
 
   recordRawData(data, success, errorf) {
-    const that = this;
 
-    const placeholders = Object.values(data).map(() => '?').join(',');
-    const sqliteQuery = 'INSERT INTO raw_data (' + Object.keys(data).join(',') + ') VALUES (' + placeholders + ')';
-    const mysqlQuery = 'INSERT INTO raw_data (' + Object.keys(data).join(',') + ') VALUES (' + placeholders + ')';
+    const handleSQLiteInsert = (mysqlInserted: boolean) => {
+      data.mysql_inserted = mysqlInserted ? 1 : 0;
+      const sqlitePlaceholders = Object.values(data).map(() => '?').join(',');
+      const sqliteQuery = `INSERT INTO raw_data (${Object.keys(data).join(',')}, mysql_inserted) VALUES (${sqlitePlaceholders}, ?)`;
+      this.electronService.execSqliteQuery(sqliteQuery, [...Object.values(data), data.mysql_inserted])
+        .then(success)
+        .catch(errorf);
+    };
 
-    // Ensure instrument_id is set if not already present
-    if (!data.instrument_id && data.machine) {
-      data.instrument_id = data.machine;
-    }
+    this.checkMysqlConnection(null, () => {
+      // MySQL connected
+      const mysqlQuery = 'INSERT INTO raw_data (' + Object.keys(data).join(',') + ') VALUES (' + Object.values(data).map(() => '?').join(',') + ')';
+      this.execQuery(mysqlQuery, [...Object.values(data)],
+        () => handleSQLiteInsert(true),
+        (mysqlError) => {
+          handleSQLiteInsert(false);
+          console.error('Error inserting record into MySQL:', mysqlError);
+        }
+      );
+    }, (err) => {
+      // MySQL connection failed, insert into SQLite
+      console.error('MySQL connection failed, insert into SQLite:', err.message);
+      handleSQLiteInsert(false);
+    });
+  }
 
-    // Insert into SQLite first
-    that.electronService.execSqliteQuery(sqliteQuery, Object.values(data))
-      .then(sqliteResults => {
-        // Signal success immediately after SQLite succeeds
-        success({ sqlite: sqliteResults });
+  resyncRawDataToMySQL(success: any, errorf: any) {
+    const sqliteQuery = 'SELECT * FROM raw_data WHERE mysql_inserted = 0';
 
-        // Try MySQL separately (don't call errorf on MySQL failures)
-        that.checkMysqlConnection(null,
-          // MySQL connection success callback
-          () => {
-            that.execQuery(mysqlQuery, Object.values(data),
-              // MySQL insert success
-              () => {
-                console.log('MySQL raw data insert successful');
-              },
-              // MySQL insert error - don't call main errorf since SQLite succeeded
-              (mysqlError) => {
-                // Just log a simplified error message
-                let errorMsg = 'Unknown error';
+    this.electronService.execSqliteQuery(sqliteQuery, [])
+      .then((records) => {
+        if (records.length === 0) {
+          success('No raw data records to resync.');
+          return;
+        }
 
-                // Try to extract a useful message
-                try {
-                  if (mysqlError === null || mysqlError === undefined) {
-                    errorMsg = 'Null or undefined error';
-                  } else if (typeof mysqlError === 'string') {
-                    errorMsg = mysqlError;
-                  } else if (typeof mysqlError === 'object') {
-                    if (mysqlError.message) {
-                      errorMsg = mysqlError.message;
-                    } else {
-                      errorMsg = JSON.stringify(mysqlError, null, 2); // <-- Fix here
-                    }
-                  }
-                } catch (e) {
-                  errorMsg = 'Error while extracting error message';
-                }
-
-                // Log a simple warning without the full object
-                console.warn(`MySQL insert warning (non-critical): ${errorMsg}`);
-                console.warn('Full MySQL error object:', mysqlError);
-
-              }
-            );
-          },
-          // MySQL connection error - also don't call errorf
-          () => {
-            // Just log the connection issue
-            console.log('MySQL connection unavailable, skipping MySQL insert');
-          }
-        );
+        this.processResyncRawDataRecords(records, success, errorf);
       })
-      .catch(sqliteError => {
-        // Only call errorf if SQLite insert fails
-        console.error('Error inserting into SQLite:', sqliteError);
-        errorf(sqliteError);
+      .catch((err: any) => {
+        errorf('Error fetching raw data records from SQLite:', err);
+      });
+  }
+
+  private processResyncRawDataRecords(records: any[], success: any, errorf: any) {
+    records.forEach((record: any) => {
+      const mysqlRecord = { ...record };
+      delete mysqlRecord.mysql_inserted;
+      delete mysqlRecord.id;
+
+      const placeholders = Object.keys(mysqlRecord).map(() => '?').join(',');
+      const t = 'INSERT INTO raw_data (' + Object.keys(mysqlRecord).join(',') + ') VALUES (' + placeholders + ')';
+
+      this.execQuery(t, Object.values(mysqlRecord),
+        () => this.updateSQLiteAfterMySQLInsertRawData(record),
+        (mysqlError: any) => {
+          console.error('Error inserting raw data record into MySQL:', mysqlError);
+        }
+      );
+    });
+
+    success('Raw data resync process completed.');
+  }
+
+  private updateSQLiteAfterMySQLInsertRawData(record: any) {
+    const updateQuery = 'UPDATE raw_data SET mysql_inserted = 1 WHERE id = ?';
+    this.electronService.execSqliteQuery(updateQuery, [record.id])
+      .then(() => {
+        console.log('Raw data record successfully resynced and updated in SQLite:', record.id);
+      })
+      .catch((error: any) => {
+        console.error('Error updating SQLite after successful MySQL insert for raw data:', error);
       });
   }
 
@@ -815,39 +820,113 @@ export class DatabaseService {
     });
   }
 
-  fetchRecentLogs(instrumentId = null, success = null, errorf = null) {
-    let recentLogsQuery: string;
-    const that = this;
-
-    if (instrumentId) {
-      // Adjust the SQL query to filter by instrumentId
-      recentLogsQuery = 'SELECT * FROM app_log WHERE log like ? ORDER BY added_on DESC, id DESC LIMIT 500';
-    } else {
-      // If no instrumentId is provided, fetch all logs
-      recentLogsQuery = 'SELECT * FROM app_log ORDER BY added_on DESC, id DESC LIMIT 500';
+  async recordLogBatch(logs: any[]): Promise<void> {
+    if (!logs || logs.length === 0) {
+      return;
     }
 
-    const sqliteArgs = instrumentId ? [`%[${instrumentId}]%`] : [];
+    const sqliteQuery = 'INSERT INTO app_log (log, log_type, log_message, instrument_id, added_on, mysql_inserted) VALUES (?, ?, ?, ?, ?, ?)';
 
-    that.electronService.execSqliteQuery(recentLogsQuery, sqliteArgs)
-      .then((results) => { success(results); })
-      .catch((err) => { if (errorf) errorf(err); });
+    const sqlitePromises = logs.map(log => {
+      const params = [log.message, log.type, log.message, log.instrumentId, log.timestamp, 0];
+      return this.electronService.execSqliteQuery(sqliteQuery, params).catch(e => {
+        console.error('SQLite log insert failed', e);
+      });
+    });
 
-    // that.checkMysqlConnection(null, () => {
-    //   // If MySQL is connected, execute the query in MySQL
-    //   that.execQuery(recentLogsQuery, sqliteArgs.length ? sqliteArgs : null, success, (err) => {
-    //     console.error('Error fetching from MySQL:', err.message);
-    //     // On MySQL error, fallback to SQLite
-    //     that.electronService.execSqliteQuery(recentLogsQuery, sqliteArgs)
-    //       .then((results) => { success(results); })
-    //       .catch((err) => { if (errorf) errorf(err); });
-    //   });
-    // }, () => {
-    //   // If MySQL is not connected, fetch from SQLite
-    //   that.electronService.execSqliteQuery(recentLogsQuery, sqliteArgs)
-    //     .then((results) => { success(results); })
-    //     .catch((err) => { if (errorf) errorf(err); });
-    // });
+    await Promise.all(sqlitePromises);
+    this.resyncAppLogToMySQL(() => { }, () => { });
+
+  }
+
+  resyncAppLogToMySQL(success: any, errorf: any) {
+    const sqliteQuery = 'SELECT * FROM app_log WHERE mysql_inserted = 0';
+
+    this.electronService.execSqliteQuery(sqliteQuery, [])
+      .then((records) => {
+        if (records.length === 0) {
+          success('No app log records to resync.');
+          return;
+        }
+
+        this.processResyncAppLogRecords(records, success, errorf);
+      })
+      .catch((err: any) => {
+        errorf('Error fetching app log records from SQLite:', err);
+      });
+  }
+
+  private processResyncAppLogRecords(records: any[], success: any, errorf: any) {
+    const mysqlValues = records.map(log => [log.log, log.log_type, log.log_message, log.instrument_id, log.added_on]);
+    const mysqlQuery = 'INSERT INTO app_log (log, log_type, log_message, instrument_id, added_on) VALUES ?';
+
+    this.checkMysqlConnection(null, () => {
+      this.execQuery(mysqlQuery, [mysqlValues],
+        () => {
+          const recordIds = records.map(r => r.id);
+          this.updateSQLiteAfterMySQLInsertAppLog(recordIds);
+          success('App log resync process completed.');
+        },
+        (mysqlError) => {
+          if (mysqlError) {
+            console.error('Error inserting log batch into MySQL:', mysqlError);
+          }
+          errorf(mysqlError);
+        }
+      );
+    }, () => {
+      // Mysql not available
+      errorf('MySQL not available');
+    });
+  }
+
+  private updateSQLiteAfterMySQLInsertAppLog(recordIds: any[]) {
+    const placeholders = recordIds.map(() => '?').join(',');
+    const updateQuery = `UPDATE app_log SET mysql_inserted = 1 WHERE id IN (${placeholders})`;
+    this.electronService.execSqliteQuery(updateQuery, recordIds)
+      .then(() => {
+        console.log('App log records successfully resynced and updated in SQLite:', recordIds.length);
+      })
+      .catch((error: any) => {
+        console.error('Error updating SQLite after successful MySQL insert for app log:', error);
+      });
+  }
+
+  fetchRecentLogs(instrumentId: string, limit: number = 200): Observable<any[]> {
+    const subject = new Subject<any[]>();
+    const query = 'SELECT * FROM app_log WHERE instrument_id = ? ORDER BY id DESC LIMIT ?';
+    this.electronService.execSqliteQuery(query, [instrumentId, limit])
+      .then(rows => {
+        const logs = rows.map(row => ({
+          type: row.log_type,
+          message: this.formatLogMessage(row),
+          instrumentId: row.instrument_id,
+          timestamp: new Date(row.added_on)
+        }));
+        subject.next(logs.reverse());
+        subject.complete();
+      })
+      .catch(err => {
+        console.error('Error fetching recent logs:', err);
+        subject.error(err);
+        subject.complete();
+      });
+    return subject.asObservable();
+  }
+
+  private formatLogMessage(log: any): string {
+    const timestamp = this.moment(log.added_on).format('YYYY-MM-DD HH:mm:ss.SSS');
+    const logType = log.log_type || 'info';
+    // Reverted to old format to restore colors and styling
+    const bootstrapClass = {
+      success: 'success',
+      info: 'info',
+      warn: 'warning',
+      error: 'danger',
+      verbose: 'muted'
+    }[logType] || 'info';
+
+    return `<span class="log-time">[${timestamp}]</span> <span class="log-${logType} text-${bootstrapClass}">[${logType}]</span> <span class="log-text">${log.log}</span>`;
   }
 
   /**
@@ -869,6 +948,26 @@ export class DatabaseService {
         errorf(err);
       }
     );
+  }
+
+  public dropMySQLVersionsTable(): Observable<any> {
+    const subject = new Subject<any>();
+    const query = 'DROP TABLE IF EXISTS versions';
+
+    this.execQuery(query, [],
+      (results) => {
+        console.log('MySQL versions table dropped successfully.');
+        subject.next(results);
+        subject.complete();
+      },
+      (err: any) => {
+        console.error('Error dropping MySQL versions table:', err);
+        subject.error(err);
+        subject.complete();
+      }
+    );
+
+    return subject.asObservable();
   }
 
 
