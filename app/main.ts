@@ -78,8 +78,6 @@ async function runSqliteMigrations(db, migrationsPath) {
         .filter(s => s.length > 0);
 
       console.log(`Executing ${statements.length} statements from migration file: ${file}`);
-      console.log(`Statements:`, statements);
-
 
 
       for (const statement of statements) {
@@ -420,6 +418,105 @@ try {
 
     ipcMain.handle('dialog', (event, method, params) => {
       return dialog[method](params);
+    });
+
+    ipcMain.on('sqlite3-query', (event, sql: string, params: any, replyChannel: string) => {
+      const respond = (payload: any) => {
+        if (replyChannel) {
+          event.sender.send(replyChannel, payload);
+        }
+      };
+
+      if (!replyChannel) {
+        console.error('sqlite3-query invoked without reply channel.');
+        return;
+      }
+
+      if (!sqlite3Obj) {
+        respond({ __sqliteError: true, message: 'SQLite database not initialized' });
+        return;
+      }
+
+      const statementType = typeof sql === 'string'
+        ? sql.trim().split(/\s+/)[0]?.toLowerCase()
+        : '';
+      const isSelectStatement = ['select', 'pragma', 'with', 'show'].includes(statementType);
+      const safeParams = params ?? [];
+
+      const handleError = (err: any) => {
+        console.error('SQLite query error:', err?.message || err);
+        respond({
+          __sqliteError: true,
+          message: err?.message || 'Unknown SQLite error'
+        });
+      };
+
+      try {
+        if (isSelectStatement) {
+          sqlite3Obj.all(sql, safeParams, (err, rows) => {
+            if (err) {
+              handleError(err);
+            } else {
+              respond(rows ?? []);
+            }
+          });
+        } else {
+          sqlite3Obj.run(sql, safeParams, function runCallback(err) {
+            if (err) {
+              handleError(err);
+            } else {
+              respond({
+                changes: this.changes,
+                lastID: this.lastID
+              });
+            }
+          });
+        }
+      } catch (err) {
+        handleError(err);
+      }
+    });
+
+    ipcMain.handle('log-info', (event, message: string, instrumentId: string | null = null) => {
+      let scopedLogger = log.scope('app');
+      if (instrumentId) {
+        scopedLogger = log.scope(instrumentId);
+      }
+      scopedLogger.info(message);
+    });
+
+    ipcMain.handle('log-warning', (event, message: string, instrumentId: string | null = null) => {
+      let scopedLogger = log.scope('app');
+      if (instrumentId) {
+        scopedLogger = log.scope(instrumentId);
+      }
+      scopedLogger.warn(message);
+    });
+
+    ipcMain.handle('log-error', (event, message: string, instrumentId: string | null = null) => {
+      let scopedLogger = log.scope('app');
+      if (instrumentId) {
+        scopedLogger = log.scope(instrumentId);
+      }
+      scopedLogger.error(message);
+    });
+
+    ipcMain.handle('sqlite3-wal-checkpoint', () => {
+      return new Promise((resolve, reject) => {
+        if (!sqlite3Obj) {
+          reject(new Error('SQLite database not initialized'));
+          return;
+        }
+
+        sqlite3Obj.run('PRAGMA wal_checkpoint(PASSIVE)', function (err) {
+          if (err) {
+            console.error('Error running SQLite WAL checkpoint:', err);
+            reject(err);
+          } else {
+            resolve({ success: true });
+          }
+        });
+      });
     });
 
     ipcMain.on('force-rerun-migrations', (event) => {

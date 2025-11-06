@@ -17,6 +17,7 @@ import { MatCheckboxChange } from '@angular/material/checkbox';
 import { fromEvent, Subscription } from 'rxjs';
 import { IpcRenderer } from 'electron';
 import { MatDialog } from '@angular/material/dialog';
+import { MatSnackBar } from '@angular/material/snack-bar';
 import { ChangeDetectionStrategy } from '@angular/core';
 import { debounceTime, distinctUntilChanged, shareReplay, map, filter } from 'rxjs/operators';
 import { LogDisplayService, LogEntry } from '../../services/log-display.service';
@@ -111,6 +112,7 @@ export class ConsoleComponent implements OnInit, OnDestroy {
     private readonly tcpService: TcpConnectionService,
     private readonly utilitiesService: UtilitiesService,
     private readonly logDisplayService: LogDisplayService,
+    private readonly snackBar: MatSnackBar,
     private readonly router: Router) {
     if ((<any>window).require) {
       this.ipc = (<any>window).require('electron').ipcRenderer;
@@ -639,8 +641,10 @@ export class ConsoleComponent implements OnInit, OnDestroy {
 
   copyLog(instrument: { connectionParams: { instrumentId: string | number; }; }) {
     if (this.instrumentLogs[instrument.connectionParams.instrumentId]) {
-      // Join the filtered logs with a newline character
-      const logContent = this.instrumentLogs[instrument.connectionParams.instrumentId].filteredLogs.map(l => l.message).join('\n');
+      // Join the filtered logs with a newline character, stripping any HTML markup
+      const logContent = this.instrumentLogs[instrument.connectionParams.instrumentId].filteredLogs
+        .map(l => this.extractPlainText(l.message))
+        .join('\n');
       this.copyTextToClipboard(logContent);
     } else {
       console.error('No logs found for instrument:', instrument.connectionParams.instrumentId);
@@ -651,6 +655,13 @@ export class ConsoleComponent implements OnInit, OnDestroy {
     const instrumentId = instrument.connectionParams.instrumentId;
     // This will trigger the subscription to clear the UI
     this.logDisplayService.clearLogs(instrumentId);
+    this._ngZone.run(() => {
+      this.snackBar.open('Logs cleared', undefined, {
+        duration: 3000,
+        horizontalPosition: 'end',
+        verticalPosition: 'bottom'
+      });
+    });
   }
 
   resyncTestResultsToMySQL() {
@@ -676,14 +687,36 @@ export class ConsoleComponent implements OnInit, OnDestroy {
 
   copyTextToClipboard(text: string) {
     navigator.clipboard.writeText(text).then(() => {
-      console.log('Log copied to clipboard');
+      this._ngZone.run(() => {
+        this.snackBar.open('Logs copied to clipboard', undefined, {
+          duration: 3000,
+          horizontalPosition: 'end',
+          verticalPosition: 'bottom'
+        });
+      });
     }, (err) => {
       console.error('Error in copying text: ', err);
+      this._ngZone.run(() => {
+        this.snackBar.open('Failed to copy logs', undefined, {
+          duration: 3000,
+          horizontalPosition: 'end',
+          verticalPosition: 'bottom'
+        });
+      });
     });
   }
 
   getSafeHtml(logEntry: LogEntry) {
     return this.sanitizer.bypassSecurityTrustHtml(logEntry.message);
+  }
+
+  private extractPlainText(message: string): string {
+    if (!message) {
+      return '';
+    }
+    const tempElement = document.createElement('div');
+    tempElement.innerHTML = message;
+    return tempElement.textContent ?? tempElement.innerText ?? '';
   }
 
   checkMysqlConnection() {
