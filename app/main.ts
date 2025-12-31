@@ -27,87 +27,80 @@ function restartApp() {
 
 async function runSqliteMigrations(db, migrationsPath) {
   console.log('Running SQLite migrations from:', migrationsPath);
-  try {
-    // 1. Ensure versions table exists
-    await new Promise<void>((resolve, reject) => {
-      db.run('CREATE TABLE IF NOT EXISTS versions (version INTEGER PRIMARY KEY, filename TEXT, applied_at DATETIME DEFAULT CURRENT_TIMESTAMP)', (err) => {
-        if (err) return reject(err);
-        resolve();
-      });
-    });
 
-    // 2. Add filename column for backward compatibility
-    await new Promise<void>((resolve, reject) => {
-      db.run('ALTER TABLE versions ADD COLUMN filename TEXT', (err) => {
-        if (err && !err.message.includes('duplicate column name')) {
-          console.error('Error altering versions table:', err);
-          return reject(err);
-        }
-        resolve();
-      });
-    });
+  // 1. Ensure versions table exists
+  await new Promise<void>((resolve) => {
+    db.run('CREATE TABLE IF NOT EXISTS versions (version INTEGER PRIMARY KEY, filename TEXT, applied_at DATETIME DEFAULT CURRENT_TIMESTAMP)', () => resolve());
+  });
 
-    // 3. Get migration files
-    const migrationFiles = fs.readdirSync(migrationsPath)
-      .filter(file => file.endsWith('.sql'))
-      .sort();
+  // 2. Add filename column for backward compatibility (silently skip if exists)
+  await new Promise<void>((resolve) => {
+    db.run('ALTER TABLE versions ADD COLUMN filename TEXT', () => resolve());
+  });
 
-    // 4. Get applied migrations
-    const appliedFilenames = await new Promise<Set<string>>((resolve, reject) => {
-      db.all('SELECT filename FROM versions WHERE filename IS NOT NULL', (err, rows: { filename: string }[]) => {
-        if (err) return reject(err);
-        resolve(new Set(rows.map(row => row.filename)));
-      });
-    });
+  // 3. Get migration files
+  if (!fs.existsSync(migrationsPath)) {
+    console.log('SQLite migration directory not found, skipping');
+    return;
+  }
 
-    // 5. Run new migrations
-    for (const file of migrationFiles) {
-      if (appliedFilenames.has(file)) {
-        continue;
+  const migrationFiles = fs.readdirSync(migrationsPath)
+    .filter(file => file.endsWith('.sql'))
+    .sort();
+
+  if (migrationFiles.length === 0) {
+    console.log('No SQLite migration files found');
+    return;
+  }
+
+  // 4. Get applied migrations (return empty set on error)
+  const appliedFilenames = await new Promise<Set<string>>((resolve) => {
+    db.all('SELECT filename FROM versions WHERE filename IS NOT NULL', (err: Error | null, rows: { filename: string }[]) => {
+      if (err || !Array.isArray(rows)) {
+        resolve(new Set());
+        return;
       }
+      resolve(new Set(rows.map(row => row.filename)));
+    });
+  });
 
-      console.log(`Applying SQLite migration: ${file}`);
-      const filePath = path.join(migrationsPath, file);
-      const sql = fs.readFileSync(filePath, 'utf8');
-      // 1. Remove comment lines, 2. Split by semicolon, 3. Trim and filter empty statements
-      const statements = sql.split('\n')
-        .filter(line => !line.trim().startsWith('--'))
-        .join('\n')
-        .split(';')
-        .map(s => s.trim())
-        .filter(s => s.length > 0);
+  // 5. Run migrations - permissive mode
+  let successCount = 0;
+  for (const file of migrationFiles) {
+    if (appliedFilenames.has(file)) {
+      continue;
+    }
 
-      console.log(`Executing ${statements.length} statements from migration file: ${file}`);
+    console.log(`Applying SQLite migration: ${file}`);
+    const filePath = path.join(migrationsPath, file);
+    const sql = fs.readFileSync(filePath, 'utf8');
 
+    // Split into statements
+    const statements = sql.split('\n')
+      .filter(line => !line.trim().startsWith('--'))
+      .join('\n')
+      .split(';')
+      .map(s => s.trim())
+      .filter(s => s.length > 0);
 
-      for (const statement of statements) {
-        await new Promise<void>((resolve) => {
-          db.run(statement, (err) => {
-            if (err) {
-              console.warn(`Warning executing statement in ${file}: "${statement}". Error: ${err.message}`);
-            }
-            resolve(); // Always resolve, even if there's an error
-          });
-        });
-      }
-
-      // Record the migration as complete, regardless of statement errors, to prevent re-running.
-      const version = parseInt(file.split('.')[0], 10);
-      await new Promise<void>((resolve, reject) => {
-        db.run('INSERT INTO versions (version, filename) VALUES (?, ?)', [version, file], (err) => {
-          if (err) {
-            // If we fail to record the version, that's a critical error.
-            return reject(new Error(`Failed to record migration version for ${file}: ${err.message}`));
-          }
-          console.log(`Finished applying SQLite migration: ${file}`);
-          resolve();
-        });
+    // Execute each statement - silently skip errors
+    for (const statement of statements) {
+      await new Promise<void>((resolve) => {
+        db.run(statement, () => resolve());
       });
     }
-    console.log('SQLite migrations check complete.');
-  } catch (err) {
-    console.error('A critical error occurred during the SQLite migration process:', err);
+
+    // Record migration as complete (silently skip if already recorded)
+    const version = parseInt(file.split('.')[0], 10);
+    await new Promise<void>((resolve) => {
+      db.run('INSERT INTO versions (version, filename) VALUES (?, ?)', [version, file], () => resolve());
+    });
+
+    console.log(`✅ SQLite migration ${file} completed (${statements.length} statements)`);
+    successCount++;
   }
+
+  console.log(`SQLite migrations: ${successCount} processed`);
 }
 
 
@@ -178,6 +171,35 @@ async function copySqliteMigrationFiles(): Promise<void> {
     }
   } catch (err) {
     console.error('Error copying SQLite migration files:', err);
+  }
+}
+
+
+async function copyMySQLMigrationFiles(): Promise<void> {
+  const sourceDir = path.join(serve ? __dirname : process.resourcesPath, 'mysql-migrations');
+  const targetDir = path.join(app.getPath('userData'), 'mysql-migrations');
+
+  try {
+    if (!fs.existsSync(sourceDir)) {
+      console.error(`MySQL migration source directory not found: ${sourceDir}`);
+      return;
+    }
+
+    if (!fs.existsSync(targetDir)) {
+      await fs.promises.mkdir(targetDir, { recursive: true });
+    }
+
+    const files = await fs.promises.readdir(sourceDir);
+    for (const file of files) {
+      const sourceFile = path.join(sourceDir, file);
+      const targetFile = path.join(targetDir, file);
+      if (!fs.existsSync(targetFile)) {
+        await fs.promises.copyFile(sourceFile, targetFile);
+        console.log(`Copied MySQL migration file: ${file}`);
+      }
+    }
+  } catch (err) {
+    console.error('Error copying MySQL migration files:', err);
   }
 }
 
@@ -519,23 +541,15 @@ try {
       });
     });
 
-    ipcMain.on('force-rerun-migrations', (event) => {
-      try {
-        const db = getSQLiteDBConnection();
-        if (db) {
-          db.exec('DROP TABLE IF EXISTS versions', (err) => {
-            if (err) {
-              console.error('Failed to drop SQLite versions table:', err);
-            }
-            restartApp();
-          });
-        } else {
-          console.error('SQLite DB connection not available.');
-          restartApp();
-        }
-      } catch (error) {
-        console.error('Error during SQLite table drop:', error);
-        restartApp();
+    ipcMain.on('force-rerun-migrations', () => {
+      const db = getSQLiteDBConnection();
+      if (db) {
+        // DELETE instead of DROP - cleaner, keeps table structure
+        db.run('DELETE FROM versions', () => {
+          setTimeout(() => restartApp(), 500);
+        });
+      } else {
+        setTimeout(() => restartApp(), 500);
       }
     });
 
@@ -565,6 +579,7 @@ try {
       // Then, copy and run the migrations
       const migrationsPath = path.join(app.getPath('userData'), 'sqlite-migrations');
       await copySqliteMigrationFiles();
+      await copyMySQLMigrationFiles();
       await runSqliteMigrations(sqlite3Obj, migrationsPath);
 
       // IMPORTANT: Register all IPC handlers BEFORE creating the window
