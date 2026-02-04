@@ -202,6 +202,10 @@ export class HL7HelperService {
   processHL7ResultValue(singleObx: any, resultStatusType: string): { results: string, test_unit: string } {
     let raw = (singleObx.get('OBX.5.1')?.toString() ?? '').trim();
     raw = this.utilitiesService.decodeHtmlEntities(raw);
+    if (!raw) {
+      // Some instruments (e.g., Roche Cobas) send below-titer flags in OBX-8 when OBX-5 is empty.
+      raw = (singleObx.get('OBX.8.1')?.toString() ?? '').trim();
+    }
     const v = raw.toLowerCase();
 
     // Preserve literal textual outcomes
