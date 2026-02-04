@@ -919,25 +919,26 @@ export class DatabaseService {
     );
   }
 
-  public dropMySQLVersionsTable(): Observable<any> {
-    const subject = new Subject<any>();
-    // TRUNCATE instead of DROP - cleaner, keeps table structure
-    const query = 'TRUNCATE TABLE versions';
-
-    this.execQuery(query, [],
-      (results) => {
-        console.log('MySQL versions table truncated successfully.');
-        subject.next(results);
-        subject.complete();
-      },
-      (err: any) => {
-        console.error('Error truncating MySQL versions table:', err);
-        subject.error(err);
-        subject.complete();
-      }
-    );
-
-    return subject.asObservable();
+  public resetMysqlMigrations(): Promise<void> {
+    // Use DELETE to keep table structure and avoid requiring DROP/CREATE privileges.
+    const query = 'DELETE FROM versions';
+    return new Promise((resolve, reject) => {
+      this.execQuery(query, [],
+        () => {
+          console.log('MySQL versions table cleared successfully.');
+          resolve();
+        },
+        (err: any) => {
+          // If the table doesn't exist, treat it as already reset.
+          if (err?.code === 'ER_NO_SUCH_TABLE') {
+            resolve();
+            return;
+          }
+          console.error('Error clearing MySQL versions table:', err);
+          reject(err);
+        }
+      );
+    });
   }
 
 

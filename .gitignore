@@ -1,0 +1,33 @@
+# Project #
+.angular/
+
+# System #
+.DS_Store
+snyk_rules.instructions.md
+
+# Mercurial #
+.orig
+
+# Node #
+node_modules/
+**/node_modules/
+
+# Grunt build #
+dist/
+release/
+# Bower #
+bower_components/
+public/system/lib
+.bower-cache/
+.bower-registry/
+.bower-tmp/
+.tmp/
+.nx/
+.vscode/
+.idea/
+
+# Compiled Electron main process bundles #
+app/main.js
+app/main.js.map
+app/sqlite3helper.main.js
+app/sqlite3helper.main.js.map
