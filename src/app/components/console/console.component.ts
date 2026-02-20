@@ -49,6 +49,7 @@ export class ConsoleComponent implements OnInit, OnDestroy {
   public lastOrders: any;
   private readonly ipc: IpcRenderer;
   public availableInstruments = [];
+  private readonly loadedLogInstrumentIds = new Set<string>();
   public instrumentLogs: { [instrumentId: string]: { logs: any[]; filteredLogs: any[] } } = {};
   public connectionParams: ConnectionParams = null;
   public selectedTabIndex = 0;
@@ -192,9 +193,9 @@ export class ConsoleComponent implements OnInit, OnDestroy {
           // Check if we should auto-reconnect instruments
           that.checkForAutoReconnect();
 
-          // We don't need to subscribe to logs here anymore,
-          // it's handled by the global logSubscription
-          that.fetchRecentLogs();
+          // Load persisted logs only once per instrument. Re-loading on every
+          // status tick can overwrite in-memory live HL7 logs before they persist.
+          that.loadRecentLogsForNewInstruments(instruments);
           that.cdRef.detectChanges();
         });
       });
@@ -572,13 +573,19 @@ export class ConsoleComponent implements OnInit, OnDestroy {
     this.filterInstrumentLogs({ connectionParams: { instrumentId } });
   }
 
-  fetchRecentLogs() {
+  private loadRecentLogsForNewInstruments(instruments: any[]) {
     const that = this;
-    that.availableInstruments.forEach(instrument => {
-      that.utilitiesService.fetchRecentLogs(instrument.connectionParams.instrumentId)
+    instruments.forEach(instrument => {
+      const instrumentId = instrument?.connectionParams?.instrumentId;
+      if (!instrumentId || that.loadedLogInstrumentIds.has(instrumentId)) {
+        return;
+      }
+
+      that.loadedLogInstrumentIds.add(instrumentId);
+      that.utilitiesService.fetchRecentLogs(instrumentId)
         .subscribe(logs => {
           that._ngZone.run(() => {
-            that.updateLogsForInstrument(instrument.connectionParams.instrumentId, logs);
+            that.updateLogsForInstrument(instrumentId, logs);
           });
         });
     });
