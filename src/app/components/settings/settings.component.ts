@@ -163,23 +163,19 @@ export class SettingsComponent implements OnInit {
 
       if (result.response === 1) { // Corresponds to 'Yes, Proceed'
         try {
+          // Force-reset must cover both databases; fail fast if MySQL reset cannot be completed.
           await this.databaseService.resetMysqlMigrations();
-          // On successful reset of MySQL migration history, trigger the main process to handle the rest
-          this.electronService.ipcRenderer.send('force-rerun-migrations');
+          // After MySQL reset succeeds, reset local migration history and restart app.
+          await this.electronService.ipcRenderer.invoke('force-rerun-migrations');
         } catch (err) {
-          // If MySQL is not connected or there's an error, ask user if they want to proceed
-          const errorResult = await this.electronService.ipcRenderer.invoke('show-confirm-dialog', {
+          await this.electronService.ipcRenderer.invoke('show-confirm-dialog', {
             type: 'error',
-            buttons: ['Cancel', 'Proceed Anyway'],
+            buttons: ['OK'],
             defaultId: 0,
-            title: 'MySQL Error',
-            message: 'Could not reset the versions table on the MySQL server. This might be because MySQL is not configured or is unreachable.',
-            detail: `Error: ${err?.message ?? err}\n\nDo you want to proceed with resetting the local database only?`
+            title: 'Migration Reset Failed',
+            message: 'Could not reset MySQL migration history.',
+            detail: `Error: ${err?.message ?? err}\n\nNo reset was performed to avoid partial (SQLite-only) migration replay.`
           });
-
-          if (errorResult.response === 1) { // 'Proceed Anyway'
-            this.electronService.ipcRenderer.send('force-rerun-migrations');
-          }
         }
       }
     } catch (error) {

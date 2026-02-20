@@ -82,6 +82,7 @@ export class ConsoleComponent implements OnInit, OnDestroy {
     'machine_used',
     'order_id',
     'results',
+    'notes',
     'test_unit',
     'test_type',
     'tested_by',

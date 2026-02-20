@@ -140,6 +140,7 @@ export class InstrumentInterfaceService {
         const resultData = that.hl7Helper.processHL7ResultValue(singleObx, that.hl7Helper.getHL7ResultStatusType(singleObx));
         sampleResult.results = resultData.results;
         sampleResult.test_unit = resultData.test_unit;
+        sampleResult.notes = resultData.notes;
 
         // Extract tester info
         sampleResult.tested_by = that.hl7Helper.extractHL7TesterInfo(singleObx, obx, message);
@@ -218,6 +219,7 @@ export class InstrumentInterfaceService {
         const resultData = that.hl7Helper.processHL7ResultValue(singleObx, resultStatusType);
         sampleResult.results = resultData.results;
         sampleResult.test_unit = resultData.test_unit;
+        sampleResult.notes = resultData.notes;
 
         // Extract tester info
         sampleResult.tested_by = that.hl7Helper.extractHL7TesterInfo(singleObx, obx, message);
@@ -296,6 +298,7 @@ export class InstrumentInterfaceService {
         const resultData = that.hl7Helper.processHL7ResultValue(singleObx, resultStatusType);
         sampleResult.results = resultData.results;
         sampleResult.test_unit = resultData.test_unit;
+        sampleResult.notes = resultData.notes;
 
         // Extract tester info
         sampleResult.tested_by = that.hl7Helper.extractHL7TesterInfo(singleObx, obx, message);
@@ -388,6 +391,7 @@ export class InstrumentInterfaceService {
         const resultData = that.hl7Helper.processHL7ResultValue(singleObx, resultStatusType);
         sampleResult.results = resultData.results;
         sampleResult.test_unit = resultData.test_unit;
+        sampleResult.notes = resultData.notes;
 
         // Extract tester info
         sampleResult.tested_by = that.hl7Helper.extractHL7TesterInfo(singleObx, obxArray, message);

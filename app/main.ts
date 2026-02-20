@@ -164,10 +164,10 @@ async function copySqliteMigrationFiles(): Promise<void> {
     for (const file of files) {
       const sourceFile = path.join(sourceDir, file);
       const targetFile = path.join(targetDir, file);
-      if (!fs.existsSync(targetFile)) {
-        await fs.promises.copyFile(sourceFile, targetFile);
-        console.log(`Copied SQLite migration file: ${file}`);
-      }
+
+      // Always overwrite to prevent stale migration scripts in userData.
+      await fs.promises.copyFile(sourceFile, targetFile);
+      console.log(`Synced SQLite migration file: ${file}`);
     }
   } catch (err) {
     console.error('Error copying SQLite migration files:', err);
@@ -193,10 +193,10 @@ async function copyMySQLMigrationFiles(): Promise<void> {
     for (const file of files) {
       const sourceFile = path.join(sourceDir, file);
       const targetFile = path.join(targetDir, file);
-      if (!fs.existsSync(targetFile)) {
-        await fs.promises.copyFile(sourceFile, targetFile);
-        console.log(`Copied MySQL migration file: ${file}`);
-      }
+
+      // Always overwrite to prevent stale migration scripts in userData.
+      await fs.promises.copyFile(sourceFile, targetFile);
+      console.log(`Synced MySQL migration file: ${file}`);
     }
   } catch (err) {
     console.error('Error copying MySQL migration files:', err);
@@ -541,16 +541,21 @@ try {
       });
     });
 
-    ipcMain.on('force-rerun-migrations', () => {
+    ipcMain.handle('force-rerun-migrations', async () => {
       const db = getSQLiteDBConnection();
       if (db) {
         // DELETE instead of DROP - cleaner, keeps table structure
-        db.run('DELETE FROM versions', () => {
-          setTimeout(() => restartApp(), 500);
+        await new Promise<void>((resolve) => {
+          db.run('DELETE FROM versions', () => resolve());
         });
-      } else {
-        setTimeout(() => restartApp(), 500);
       }
+
+      // Ensure userData migrations are in sync before restart/replay.
+      await copySqliteMigrationFiles();
+      await copyMySQLMigrationFiles();
+
+      setTimeout(() => restartApp(), 500);
+      return { success: true };
     });
 
     ipcMain.handle('show-confirm-dialog', async (event, options) => {

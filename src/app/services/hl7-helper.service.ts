@@ -9,6 +9,10 @@ import { randomUUID } from 'crypto';
 })
 export class HL7HelperService {
   public hl7parser = require('hl7parser');
+  private readonly rocheObx8OutcomeMap: Record<string, string> = {
+    BT: 'Target Not Detected',
+    ND: 'Target Not Detected'
+  };
 
   constructor(private utilitiesService: UtilitiesService) { }
 
@@ -199,27 +203,30 @@ export class HL7HelperService {
    * @param resultStatusType Status of the result
    * @returns Object containing result value and unit
    */
-  processHL7ResultValue(singleObx: any, resultStatusType: string): { results: string, test_unit: string } {
+  processHL7ResultValue(singleObx: any, resultStatusType: string): { results: string, test_unit: string, notes: string } {
     let raw = (singleObx.get('OBX.5.1')?.toString() ?? '').trim();
     raw = this.utilitiesService.decodeHtmlEntities(raw);
     if (!raw) {
-      // Some instruments (e.g., Roche Cobas) send below-titer flags in OBX-8 when OBX-5 is empty.
-      raw = (singleObx.get('OBX.8.1')?.toString() ?? '').trim();
+      // Roche can put outcome/error flags in OBX-8 when OBX-5 is empty.
+      raw = this.extractObx8Outcome(singleObx);
     }
     const v = raw.toLowerCase();
 
     // Preserve literal textual outcomes
     if (['invalid', 'failed', 'not detected', 'target not detected'].includes(v)) {
-      return { results: raw, test_unit: '' };
+      return { results: raw, test_unit: '', notes: '' };
     }
 
     const resultOutcome = raw; // Use decoded value
 
 
     if (resultStatusType === 'ERROR') {
-      return { results: 'Failed', test_unit: '' };
+      // Keep results clean for LIS usage while preserving instrument-specific detail in notes.
+      const notes = raw && !['failed', 'invalid'].includes(v) ? raw : '';
+      return { results: 'Failed', test_unit: '', notes };
     } else if (resultStatusType === 'INCOMPLETE') {
-      return { results: 'Incomplete', test_unit: '' };
+      const notes = raw && !['incomplete'].includes(v) ? raw : '';
+      return { results: 'Incomplete', test_unit: '', notes };
     }
 
     // Process based on result value
@@ -229,18 +236,19 @@ export class HL7HelperService {
 
       return {
         results: resultOutcome,
-        test_unit: testUnit
+        test_unit: testUnit,
+        notes: ''
       };
     } else if (resultOutcome === '<20' || resultOutcome === '< 20' || resultOutcome === 'Target Not Detected') {
-      return { results: 'Target Not Detected', test_unit: '' };
+      return { results: 'Target Not Detected', test_unit: '', notes: '' };
     } else if (resultOutcome === '> Titer max') {
-      return { results: '> 10000000', test_unit: '' };
+      return { results: '> 10000000', test_unit: '', notes: '' };
     } else if (
       resultOutcome === 'Target Not Detected' ||
       resultOutcome === 'Failed' ||
       resultOutcome === 'Invalid' ||
       resultOutcome === 'Not Detected') {
-      return { results: resultOutcome, test_unit: '' };
+      return { results: resultOutcome, test_unit: '', notes: '' };
     } else {
       let testUnit = singleObx.get('OBX.6.1')?.toString() ??
         singleObx.get('OBX.6.2')?.toString() ??
@@ -250,9 +258,33 @@ export class HL7HelperService {
 
       return {
         results: resultOutcome,
-        test_unit: testUnit
+        test_unit: testUnit,
+        notes: ''
       };
     }
+  }
+
+  private extractObx8Outcome(singleObx: any): string {
+    const rawObx8 = (singleObx.get('OBX.8')?.toString() ?? '').trim();
+    if (!rawObx8) {
+      return '';
+    }
+
+    const [firstRepeat = ''] = rawObx8.split('~');
+    const [code = '', text = '', codingSystem = ''] = firstRepeat.split('^').map(part => part.trim());
+
+    const normalizedCode = code.toUpperCase();
+    const normalizedSystem = codingSystem.toUpperCase();
+
+    if (normalizedSystem === '99ROC' && this.rocheObx8OutcomeMap[normalizedCode]) {
+      return this.rocheObx8OutcomeMap[normalizedCode];
+    }
+
+    if (text) {
+      return this.utilitiesService.decodeHtmlEntities(text);
+    }
+
+    return normalizedCode || rawObx8;
   }
 
   /**
@@ -311,14 +343,24 @@ export class HL7HelperService {
   getHL7ResultStatusType(singleObx: any): string {
     const resultStatus = singleObx.get('OBX.11')?.toString().toUpperCase() ?? '';
     const resultValue = singleObx.get('OBX.5.1')?.toString().toLowerCase() ?? '';
+    const obx8Code = (singleObx.get('OBX.8.1')?.toString() ?? '').trim().toUpperCase();
     const badValues = ['failed', 'invalid'];
-    if (resultStatus === 'X' || badValues.includes(resultValue)) {
+    if (resultStatus === 'X' || badValues.includes(resultValue) || this.isRocheErrorFlag(obx8Code)) {
       return 'ERROR';
     }
     if (['I', 'R'].includes(resultStatus)) {
       return 'INCOMPLETE';
     }
     return 'FINAL';
+  }
+
+  private isRocheErrorFlag(code: string): boolean {
+    if (!code) {
+      return false;
+    }
+
+    // Roche analyzer issue flags are commonly Uxx/UxxT-style codes (e.g. U06T).
+    return /^U\d{2}[A-Z]?$/.test(code);
   }
 
   /**

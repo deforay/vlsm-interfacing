@@ -808,6 +808,14 @@ $background-color: #f9fafb;
       max-width: 220px;
     }
 
+    .mat-column-notes {
+      flex: 0 0 260px;
+      max-width: 260px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
     .mat-column-test_unit {
       flex: 0 0 80px;
       max-width: 80px;

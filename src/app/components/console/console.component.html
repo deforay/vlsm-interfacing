@@ -272,6 +272,14 @@
           </mat-cell>
         </ng-container>
 
+        <!-- Notes Column -->
+        <ng-container matColumnDef="notes">
+          <mat-header-cell *matHeaderCellDef mat-sort-header>Notes</mat-header-cell>
+          <mat-cell *matCellDef="let row">
+            <span [title]="row.notes" class="truncate-with-tooltip">{{ row.notes }}</span>
+          </mat-cell>
+        </ng-container>
+
         <!-- Result Unit Column -->
         <ng-container matColumnDef="test_unit">
           <mat-header-cell *matHeaderCellDef mat-sort-header>Unit</mat-header-cell>
