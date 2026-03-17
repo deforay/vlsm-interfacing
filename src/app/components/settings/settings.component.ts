@@ -163,20 +163,23 @@ export class SettingsComponent implements OnInit {
 
       if (result.response === 1) { // Corresponds to 'Yes, Proceed'
         try {
-          // Force-reset must cover both databases; fail fast if MySQL reset cannot be completed.
           await this.databaseService.resetMysqlMigrations();
-          // After MySQL reset succeeds, reset local migration history and restart app.
-          await this.electronService.ipcRenderer.invoke('force-rerun-migrations');
         } catch (err) {
-          await this.electronService.ipcRenderer.invoke('show-confirm-dialog', {
-            type: 'error',
-            buttons: ['OK'],
+          // MySQL reset failed — ask user if they want to proceed anyway
+          const proceed = await this.electronService.ipcRenderer.invoke('show-confirm-dialog', {
+            type: 'warning',
+            buttons: ['Cancel', 'Proceed Anyway'],
             defaultId: 0,
-            title: 'Migration Reset Failed',
+            title: 'MySQL Reset Failed',
             message: 'Could not reset MySQL migration history.',
-            detail: `Error: ${err?.message ?? err}\n\nNo reset was performed to avoid partial (SQLite-only) migration replay.`
+            detail: `Error: ${err?.message ?? err}\n\nYou can still proceed to reset the local database and restart. MySQL migrations will be re-applied when the connection is available.`
           });
+          if (proceed.response !== 1) {
+            return;
+          }
         }
+        // Reset local migration history and restart app
+        await this.electronService.ipcRenderer.invoke('force-rerun-migrations');
       }
     } catch (error) {
       console.error('Error showing confirmation dialog:', error);

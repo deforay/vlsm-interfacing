@@ -1,11 +1,4 @@
 
-ALTER TABLE `orders` ADD `instrument_id` VARCHAR(128) NULL DEFAULT NULL AFTER `id`;
-
-
-CREATE TABLE IF NOT EXISTS versions (
-  id INT AUTO_INCREMENT PRIMARY KEY,
-  version INT NOT NULL UNIQUE,
-  filename VARCHAR(255) NOT NULL,
-  applied_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-  INDEX idx_version (version)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+-- instrument_id column already exists in 001.sql CREATE TABLE
+-- versions table is created programmatically by checkAndRunMigrations
+-- This migration file is intentionally empty after cleanup of redundant statements

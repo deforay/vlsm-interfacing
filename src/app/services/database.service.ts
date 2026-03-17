@@ -16,6 +16,13 @@ export class DatabaseService {
   private commonSettings = null;
   private migrationDir: string; // Path for migrations
   private hasRunMigrations = false;
+  private migrationAutoRetryCount = 0;
+  private static readonly DDL_ERROR_CODES = new Set(['ER_BAD_FIELD_ERROR', 'ER_NO_SUCH_TABLE', 'ER_NO_SUCH_COLUMN']);
+  private static readonly DDL_ERROR_PATTERNS = [
+    /unknown column/i,
+    /table .+ doesn't exist/i,
+    /column .+ (cannot be null|doesn't have a default)/i,
+  ];
   private readonly moment = require('moment');
 
   constructor(private readonly electronService: ElectronService,
@@ -130,36 +137,41 @@ export class DatabaseService {
       console.log('Migrations already run, skipping...');
       return;
     }
-    that.hasRunMigrations = true;
-
     console.log('🚀 Starting MySQL migrations...');
     console.log('Target database:', that.commonSettings.mysqlDb);
     console.log('Migration directory:', that.migrationDir);
 
     try {
-      // STEP 1: Ensure database exists
+      // STEP 1: Ensure database exists using a temporary connection (without database parameter)
       console.log('Step 1: Ensuring database exists...');
-      const createDbQuery = `CREATE DATABASE IF NOT EXISTS \`${that.commonSettings.mysqlDb}\` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci`;
-
       try {
-        await that.execQueryPromise(createDbQuery, []);
+        await new Promise<void>((resolve, reject) => {
+          const mysql = that.electronService.mysql;
+          const tempConnection = mysql.createConnection({
+            host: that.commonSettings.mysqlHost,
+            user: that.commonSettings.mysqlUser,
+            password: that.cryptoService.decrypt(that.commonSettings.mysqlPassword),
+            port: that.commonSettings.mysqlPort
+          });
+          tempConnection.query(
+            `CREATE DATABASE IF NOT EXISTS \`${that.commonSettings.mysqlDb}\` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci`,
+            (err) => {
+              tempConnection.destroy();
+              if (err) {
+                reject(err);
+              } else {
+                resolve();
+              }
+            }
+          );
+        });
         console.log('✅ Database ensured:', that.commonSettings.mysqlDb);
       } catch (createDbError) {
         console.log('ℹ️ Database creation note:', createDbError.message);
-        // Continue - database might already exist
+        // Continue - database likely already exists, pool will connect to it
       }
 
-      // STEP 2: Use the target database
-      console.log('Step 2: Selecting target database...');
-      try {
-        await that.execQueryPromise(`USE \`${that.commonSettings.mysqlDb}\``, []);
-        console.log('✅ Using database:', that.commonSettings.mysqlDb);
-      } catch (useDbError) {
-        console.error('❌ Failed to select database:', useDbError.message);
-        return;
-      }
-
-      // STEP 3: Check migration directory
+      // STEP 2: Check migration directory
       console.log('Step 3: Checking migration directory...');
       if (!that.electronService.fs.existsSync(that.migrationDir)) {
         console.log('ℹ️ Migration directory not found:', that.migrationDir);
@@ -196,8 +208,17 @@ export class DatabaseService {
       await that.execQueryPromise(createVersionsTable, []);
       console.log('✅ Versions tracking table ready');
 
-      // STEP 6: Get already executed migrations
-      const executedResults = await that.execQueryPromise('SELECT version, filename FROM versions ORDER BY version', []);
+      // STEP 6: Get already executed migrations — self-healing: if versions table is stale/corrupt, reset it
+      let executedResults: any[];
+      try {
+        executedResults = await that.execQueryPromise('SELECT version, filename FROM versions ORDER BY version', []);
+      } catch (versionsQueryErr) {
+        console.warn('⚠️ Versions table query failed, resetting migration tracking:', versionsQueryErr.message);
+        await that.execQueryPromise('DROP TABLE IF EXISTS versions', []);
+        await that.execQueryPromise(createVersionsTable, []);
+        executedResults = [];
+        console.log('✅ Versions table reset — all migrations will re-run');
+      }
       const executedVersions = executedResults.map((row: any) => row.version);
       console.log('Previously executed versions:', executedVersions);
 
@@ -292,9 +313,11 @@ export class DatabaseService {
 
       // Final summary
       console.log(`\n🎯 Migration Summary: ${successCount}/${migrations.length} processed`);
+      that.hasRunMigrations = true;
+      that.migrationAutoRetryCount = 0; // Reset so future DDL errors can trigger re-runs again
 
     } catch (error) {
-      // Permissive mode - log and continue
+      // Permissive mode - log and continue, but don't set hasRunMigrations so retry is possible
       console.log('ℹ️ Migration process completed with some skipped items');
     }
   }
@@ -384,6 +407,29 @@ export class DatabaseService {
       connection.query({ sql: query }, data, (queryError, results) => {
         if (queryError) {
           connection.release();
+          // If the error is DDL-related (missing table/column), trigger a migration re-run.
+          // Cap at 2 auto-retries per session to prevent infinite loops if a migration can't fix the issue.
+          const isDdlError = DatabaseService.DDL_ERROR_CODES.has(queryError.code)
+            || DatabaseService.DDL_ERROR_PATTERNS.some(p => p.test(queryError.message));
+          if (isDdlError) {
+            if (this.migrationAutoRetryCount < 2) {
+              this.migrationAutoRetryCount++;
+              this.hasRunMigrations = false;
+              console.warn(`⚠️ DDL error detected (${queryError.code}), triggering migration re-run (attempt ${this.migrationAutoRetryCount}/2)...`);
+              this.checkAndRunMigrations(null).catch(e => console.error('Auto-migration re-run failed:', e));
+            } else {
+              // Self-healing exhausted — notify user to force re-run migrations manually
+              console.error(`❌ DDL error persists after ${this.migrationAutoRetryCount} migration re-runs. Manual intervention required.`);
+              this.electronService.ipcRenderer.invoke('show-confirm-dialog', {
+                type: 'warning',
+                buttons: ['OK'],
+                defaultId: 0,
+                title: 'Database Schema Issue',
+                message: 'MySQL database schema appears to be out of sync.',
+                detail: `Error: ${queryError.message}\n\nPlease go to Settings and use "Force Re-run Migrations" to repair the database schema.`
+              }).catch(() => {});
+            }
+          }
           errorf(queryError);
           return;
         }

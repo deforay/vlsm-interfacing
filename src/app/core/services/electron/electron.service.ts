@@ -21,6 +21,7 @@ interface MySQLClient {
   createPool: (config: any) => MySQLPool;
   createConnection: (config: any) => {
     connect: (cb: (err: any | null) => void) => void;
+    query: (q: string, cb: (err: any, res?: any) => void) => void;
     destroy: () => void;
   };
 }
@@ -61,6 +62,7 @@ export class ElectronService {
         }),
         createConnection: (config) => ({
           connect: (cb) => this.testConnection(config, cb),
+          query: (q, cb) => this.executeQuery(config, q, [], cb),
           destroy: () => { }
         })
       };
