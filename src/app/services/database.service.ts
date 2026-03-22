@@ -23,6 +23,18 @@ export class DatabaseService {
     /table .+ doesn't exist/i,
     /column .+ (cannot be null|doesn't have a default)/i,
   ];
+  private static readonly MIGRATION_REPLAY_ERROR_CODES = new Set([
+    'ER_TABLE_EXISTS_ERROR',
+    'ER_DUP_FIELDNAME',
+    'ER_DUP_KEYNAME',
+    'ER_MULTIPLE_PRI_KEY',
+  ]);
+  private static readonly MIGRATION_REPLAY_ERROR_PATTERNS = [
+    /already exists/i,
+    /duplicate column name/i,
+    /duplicate key name/i,
+    /multiple primary key defined/i,
+  ];
   private readonly moment = require('moment');
 
   constructor(private readonly electronService: ElectronService,
@@ -244,8 +256,11 @@ export class DatabaseService {
 
       console.log(`Step 5: Executing ${migrations.length} pending migrations...`);
 
-      // Execute migrations sequentially - permissive mode
+      // Execute migrations sequentially.
+      // WHY: re-runs should tolerate idempotent DDL conflicts, but they must not
+      // mark a migration successful when a real statement failed.
       let successCount = 0;
+      let hadUnexpectedFailures = false;
 
       for (const migration of migrations) {
         console.log(`\n--- Executing Migration ${migration.version}: ${migration.file} ---`);
@@ -261,35 +276,31 @@ export class DatabaseService {
           const migrationSql = that.electronService.fs.readFileSync(migrationPath, 'utf8');
           console.log(`📄 Migration size: ${migrationSql.length} characters`);
 
-          // Clean and split SQL statements
-          const statements = migrationSql
-            .split(';')
-            .map(stmt => {
-              // Remove comment lines (lines starting with --)
-              return stmt
-                .split('\n')
-                .filter(line => !line.trim().startsWith('--'))
-                .join('\n')
-                .trim();
-            })
-            .map(stmt => stmt.trim())
-            .filter(stmt => stmt.length > 0)
-            .filter(stmt => !stmt.match(/^\s*--/)) // Skip comment lines
-            .filter(stmt => !stmt.match(/^\s*\/\*/)) // Skip comment blocks
-            .filter(stmt => !stmt.match(/^\s*\/\//)) // Skip // comments
-            .filter(stmt => stmt.toLowerCase() !== 'delimiter'); // Skip DELIMITER commands
+          const statements = that.extractMigrationStatements(migrationSql);
 
           console.log(`🔧 Processing ${statements.length} SQL statements...`);
 
-          // Execute each statement - permissive mode: silently skip errors and continue
+          let migrationFailed = false;
+
           for (let i = 0; i < statements.length; i++) {
             const statement = statements[i];
             try {
               await that.execQueryPromise(statement, []);
             } catch (stmtErr) {
-              // Silently skip all errors - permissive migration mode
-              // Common expected errors: table/column/index already exists, duplicate key, etc.
+              if (that.isExpectedMigrationReplayError(stmtErr)) {
+                console.warn(`ℹ️ Migration replay note for ${migration.file}: ${stmtErr.message}`);
+                continue;
+              }
+
+              migrationFailed = true;
+              hadUnexpectedFailures = true;
+              console.error(`❌ Migration ${migration.file} failed on statement ${i + 1}:`, stmtErr.message);
+              break;
             }
+          }
+
+          if (migrationFailed) {
+            continue;
           }
 
           // Record migration as completed
@@ -299,27 +310,57 @@ export class DatabaseService {
               [migration.version, migration.file]
             );
           } catch (versionErr) {
-            // Silently skip if version already recorded
+            if (!that.isExpectedMigrationReplayError(versionErr)) {
+              hadUnexpectedFailures = true;
+              console.error(`❌ Failed to record migration ${migration.file}:`, versionErr.message);
+              continue;
+            }
           }
 
           console.log(`✅ Migration ${migration.file} completed (${statements.length} statements)`);
           successCount++;
 
         } catch (err) {
-          // Even on error, try to continue with next migration
+          hadUnexpectedFailures = true;
           console.log(`ℹ️ Migration ${migration.file} skipped: ${err.message}`);
         }
       }
 
       // Final summary
       console.log(`\n🎯 Migration Summary: ${successCount}/${migrations.length} processed`);
-      that.hasRunMigrations = true;
-      that.migrationAutoRetryCount = 0; // Reset so future DDL errors can trigger re-runs again
+      that.hasRunMigrations = !hadUnexpectedFailures;
+      if (hadUnexpectedFailures) {
+        console.warn('⚠️ MySQL migrations completed with unexpected failures. Pending migrations will retry later.');
+      } else {
+        that.migrationAutoRetryCount = 0; // Reset so future DDL errors can trigger re-runs again
+      }
 
     } catch (error) {
       // Permissive mode - log and continue, but don't set hasRunMigrations so retry is possible
       console.log('ℹ️ Migration process completed with some skipped items');
     }
+  }
+
+  private extractMigrationStatements(sql: string): string[] {
+    return sql
+      .replace(/\/\*[\s\S]*?\*\//g, '\n')
+      .split('\n')
+      .filter(line => {
+        const trimmedLine = line.trim();
+        return trimmedLine.length > 0
+          && !trimmedLine.startsWith('--')
+          && !trimmedLine.startsWith('//');
+      })
+      .join('\n')
+      .split(';')
+      .map(stmt => stmt.trim())
+      .filter(stmt => stmt.length > 0)
+      .filter(stmt => stmt.toLowerCase() !== 'delimiter');
+  }
+
+  private isExpectedMigrationReplayError(error: any): boolean {
+    return DatabaseService.MIGRATION_REPLAY_ERROR_CODES.has(error?.code)
+      || DatabaseService.MIGRATION_REPLAY_ERROR_PATTERNS.some(pattern => pattern.test(error?.message ?? ''));
   }
 
   /**
@@ -966,21 +1007,34 @@ export class DatabaseService {
   }
 
   public resetMysqlMigrations(): Promise<void> {
-    // Use DELETE to keep table structure and avoid requiring DROP/CREATE privileges.
-    const query = 'DELETE FROM versions';
+    // Use CREATE + DELETE to keep privileges minimal while still repairing a missing tracking table.
+    const createVersionsTable = `
+      CREATE TABLE IF NOT EXISTS versions (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        version INT NOT NULL UNIQUE,
+        filename VARCHAR(255) NOT NULL,
+        applied_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        INDEX idx_version (version)
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+    `;
+
     return new Promise((resolve, reject) => {
-      this.execQuery(query, [],
+      this.execQuery(createVersionsTable, [],
         () => {
-          console.log('MySQL versions table cleared successfully.');
-          resolve();
+          this.execQuery('DELETE FROM versions', [],
+            () => {
+              this.hasRunMigrations = false;
+              console.log('MySQL versions table cleared successfully.');
+              resolve();
+            },
+            (err: any) => {
+              console.error('Error clearing MySQL versions table:', err);
+              reject(err);
+            }
+          );
         },
         (err: any) => {
-          // If the table doesn't exist, treat it as already reset.
-          if (err?.code === 'ER_NO_SUCH_TABLE') {
-            resolve();
-            return;
-          }
-          console.error('Error clearing MySQL versions table:', err);
+          console.error('Error preparing MySQL versions table:', err);
           reject(err);
         }
       );

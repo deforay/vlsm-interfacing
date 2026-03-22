@@ -16,6 +16,32 @@ const args = process.argv.slice(1),
   serve = args.some(val => val === '--serve');
 let tray: Tray = null;
 
+function formatUnknownError(error: unknown): string {
+  if (error instanceof Error) {
+    return `${error.name}: ${error.message}${error.stack ? `\n${error.stack}` : ''}`;
+  }
+
+  if (typeof error === 'string') {
+    return error;
+  }
+
+  try {
+    return JSON.stringify(error);
+  } catch {
+    return String(error);
+  }
+}
+
+function registerProcessErrorLogging(): void {
+  process.on('uncaughtException', (error) => {
+    log.error(`[Main][UncaughtException] ${formatUnknownError(error)}`);
+  });
+
+  process.on('unhandledRejection', (reason) => {
+    log.error(`[Main][UnhandledRejection] ${formatUnknownError(reason)}`);
+  });
+}
+
 function getSQLiteDBConnection() {
   return sqlite3Obj;
 }
@@ -272,6 +298,8 @@ function openModal() {
 ipcMain.on('openModal', (event, arg) => {
   openModal();
 });
+
+registerProcessErrorLogging();
 
 
 try {

@@ -1,6 +1,7 @@
 import { Injectable } from '@angular/core';
 import { DatabaseService } from './database.service';
 import { LogDisplayService, LogEntry } from './log-display.service';
+import { ElectronService } from '../core/services';
 
 @Injectable({
   providedIn: 'root'
@@ -12,7 +13,8 @@ export class LoggingService {
 
   constructor(
     private dbService: DatabaseService,
-    private logDisplayService: LogDisplayService
+    private logDisplayService: LogDisplayService,
+    private electronService: ElectronService
   ) {
     setInterval(() => this.processQueue(), this.processingInterval);
   }
@@ -22,6 +24,16 @@ export class LoggingService {
 
     // Push to display immediately
     this.logDisplayService.log(logEntry);
+
+    if (this.electronService?.isElectron) {
+      if (type === 'error') {
+        this.electronService.logError(message, instrumentId);
+      } else if (type === 'warn') {
+        this.electronService.logWarning(message, instrumentId);
+      } else {
+        this.electronService.logInfo(message, instrumentId);
+      }
+    }
 
     // Push to persistence queue
     this.logQueue.push(logEntry);

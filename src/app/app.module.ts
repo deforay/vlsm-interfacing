@@ -1,5 +1,5 @@
 import { BrowserModule } from '@angular/platform-browser';
-import { NgModule } from '@angular/core';
+import { ErrorHandler, NgModule } from '@angular/core';
 import { FormsModule, ReactiveFormsModule } from '@angular/forms';
 import { HttpClientModule, HttpClient } from '@angular/common/http';
 import { CoreModule } from './core/core.module';
@@ -26,6 +26,7 @@ import { ElectronStoreService } from './services/electron-store.service';
 import { ConnectionManagerService } from './services/connection-manager.service';
 import { LogDisplayService } from './services/log-display.service';
 import { LoggingService } from './services/logging.service';
+import { GlobalErrorHandlerService } from './services/global-error-handler.service';
 
 
 import { NgxPaginationModule } from 'ngx-pagination';
@@ -85,7 +86,8 @@ export function httpLoaderFactory(http: HttpClient) {
     ConnectionManagerService,
     { provide: MAT_FORM_FIELD_DEFAULT_OPTIONS, useValue: { appearance: 'fill' } },
     LogDisplayService,
-    LoggingService
+    LoggingService,
+    { provide: ErrorHandler, useClass: GlobalErrorHandlerService }
   ],
   bootstrap: [AppComponent]
 })
