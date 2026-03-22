@@ -10,7 +10,7 @@ export class GlobalErrorHandlerService implements ErrorHandler {
 
     // WHY: Angular catches many runtime errors that never reach the existing
     // logging pipeline, so persist them explicitly for post-mortem debugging.
-    this.loggingService.log('error', `[Renderer][Angular] ${formattedError}`);
+    this.loggingService.logSystemError(`[Renderer][Angular] ${formattedError}`);
 
     if (error instanceof Error && error.stack) {
       console.error(error.stack);

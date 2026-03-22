@@ -1,6 +1,6 @@
 // src/app/components/console/console.component.ts
 
-import { Component, OnInit, NgZone, OnDestroy, ChangeDetectorRef, ViewChild, ElementRef } from '@angular/core';
+import { Component, OnInit, NgZone, OnDestroy, ChangeDetectorRef, ViewChild, ElementRef, HostListener } from '@angular/core';
 import { DomSanitizer } from '@angular/platform-browser';
 import { Router } from '@angular/router';
 import { ElectronStoreService } from '../../services/electron-store.service';
@@ -34,6 +34,7 @@ export enum SelectType {
   changeDetection: ChangeDetectionStrategy.OnPush
 })
 export class ConsoleComponent implements OnInit, OnDestroy {
+  private static readonly SYSTEM_LOG_ID = '__system__';
   searchTerm: string = '';
   private pickedInitialTab = false; // run-once guard
   public commonSettings = null;
@@ -47,6 +48,7 @@ export class ConsoleComponent implements OnInit, OnDestroy {
   public walCheckpointInterval: any; // Interval for performing SQLite WAL checkpoints
   public data: any;
   public lastOrders: any;
+  public showScrollToTop = false;
   private readonly ipc: IpcRenderer;
   public availableInstruments = [];
   private readonly loadedLogInstrumentIds = new Set<string>();
@@ -58,6 +60,11 @@ export class ConsoleComponent implements OnInit, OnDestroy {
   private resultSavedSubscription: Subscription;
   private logSubscription: Subscription;
   private logClearSubscription: Subscription;
+  public systemLogsExpanded = false;
+  public systemLogContext = {
+    connectionParams: { instrumentId: ConsoleComponent.SYSTEM_LOG_ID },
+    searchText: ''
+  };
 
   private checkConnectionsAfterInactivity() {
     console.log('Checking connection status after inactivity');
@@ -99,6 +106,8 @@ export class ConsoleComponent implements OnInit, OnDestroy {
   selection = new SelectionModel<any>(true, []);
   displayType = SelectType.single;
   dataSource = new MatTableDataSource<any>();
+  @ViewChild('topAnchor', { static: true }) topAnchor: ElementRef;
+  @ViewChild('resultsSection', { static: false }) resultsSection: ElementRef;
   @ViewChild('searchInput', { static: true }) searchInput: ElementRef;
   @ViewChild(MatPaginator, { static: true }) paginator: MatPaginator;
   @ViewChild(MatSort, { static: true }) sort: MatSort;
@@ -258,8 +267,27 @@ export class ConsoleComponent implements OnInit, OnDestroy {
     });
   }
 
+  @HostListener('window:scroll')
+  onWindowScroll(): void {
+    this.showScrollToTop = window.scrollY > 500;
+  }
+
+  scrollToResults(): void {
+    this.resultsSection?.nativeElement?.scrollIntoView({
+      behavior: 'smooth',
+      block: 'start'
+    });
+  }
+
+  scrollToTop(): void {
+    this.topAnchor?.nativeElement?.scrollIntoView({
+      behavior: 'smooth',
+      block: 'start'
+    });
+  }
+
   private updateLogUI(logEntry: LogEntry) {
-    const instrumentId = logEntry.instrumentId;
+    const instrumentId = logEntry.instrumentId ?? ConsoleComponent.SYSTEM_LOG_ID;
     if (!instrumentId) return;
 
     // Ensure the log structure exists
@@ -268,6 +296,10 @@ export class ConsoleComponent implements OnInit, OnDestroy {
     // Add the new log and re-sort
     this.instrumentLogs[instrumentId].logs.push(logEntry);
     this.instrumentLogs[instrumentId].logs.sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime());
+
+    if (instrumentId === ConsoleComponent.SYSTEM_LOG_ID) {
+      this.systemLogsExpanded = true;
+    }
 
 
     // Re-filter logs
@@ -571,6 +603,18 @@ export class ConsoleComponent implements OnInit, OnDestroy {
 
     this.instrumentLogs[instrumentId].logs = newLogs;
     this.filterInstrumentLogs({ connectionParams: { instrumentId } });
+  }
+
+  get systemLogs() {
+    return this.instrumentLogs[ConsoleComponent.SYSTEM_LOG_ID];
+  }
+
+  get systemLogCount(): number {
+    return this.systemLogs?.filteredLogs?.length ?? 0;
+  }
+
+  toggleSystemLogs(): void {
+    this.systemLogsExpanded = !this.systemLogsExpanded;
   }
 
   private loadRecentLogsForNewInstruments(instruments: any[]) {

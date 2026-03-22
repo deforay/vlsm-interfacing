@@ -2,6 +2,7 @@ import { Injectable, } from '@angular/core';
 import { ElectronService } from '../core/services';
 import { ElectronStoreService } from './electron-store.service';
 import { CryptoService } from './crypto.service'
+import { LoggingService } from './logging.service';
 import * as path from 'path';
 import * as fs from 'fs';
 import { Observable, Subject } from 'rxjs';
@@ -39,7 +40,8 @@ export class DatabaseService {
 
   constructor(private readonly electronService: ElectronService,
     private readonly store: ElectronStoreService,
-    private readonly cryptoService: CryptoService
+    private readonly cryptoService: CryptoService,
+    private readonly loggingService: LoggingService
   ) {
     const that = this;
     that.store.electronStoreObservable().subscribe(config => {
@@ -83,6 +85,7 @@ export class DatabaseService {
       await that.setupDatabase();
 
       that.mysqlPool.on('error', (err) => {
+        that.logCriticalDatabaseIssue(`MySQL pool error: ${err?.message ?? err}`);
         console.error('MySQL pool error:', err);
       });
 
@@ -294,6 +297,7 @@ export class DatabaseService {
 
               migrationFailed = true;
               hadUnexpectedFailures = true;
+              that.logCriticalDatabaseIssue(`Migration ${migration.file} failed on statement ${i + 1}: ${stmtErr.message}`, 'migration');
               console.error(`❌ Migration ${migration.file} failed on statement ${i + 1}:`, stmtErr.message);
               break;
             }
@@ -312,6 +316,7 @@ export class DatabaseService {
           } catch (versionErr) {
             if (!that.isExpectedMigrationReplayError(versionErr)) {
               hadUnexpectedFailures = true;
+              that.logCriticalDatabaseIssue(`Failed to record migration ${migration.file}: ${versionErr.message}`, 'migration');
               console.error(`❌ Failed to record migration ${migration.file}:`, versionErr.message);
               continue;
             }
@@ -322,6 +327,7 @@ export class DatabaseService {
 
         } catch (err) {
           hadUnexpectedFailures = true;
+          that.logCriticalDatabaseIssue(`Migration ${migration.file} skipped: ${err.message}`, 'migration');
           console.log(`ℹ️ Migration ${migration.file} skipped: ${err.message}`);
         }
       }
@@ -433,6 +439,13 @@ export class DatabaseService {
     });
   }
 
+  private logCriticalDatabaseIssue(message: string, category: 'database' | 'migration' = 'database', instrumentId: string | null = null): void {
+    this.loggingService.log('error', message, instrumentId, {
+      category,
+      displayInConsole: true
+    });
+  }
+
   execQuery(query: string, data: any, success: any, errorf: any, callback = null) {
     if (!this.mysqlPool) {
       errorf({ error: 'Database Connection not found' });
@@ -460,6 +473,7 @@ export class DatabaseService {
               this.checkAndRunMigrations(null).catch(e => console.error('Auto-migration re-run failed:', e));
             } else {
               // Self-healing exhausted — notify user to force re-run migrations manually
+              this.logCriticalDatabaseIssue(`DDL error persists after ${this.migrationAutoRetryCount} migration re-runs: ${queryError.message}`, 'migration');
               console.error(`❌ DDL error persists after ${this.migrationAutoRetryCount} migration re-runs. Manual intervention required.`);
               this.electronService.ipcRenderer.invoke('show-confirm-dialog', {
                 type: 'warning',
@@ -919,7 +933,7 @@ export class DatabaseService {
         },
         (mysqlError) => {
           if (mysqlError) {
-            console.error('Error inserting log batch into MySQL:', mysqlError);
+            this.logCriticalDatabaseIssue(`Error inserting log batch into MySQL: ${mysqlError?.message ?? mysqlError}`, 'database', records.find(log => !!log.instrument_id)?.instrument_id ?? null);
           }
           errorf(mysqlError);
         }

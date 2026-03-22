@@ -1,12 +1,13 @@
 import { Injectable } from '@angular/core';
 import { Subject } from 'rxjs';
-import { DatabaseService } from './database.service';
 
 export interface LogEntry {
   type: 'info' | 'success' | 'warn' | 'error' | 'verbose';
   message: string;
   instrumentId?: string;
   timestamp: Date;
+  category?: 'operational' | 'system' | 'database' | 'migration';
+  displayInConsole?: boolean;
 }
 
 @Injectable({
@@ -19,17 +20,11 @@ export class LogDisplayService {
   log$ = this.logSubject.asObservable();
   clear$ = this.clearLogSubject.asObservable();
 
-  constructor(private dbService: DatabaseService) { }
-
-  loadInitialLogs(instrumentId: string, limit: number = 100) {
-    this.dbService.fetchRecentLogs(instrumentId, limit).subscribe(logs => {
-      // Sort logs by timestamp ascending before emitting
-      logs.sort((a, b) => a.timestamp.getTime() - b.timestamp.getTime());
-      logs.forEach(log => this.logSubject.next(log));
-    });
-  }
-
   log(logEntry: LogEntry) {
+    if (logEntry.displayInConsole === false) {
+      return;
+    }
+
     this.logSubject.next(logEntry);
   }
 

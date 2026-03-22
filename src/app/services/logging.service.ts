@@ -1,7 +1,12 @@
-import { Injectable } from '@angular/core';
-import { DatabaseService } from './database.service';
+import { Injectable, Injector } from '@angular/core';
 import { LogDisplayService, LogEntry } from './log-display.service';
 import { ElectronService } from '../core/services';
+
+export interface LogOptions {
+  category?: LogEntry['category'];
+  displayInConsole?: boolean;
+  persist?: boolean;
+}
 
 @Injectable({
   providedIn: 'root'
@@ -10,17 +15,30 @@ export class LoggingService {
   private logQueue: LogEntry[] = [];
   private isProcessing = false;
   private processingInterval = 10000; // Process queue every 10 seconds
+  private databaseServicePromise: Promise<any> | null = null;
 
   constructor(
-    private dbService: DatabaseService,
+    private injector: Injector,
     private logDisplayService: LogDisplayService,
     private electronService: ElectronService
   ) {
     setInterval(() => this.processQueue(), this.processingInterval);
   }
 
-  log(type: 'info' | 'success' | 'warn' | 'error' | 'verbose', message: string, instrumentId?: string) {
-    const logEntry: LogEntry = { type, message, instrumentId, timestamp: new Date() };
+  log(
+    type: 'info' | 'success' | 'warn' | 'error' | 'verbose',
+    message: string,
+    instrumentId?: string,
+    options: LogOptions = {}
+  ) {
+    const logEntry: LogEntry = {
+      type,
+      message,
+      instrumentId,
+      timestamp: new Date(),
+      category: options.category ?? 'operational',
+      displayInConsole: options.displayInConsole ?? true
+    };
 
     // Push to display immediately
     this.logDisplayService.log(logEntry);
@@ -35,8 +53,18 @@ export class LoggingService {
       }
     }
 
-    // Push to persistence queue
-    this.logQueue.push(logEntry);
+    // WHY: internal/system failures should still be queryable after the fact
+    // even when we intentionally suppress them from the live operator console.
+    if (options.persist !== false) {
+      this.logQueue.push(logEntry);
+    }
+  }
+
+  logSystemError(message: string, instrumentId?: string, displayInConsole: boolean = false) {
+    this.log('error', message, instrumentId, {
+      category: 'system',
+      displayInConsole
+    });
   }
 
   private async processQueue() {
@@ -48,7 +76,8 @@ export class LoggingService {
     const logsToProcess = this.logQueue.splice(0); // Process all logs in the queue
 
     try {
-      await this.dbService.recordLogBatch(logsToProcess);
+      const dbService = await this.getDatabaseService();
+      await dbService.recordLogBatch(logsToProcess);
     } catch (error) {
       console.error('Failed to persist log batch:', error);
       // If persistence fails, you might want to add the logs back to the queue
@@ -56,5 +85,16 @@ export class LoggingService {
     } finally {
       this.isProcessing = false;
     }
+  }
+
+  private async getDatabaseService(): Promise<any> {
+    if (!this.databaseServicePromise) {
+      // WHY: DatabaseService also logs operational failures. Lazy loading avoids
+      // a circular module dependency during startup.
+      this.databaseServicePromise = import('./database.service')
+        .then(({ DatabaseService }) => this.injector.get(DatabaseService));
+    }
+
+    return this.databaseServicePromise;
   }
 }

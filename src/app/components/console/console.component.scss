@@ -58,6 +58,31 @@ $background-color: #f9fafb;
   }
 }
 
+.connection-status {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.system-log-toggle {
+  background: white;
+  color: $text-color;
+  border: 1px solid $border-color;
+  box-shadow: none;
+
+  &.has-alerts {
+    color: $danger-color;
+    border-color: rgba($danger-color, 0.35);
+    background: rgba($danger-color, 0.06);
+  }
+
+  &:hover:not(:disabled) {
+    background: rgba($primary-color, 0.05);
+    box-shadow: none;
+    transform: none;
+  }
+}
+
 // Status pill - Compact
 .status-pill {
   display: flex;
@@ -219,6 +244,145 @@ $background-color: #f9fafb;
   max-width: 1600px;
   width: 100%;
   margin: 0 auto;
+}
+
+.system-log-drawer {
+  .system-log-backdrop {
+    position: fixed;
+    inset: 0;
+    background: rgba(15, 23, 42, 0.12);
+    z-index: 150;
+  }
+
+  .system-log-drawer-panel {
+    position: fixed;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    width: min(42vw, 560px);
+    min-width: 380px;
+    background: white;
+    box-shadow: -8px 0 24px rgba(15, 23, 42, 0.16);
+    z-index: 160;
+    display: flex;
+    flex-direction: column;
+    border-left: 1px solid $border-color;
+  }
+
+  .system-log-drawer-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+    padding: 0.9rem 1rem 0.75rem;
+    border-bottom: 1px solid $border-color;
+    background: linear-gradient(135deg, lighten($dark-color, 77%), lighten($dark-color, 74%));
+  }
+
+  .system-log-drawer-title {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-size: 0.95rem;
+    font-weight: 600;
+    color: $dark-color;
+
+    i {
+      color: $danger-color;
+    }
+  }
+
+  .system-log-count {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 1.5rem;
+    padding: 0.15rem 0.45rem;
+    border-radius: 999px;
+    background: rgba($primary-color, 0.08);
+    color: $primary-color;
+    font-size: 0.75rem;
+    font-weight: 700;
+  }
+
+  .system-log-drawer-controls {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.75rem 1rem;
+    border-bottom: 1px solid $border-color;
+    background: white;
+    flex-wrap: wrap;
+
+    .search-box {
+      position: relative;
+      flex: 1;
+      min-width: 220px;
+
+      i {
+        position: absolute;
+        left: 0.625rem;
+        top: 50%;
+        transform: translateY(-50%);
+        color: $text-light;
+        pointer-events: none;
+      }
+
+      input {
+        width: 100%;
+        padding: 0.35rem 0.6rem 0.35rem 1.95rem;
+        border: 1px solid $border-color;
+        border-radius: 0.35rem;
+        font-size: 0.8rem;
+      }
+    }
+  }
+
+  .system-log-drawer-viewer {
+    flex: 1;
+    min-height: 0;
+    background: #1e293b;
+
+    .log-entries {
+      height: 100%;
+      overflow-y: auto;
+      padding: 0.85rem 1rem;
+      font-family: "Consolas", "Monaco", monospace;
+      font-size: 0.8rem;
+      line-height: 1.5;
+      color: #e2e8f0;
+      display: flex;
+      flex-direction: column-reverse;
+
+      .log-entry {
+        margin-bottom: 0.35rem;
+        white-space: pre-wrap;
+        word-break: break-word;
+
+        .text-info {
+          color: #4fc3f7 !important;
+        }
+
+        .text-danger {
+          color: #ff5252 !important;
+        }
+
+        .text-success {
+          color: #4caf50 !important;
+        }
+      }
+
+      .log-empty {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 0.4rem;
+        color: #94a3b8;
+        font-style: italic;
+        height: 100%;
+      }
+    }
+  }
 }
 
 // Instrument tabs - Compact

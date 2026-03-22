@@ -2,7 +2,7 @@ import { Injectable } from '@angular/core';
 import { DatabaseService } from './database.service';
 import { BehaviorSubject, Observable, of } from 'rxjs';
 import { ElectronService } from '../core/services';
-import { LoggingService } from './logging.service';
+import { LoggingService, LogOptions } from './logging.service';
 
 type LogLevel = 'info' | 'success' | 'warn' | 'error' | 'verbose';
 
@@ -54,8 +54,8 @@ export class UtilitiesService {
     return new Promise(resolve => setTimeout(resolve, ms));
   }
 
-  logger(type: LogLevel, message: string, instrumentId: string) {
-    this.loggingService.log(type, message, instrumentId);
+  logger(type: LogLevel, message: string, instrumentId: string, options?: LogOptions) {
+    this.loggingService.log(type, message, instrumentId, options);
   }
 
   humanReadableDateTime(date: Date | string | null): string {
