@@ -50,6 +50,16 @@
               (click)="setActiveSection(section.id)">
             <i [class]="section.icon"></i>
             <span>{{ section.label }}</span>
+            <span class="setup-indicator not-configured"
+              *ngIf="sectionSetupStatus[section.id] === false"
+              title="Not configured">
+              <i class="fas fa-exclamation-circle"></i>
+            </span>
+            <span class="setup-indicator configured"
+              *ngIf="sectionSetupStatus[section.id] === true"
+              title="Configured">
+              <i class="fas fa-check-circle"></i>
+            </span>
           </li>
         </ul>
         <div class="sidebar-version" *ngIf="appVersion">

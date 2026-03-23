@@ -299,6 +299,19 @@ $background-color: #f9fafb;
         text-align: center;
         font-size: 0.875rem;
       }
+
+      .setup-indicator {
+        margin-left: auto;
+        font-size: 0.75rem;
+
+        &.not-configured {
+          color: $warning-color;
+        }
+
+        &.configured {
+          color: $success-color;
+        }
+      }
     }
   }
 

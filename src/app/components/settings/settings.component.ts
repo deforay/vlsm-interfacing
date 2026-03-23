@@ -34,8 +34,8 @@ export class SettingsComponent implements OnInit, OnDestroy {
   public readonly sections = [
     { id: 'system', label: 'System', icon: 'fas fa-cog' },
     { id: 'database', label: 'Database', icon: 'fas fa-database' },
-    { id: 'lisapi', label: 'LIS API', icon: 'fas fa-plug' },
     { id: 'instruments', label: 'Instruments', icon: 'fas fa-microscope' },
+    { id: 'lisapi', label: 'LIS API', icon: 'fas fa-plug' },
     { id: 'troubleshoot', label: 'Troubleshooting', icon: 'fas fa-wrench' }
   ];
 
@@ -43,6 +43,16 @@ export class SettingsComponent implements OnInit, OnDestroy {
   public lisInstrumentNames: string[] = [];
   public lisApiFetchStatus: 'idle' | 'loading' | 'success' | 'error' = 'idle';
   public lisApiFetchError: string = '';
+
+  get sectionSetupStatus(): Record<string, boolean> {
+    const common = this.settingsForm?.get('commonSettings');
+    const instruments = this.instrumentsSettings;
+    return {
+      system: !!(common?.get('labID')?.value && common?.get('labName')?.value),
+      database: !!(common?.get('mysqlHost')?.value),
+      instruments: instruments?.length > 0
+    };
+  }
 
   constructor(
     private readonly formBuilder: FormBuilder,
@@ -648,7 +658,8 @@ export class SettingsComponent implements OnInit, OnDestroy {
       });
     ipcRenderer.on('imported-settings', (event, importedSettings) => {
       console.log('Imported Settings:', importedSettings);
-      this.updateSettings();
+      // Reload the page to pick up the newly imported settings from the store
+      window.location.reload();
     });
   }
 
