@@ -78,6 +78,11 @@ export class ElectronStoreService {
         }
       });
     }
+
+    // Remove LIS API credentials
+    if (settings && settings.lisApiConfig && settings.lisApiConfig.credentials) {
+      delete settings.lisApiConfig.credentials;
+    }
   }
 
   showNotification(title: string, message: string): void {

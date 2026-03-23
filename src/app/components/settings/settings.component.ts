@@ -1,4 +1,4 @@
-import { Component, OnInit } from '@angular/core';
+import { Component, OnInit, OnDestroy } from '@angular/core';
 import { FormBuilder, FormGroup, FormArray, Validators, AbstractControl, ValidatorFn, FormControl } from '@angular/forms';
 import { Router } from '@angular/router';
 import { ElectronService } from '../../core/services';
@@ -11,19 +11,38 @@ import { v4 as uuidv4 } from 'uuid';
 import { ConnectionManagerService } from '../../services/connection-manager.service';
 import { Subscription } from 'rxjs';
 import { DatabaseService } from '../../services/database.service';
+import { LisApiService } from '../../services/lis-api.service';
+import { LisApiConfig } from '../../interfaces/lis-api-config.interface';
 
 @Component({
   selector: 'app-settings',
   templateUrl: './settings.component.html',
   styleUrls: ['./settings.component.scss']
 })
-export class SettingsComponent implements OnInit {
+export class SettingsComponent implements OnInit, OnDestroy {
   public settingsForm: FormGroup;
   public appPath: string = "";
   public appVersion: string = null;
   public machineIps: string[] = [];
   public availableInstruments = [];
   private instrumentsSubscription: Subscription;
+  private lisSubscription: Subscription;
+
+  // Sidebar
+  public activeSection: string = 'system';
+  public sidebarCollapsed: boolean = true;
+  public readonly sections = [
+    { id: 'system', label: 'System', icon: 'fas fa-cog' },
+    { id: 'database', label: 'Database', icon: 'fas fa-database' },
+    { id: 'lisapi', label: 'LIS API', icon: 'fas fa-plug' },
+    { id: 'instruments', label: 'Instruments', icon: 'fas fa-microscope' },
+    { id: 'troubleshoot', label: 'Troubleshooting', icon: 'fas fa-wrench' }
+  ];
+
+  // LIS API
+  public lisInstrumentNames: string[] = [];
+  public lisApiFetchStatus: 'idle' | 'loading' | 'success' | 'error' = 'idle';
+  public lisApiFetchError: string = '';
 
   constructor(
     private readonly formBuilder: FormBuilder,
@@ -33,11 +52,14 @@ export class SettingsComponent implements OnInit {
     private readonly utilitiesService: UtilitiesService,
     private readonly cryptoService: CryptoService,
     private connectionManagerService: ConnectionManagerService,
-    private readonly databaseService: DatabaseService
+    private readonly databaseService: DatabaseService,
+    private readonly lisApiService: LisApiService
   ) {
 
     const commonSettingsStore = this.electronStoreService.get('commonConfig');
-    const instrumentSettingsStore = this.electronStoreService.get('instrumentsConfig');
+    const instrumentSettingsStore = (this.electronStoreService.get('instrumentsConfig') || [])
+      .sort((a, b) => (parseInt(a.displayorder, 10) || Number.MAX_SAFE_INTEGER) - (parseInt(b.displayorder, 10) || Number.MAX_SAFE_INTEGER));
+    const lisApiConfigStore = this.electronStoreService.get('lisApiConfig');
     this.appPath = this.electronStoreService.get('appPath');
     this.appVersion = this.electronStoreService.get('appVersion');
     this.machineIps = this.getMachineIps();
@@ -47,9 +69,6 @@ export class SettingsComponent implements OnInit {
       commonSettings: this.formBuilder.group({
         labID: ['', Validators.required],
         labName: ['', Validators.required],
-        // enable_api: ['no'],
-        // api_url:[''],
-        // api_auth:[''],
         mysqlHost: [''],
         mysqlPort: ['', [
           Validators.pattern('^[0-9]+$'),
@@ -65,8 +84,26 @@ export class SettingsComponent implements OnInit {
         mysqlPassword: [''],
         interfaceAutoConnect: ['yes', Validators.required]
       }),
+      lisApiSettings: this.formBuilder.group({
+        url: [''],
+        authType: ['none'],
+        credentials: this.formBuilder.group({
+          token: [''],
+          username: [''],
+          password: [''],
+          apiKey: ['']
+        }),
+        fetchInstruments: this.formBuilder.group({
+          enabled: [false],
+          endpoint: ['/api/instruments']
+        }),
+        sendResults: this.formBuilder.group({
+          enabled: [false],
+          endpoint: ['/api/results']
+        })
+      }),
       instrumentsSettings: this.formBuilder.array(
-        (instrumentSettingsStore || []).map(instrument => this.formBuilder.group(instrument))
+        instrumentSettingsStore.map(instrument => this.formBuilder.group(instrument))
       )
     }, { validators: [this.uniqueInstrumentNameValidator(), this.uniqueIpPortValidator()] });
 
@@ -74,17 +111,19 @@ export class SettingsComponent implements OnInit {
       commonSettings: commonSettingsStore
     });
 
-    // this.settingsForm.get('commonSettings.enable_api').valueChanges.subscribe(value => {
-    //   if (value === 'yes') {
-    //     this.settingsForm.get('commonSettings.api_url').setValidators([Validators.required]);
-    //     this.settingsForm.get('commonSettings.api_auth').setValidators([Validators.required]);
-    //   } else {
-    //     this.settingsForm.get('commonSettings.api_url').clearValidators();
-    //     this.settingsForm.get('commonSettings.api_auth').clearValidators();
-    //   }
-    //   this.settingsForm.get('commonSettings.api_url').updateValueAndValidity();
-    //   this.settingsForm.get('commonSettings.api_auth').updateValueAndValidity();
-    // });
+    // Load saved LIS API config with decrypted credentials
+    if (lisApiConfigStore) {
+      const decryptedConfig = { ...lisApiConfigStore };
+      if (decryptedConfig.credentials) {
+        decryptedConfig.credentials = {
+          token: this.cryptoService.decrypt(decryptedConfig.credentials.token || ''),
+          username: this.cryptoService.decrypt(decryptedConfig.credentials.username || ''),
+          password: this.cryptoService.decrypt(decryptedConfig.credentials.password || ''),
+          apiKey: this.cryptoService.decrypt(decryptedConfig.credentials.apiKey || '')
+        };
+      }
+      this.settingsForm.patchValue({ lisApiSettings: decryptedConfig });
+    }
 
   }
 
@@ -95,6 +134,59 @@ export class SettingsComponent implements OnInit {
       .subscribe(instruments => {
         this.availableInstruments = instruments;
       });
+
+    // Subscribe to LIS instrument names
+    this.lisSubscription = this.lisApiService.getInstrumentNames()
+      .subscribe(names => {
+        this.lisInstrumentNames = names;
+      });
+  }
+
+  ngOnDestroy(): void {
+    if (this.instrumentsSubscription) {
+      this.instrumentsSubscription.unsubscribe();
+    }
+    if (this.lisSubscription) {
+      this.lisSubscription.unsubscribe();
+    }
+  }
+
+  setActiveSection(sectionId: string): void {
+    this.activeSection = sectionId;
+    this.sidebarCollapsed = true;
+  }
+
+  toggleSidebar(): void {
+    this.sidebarCollapsed = !this.sidebarCollapsed;
+  }
+
+  testLisApi(): void {
+    this.lisApiFetchStatus = 'loading';
+    this.lisApiFetchError = '';
+    const config = this.settingsForm.get('lisApiSettings').value as LisApiConfig;
+    this.lisApiService.testAndFetch(config).subscribe({
+      next: (names) => {
+        this.lisInstrumentNames = names;
+        this.lisApiFetchStatus = 'success';
+      },
+      error: (err) => {
+        this.lisApiFetchError = err.message || 'Failed to fetch instruments';
+        this.lisApiFetchStatus = 'error';
+      }
+    });
+  }
+
+  filterInstrumentNames(value: string): string[] {
+    if (!this.lisInstrumentNames.length) {
+      return [];
+    }
+    if (!value) {
+      return this.lisInstrumentNames;
+    }
+    const filterValue = value.toLowerCase();
+    return this.lisInstrumentNames.filter(name =>
+      name.toLowerCase().includes(filterValue)
+    );
   }
 
   uniqueInstrumentNameValidator(): ValidatorFn {
@@ -149,6 +241,8 @@ export class SettingsComponent implements OnInit {
   get instrumentsSettings(): FormArray {
     return this.settingsForm.get('instrumentsSettings') as FormArray;
   }
+
+
 
   public async forceRerunMigrations(): Promise<void> {
     try {
@@ -292,6 +386,15 @@ export class SettingsComponent implements OnInit {
       // Encrypt the MySQL password before saving
       updatedSettings.commonSettings.mysqlPassword = this.cryptoService.encrypt(updatedSettings.commonSettings.mysqlPassword);
 
+      // Encrypt LIS API credentials before saving
+      const lisApiConfig = JSON.parse(JSON.stringify(updatedSettings.lisApiSettings));
+      if (lisApiConfig.credentials) {
+        lisApiConfig.credentials.token = this.cryptoService.encrypt(lisApiConfig.credentials.token || '');
+        lisApiConfig.credentials.username = this.cryptoService.encrypt(lisApiConfig.credentials.username || '');
+        lisApiConfig.credentials.password = this.cryptoService.encrypt(lisApiConfig.credentials.password || '');
+        lisApiConfig.credentials.apiKey = this.cryptoService.encrypt(lisApiConfig.credentials.apiKey || '');
+      }
+
       // Ensure all required keys exist in each instrument setting
       updatedSettings.instrumentsSettings = updatedSettings.instrumentsSettings.map(instrument => {
         const defaultInstrument = {
@@ -338,6 +441,7 @@ export class SettingsComponent implements OnInit {
         // Save settings to electron store
         that.electronStoreService.set('commonConfig', updatedSettings.commonSettings);
         that.electronStoreService.set('instrumentsConfig', updatedSettings.instrumentsSettings);
+        that.electronStoreService.set('lisApiConfig', lisApiConfig);
 
         // Remove the saving notification
         document.body.removeChild(savingNotification);
