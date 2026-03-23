@@ -1,7 +1,7 @@
 {
   "name": "vlsm-interfacing",
   "version": "3.2.8",
-  "description": "Interfacing Tool By VLSM",
+  "description": "Interfacing Tool By InteLIS",
   "homepage": "https://github.com/deforay/vlsm-interfacing",
   "author": {
     "name": "Deforay",
@@ -24,12 +24,12 @@
     "GeneXpert",
     "ASTM",
     "HL7",
-    "Intelis",
     "Lab Instrument Interfacing",
     "Lab Interfacing",
     "Interfacing Tool",
     "Interfacing",
     "vlsm",
+    "InteLIS",
     "viral load",
     "VL LIS",
     "Viral Load LIS",

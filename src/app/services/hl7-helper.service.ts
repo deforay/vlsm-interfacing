@@ -54,16 +54,16 @@ export class HL7HelperService {
     const date = moment().format('YYYYMMDDHHmmss');
 
     // Build optimized ACK message with field position comments
-    const ack = `${VT}MSH|^~\\&|VLSM|VLSM|VLSM|VLSM|${date}||ACK^R22^ACK|${randomUUID()}|P|${hl7Version}|||NE|AL||${characterSet}||${messageProfileIdentifier}${CR}MSA|AA|${messageID}${CR}${FS}${CR}`;
+    const ack = `${VT}MSH|^~\\&|InteLIS|InteLIS|InteLIS|InteLIS|${date}||ACK^R22^ACK|${randomUUID()}|P|${hl7Version}|||NE|AL||${characterSet}||${messageProfileIdentifier}${CR}MSA|AA|${messageID}${CR}${FS}${CR}`;
 
     /*
     MSH Field Breakdown:
     MSH|          - Message Header (segment ID)
     ^~\&|         - MSH-2: Encoding Characters
-    VLSM|         - MSH-3: Sending Application
-    VLSM|         - MSH-4: Sending Facility
-    VLSM|         - MSH-5: Receiving Application
-    VLSM|         - MSH-6: Receiving Facility
+    InteLIS|         - MSH-3: Sending Application
+    InteLIS|         - MSH-4: Sending Facility
+    InteLIS|         - MSH-5: Receiving Application
+    InteLIS|         - MSH-6: Receiving Facility
     ${date}|      - MSH-7: Date/Time of Message
     |             - MSH-8: Security (empty)
     ACK^R22^ACK|  - MSH-9: Message Type (ACK^Event^Message Structure)
