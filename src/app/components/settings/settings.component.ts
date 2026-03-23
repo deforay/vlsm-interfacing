@@ -190,11 +190,17 @@ export class SettingsComponent implements OnInit, OnDestroy {
     if (!this.lisInstrumentNames.length) {
       return [];
     }
+    const usedNames = new Set(
+      this.instrumentsSettings.value
+        .map(instrument => instrument.analyzerMachineName)
+        .filter(name => name && name !== value)
+    );
+    const available = this.lisInstrumentNames.filter(name => !usedNames.has(name));
     if (!value) {
-      return this.lisInstrumentNames;
+      return available;
     }
     const filterValue = value.toLowerCase();
-    return this.lisInstrumentNames.filter(name =>
+    return available.filter(name =>
       name.toLowerCase().includes(filterValue)
     );
   }
