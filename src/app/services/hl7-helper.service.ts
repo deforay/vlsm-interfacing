@@ -239,7 +239,13 @@ export class HL7HelperService {
         test_unit: testUnit,
         notes: ''
       };
-    } else if (resultOutcome === '<20' || resultOutcome === '< 20' || resultOutcome === 'Target Not Detected') {
+    } else if (resultOutcome === '<20' || resultOutcome === '< 20') {
+      let testUnit = singleObx.get('OBX.6.1')?.toString() ??
+        singleObx.get('OBX.6.2')?.toString() ??
+        singleObx.get('OBX.6')?.toString() ?? '';
+      testUnit = this.utilitiesService.decodeHtmlEntities(testUnit);
+      return { results: '< 20', test_unit: testUnit, notes: '' };
+    } else if (resultOutcome === 'Target Not Detected') {
       return { results: 'Target Not Detected', test_unit: '', notes: '' };
     } else if (resultOutcome === '> Titer max') {
       return { results: '> 10000000', test_unit: '', notes: '' };
