@@ -4,6 +4,9 @@ import { platformBrowserDynamic } from '@angular/platform-browser-dynamic';
 import { AppModule } from './app/app.module';
 import { APP_CONFIG } from './environments/environment';
 
+// Polyfill: some Node.js packages expect window.global to exist
+(window as any).global = window;
+
 if (APP_CONFIG.production) {
   enableProdMode();
 }

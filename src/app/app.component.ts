@@ -5,6 +5,7 @@ import { APP_CONFIG } from '../environments/environment';
 import { v4 as uuidv4 } from 'uuid';
 
 @Component({
+  standalone: false,
   selector: 'app-root',
   templateUrl: './app.component.html',
   styleUrls: ['./app.component.scss']

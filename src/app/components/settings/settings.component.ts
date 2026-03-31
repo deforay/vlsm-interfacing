@@ -3,8 +3,6 @@ import { FormBuilder, FormGroup, FormArray, Validators, AbstractControl, Validat
 import { Router } from '@angular/router';
 import { ElectronService } from '../../core/services';
 import { ElectronStoreService } from '../../services/electron-store.service';
-import * as os from 'os';
-import { ipcRenderer } from 'electron';
 import { UtilitiesService } from '../../services/utilities.service';
 import { CryptoService } from '../../services/crypto.service';
 import { v4 as uuidv4 } from 'uuid';
@@ -15,6 +13,7 @@ import { LisApiService } from '../../services/lis-api.service';
 import { LisApiConfig } from '../../interfaces/lis-api-config.interface';
 
 @Component({
+  standalone: false,
   selector: 'app-settings',
   templateUrl: './settings.component.html',
   styleUrls: ['./settings.component.scss']
@@ -321,6 +320,7 @@ export class SettingsComponent implements OnInit, OnDestroy {
   }
 
   getMachineIps(): string[] {
+    const os = (window as any).require('os');
     const networkInterfaces = os.networkInterfaces();
     const ips = [];
 
@@ -655,14 +655,14 @@ export class SettingsComponent implements OnInit, OnDestroy {
   }
 
   importSettings(): void {
-    ipcRenderer.invoke('import-settings')
+    this.electronService.ipcRenderer.invoke('import-settings')
       .then(response => {
         console.log('Import response:', response);
       })
       .catch(err => {
         console.error('Error importing settings:', err);
       });
-    ipcRenderer.on('imported-settings', (event, importedSettings) => {
+    this.electronService.ipcRenderer.on('imported-settings', (event, importedSettings) => {
       console.log('Imported Settings:', importedSettings);
       // Reload the page to pick up the newly imported settings from the store
       window.location.reload();

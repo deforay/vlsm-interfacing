@@ -263,21 +263,25 @@ function createWindow(): BrowserWindow {
   });
 
   if (serve) {
-    const debug = require('electron-debug');
-    debug();
+    import('electron-debug').then(debug => {
+      debug.default({ isEnabled: true, showDevTools: true });
+    });
 
-    require('electron-reloader')(module);
+    import('electron-reloader').then(reloader => {
+      const reloaderFn = (reloader as any).default || reloader;
+      reloaderFn(module, { watchRenderer: false });
+    });
     win.loadURL('http://localhost:4200');
   } else {
-    let pathIndex = './index.html';
+    let pathIndex = './browser/index.html';
 
-    if (fs.existsSync(path.join(__dirname, '../dist/index.html'))) {
-      pathIndex = '../dist/index.html';
+    if (fs.existsSync(path.join(__dirname, '../dist/browser/index.html'))) {
+      pathIndex = '../dist/browser/index.html';
     }
 
-    let joinedPath = path.join(__dirname, pathIndex)
-    const url = new URL(`file:${path.sep}${path.sep}${joinedPath}`);
-    win.loadURL(url.href);
+    const fullPath = path.join(__dirname, pathIndex);
+    const url = `file://${path.resolve(fullPath).replace(/\\/g, '/')}`;
+    win.loadURL(url);
   }
 
   win.on('closed', () => {
@@ -625,7 +629,7 @@ try {
       const startupTime = new Date().toISOString();
       console.log(`\n${'='.repeat(80)}\n🚀 APPLICATION STARTED - ${startupTime}\n${'='.repeat(80)}\n`);
 
-      const trayIconPath = 'dist/assets/icons/favicon.png';
+      const trayIconPath = 'dist/browser/assets/icons/favicon.png';
       try {
         const icon = nativeImage.createFromPath(trayIconPath);
         tray = new Tray(icon);

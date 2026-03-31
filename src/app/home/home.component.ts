@@ -3,6 +3,7 @@ import { Router } from '@angular/router';
 import { ElectronStoreService } from '../services/electron-store.service';
 
 @Component({
+  standalone: false,
   selector: 'app-home',
   templateUrl: './home.component.html',
   styleUrls: ['./home.component.scss']

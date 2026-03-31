@@ -1,13 +1,11 @@
 import { Injectable } from '@angular/core';
-import { ipcRenderer } from 'electron';
-import * as Store from 'electron-store';
 import { BehaviorSubject, Observable } from 'rxjs';
 
 @Injectable({
   providedIn: 'root'
 })
 export class ElectronStoreService {
-  private store: Store;
+  private store: any;
   private electronStoreSubject: BehaviorSubject<any>;
 
   constructor() {
@@ -56,7 +54,7 @@ export class ElectronStoreService {
     const sensitiveFields = ['mysqlPassword'];
     this.removeSensitiveFields(settings);
     const settingsJSON = JSON.stringify(settings, null, 2);
-    ipcRenderer.invoke('export-settings', settingsJSON)
+    (window as any).require('electron').ipcRenderer.invoke('export-settings', settingsJSON)
       .then(response => {
         console.log('Export response:', response);
 

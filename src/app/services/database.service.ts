@@ -3,8 +3,6 @@ import { ElectronService } from '../core/services';
 import { ElectronStoreService } from './electron-store.service';
 import { CryptoService } from './crypto.service'
 import { LoggingService } from './logging.service';
-import * as path from 'path';
-import * as fs from 'fs';
 import { Observable, Subject } from 'rxjs';
 
 @Injectable({
@@ -36,7 +34,8 @@ export class DatabaseService {
     /duplicate key name/i,
     /multiple primary key defined/i,
   ];
-  private readonly moment = require('moment');
+  private readonly moment = (window as any).require('moment');
+  private readonly path: any = (window as any).require('path');
 
   constructor(private readonly electronService: ElectronService,
     private readonly store: ElectronStoreService,
@@ -58,7 +57,7 @@ export class DatabaseService {
 
     // Fetch the userData path from Electron
     const userDataPath = await that.electronService.getUserDataPath();
-    that.migrationDir = path.join(userDataPath, 'mysql-migrations');
+    that.migrationDir = that.path.join(userDataPath, 'mysql-migrations');
     //console.log('User Data Path:', userDataPath);
 
     // Ensure mysqlPool and dbConfig are not initialized multiple times
@@ -269,7 +268,7 @@ export class DatabaseService {
         console.log(`\n--- Executing Migration ${migration.version}: ${migration.file} ---`);
 
         try {
-          const migrationPath = path.join(that.migrationDir, migration.file);
+          const migrationPath = that.path.join(that.migrationDir, migration.file);
 
           if (!that.electronService.fs.existsSync(migrationPath)) {
             console.log(`ℹ️ Migration file not found, skipping: ${migrationPath}`);
@@ -388,7 +387,7 @@ export class DatabaseService {
 
       // Show file sizes
       sqlFiles.forEach(file => {
-        const filePath = path.join(that.migrationDir, file);
+        const filePath = that.path.join(that.migrationDir, file);
         const stats = that.electronService.fs.statSync(filePath);
         console.log(`  ${file}: ${stats.size} bytes`);
       });

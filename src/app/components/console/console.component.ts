@@ -15,7 +15,6 @@ import { MatSort } from '@angular/material/sort';
 import { SelectionModel } from "@angular/cdk/collections";
 import { MatCheckboxChange } from '@angular/material/checkbox';
 import { fromEvent, Subscription } from 'rxjs';
-import { IpcRenderer } from 'electron';
 import { MatDialog } from '@angular/material/dialog';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { ChangeDetectionStrategy } from '@angular/core';
@@ -28,6 +27,7 @@ export enum SelectType {
 }
 
 @Component({
+  standalone: false,
   selector: 'app-console',
   templateUrl: './console.component.html',
   styleUrls: ['./console.component.scss'],
@@ -49,7 +49,7 @@ export class ConsoleComponent implements OnInit, OnDestroy {
   public data: any;
   public lastOrders: any;
   public showScrollToTop = false;
-  private readonly ipc: IpcRenderer;
+  private readonly ipc: any;
   public availableInstruments = [];
   private readonly loadedLogInstrumentIds = new Set<string>();
   public instrumentLogs: { [instrumentId: string]: { logs: any[]; filteredLogs: any[] } } = {};

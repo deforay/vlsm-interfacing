@@ -1,12 +1,11 @@
 import { Injectable } from '@angular/core';
 import { ElectronStoreService } from './electron-store.service';
-import * as crypto from 'crypto';
-
 @Injectable({
   providedIn: 'root'
 })
 export class CryptoService {
 
+  private nodeCrypto: any = (window as any).require('crypto');
   private readonly keyLength = 32; // Key length should be 32 bytes for AES-256
   private readonly prefix = 'ENC(';
   private readonly suffix = ')';
@@ -25,7 +24,7 @@ export class CryptoService {
   }
 
   private generateEncryptionKey(): string {
-    return crypto.randomBytes(this.keyLength).toString('hex');
+    return this.nodeCrypto.randomBytes(this.keyLength).toString('hex');
   }
 
   encrypt(data: string, key: string = null): string {
@@ -41,8 +40,8 @@ export class CryptoService {
     const encryptionKey = Buffer.from(key, 'hex');
 
     // Generate a random initialization vector (IV)
-    const iv = crypto.randomBytes(this.ivLength);
-    const cipher = crypto.createCipheriv(this.algorithm, encryptionKey, iv);
+    const iv = this.nodeCrypto.randomBytes(this.ivLength);
+    const cipher = this.nodeCrypto.createCipheriv(this.algorithm, encryptionKey, iv);
 
     let encrypted = Buffer.concat([cipher.update(data, 'utf8'), cipher.final()]);
     const authTag = cipher.getAuthTag();
@@ -69,7 +68,7 @@ export class CryptoService {
     const [ivHex, authTagHex, encrypted] = encryptedData.split(':');
 
     const iv = Buffer.from(ivHex, 'hex');
-    const decipher = crypto.createDecipheriv(this.algorithm, encryptionKey, iv);
+    const decipher = this.nodeCrypto.createDecipheriv(this.algorithm, encryptionKey, iv);
     decipher.setAuthTag(Buffer.from(authTagHex, 'hex'));
 
     let decrypted = decipher.update(encrypted, 'hex', 'utf8');

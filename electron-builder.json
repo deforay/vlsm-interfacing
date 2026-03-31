@@ -20,23 +20,23 @@
   ],
   "artifactName": "${productName}-${version}-${os}-${arch}.${ext}",
   "win": {
-    "icon": "dist/assets/icons",
+    "icon": "dist/browser/assets/icons",
     "target": [
       "portable",
       "nsis"
     ]
   },
   "portable": {
-    "splashImage": "dist/assets/icons/electron.bmp"
+    "splashImage": "dist/browser/assets/icons/electron.bmp"
   },
   "mac": {
-    "icon": "dist/assets/icons",
+    "icon": "dist/browser/assets/icons",
     "target": [
       "dmg"
     ]
   },
   "linux": {
-    "icon": "dist/assets/icons",
+    "icon": "dist/browser/assets/icons",
     "target": [
       "deb"
     ],

@@ -2,7 +2,8 @@
 
 import { Injectable } from '@angular/core';
 import { UtilitiesService } from './utilities.service';
-import { randomUUID } from 'crypto';
+
+const randomUUID = () => (window as any).require('crypto').randomUUID();
 
 @Injectable({
   providedIn: 'root'

@@ -11,6 +11,7 @@ import { SelectionModel } from '@angular/cdk/collections';
 import { Subscription } from 'rxjs';
 
 @Component({
+  standalone: false,
   selector: 'app-raw-data',
   templateUrl: './raw-data.component.html',
   styleUrls: ['./raw-data.component.scss']
