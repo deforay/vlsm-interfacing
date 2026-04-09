@@ -51,22 +51,54 @@ function restartApp() {
   app.exit();
 }
 
+// Idempotent SQLite errors that we can safely ignore when re-applying a migration
+// against a partially-applied schema (e.g. ALTER TABLE ADD COLUMN on a column that
+// already exists). Anything outside this set is treated as a real failure.
+const SQLITE_REPLAY_ERROR_FRAGMENTS = [
+  'duplicate column name',
+  'already exists',
+  'no such index'
+];
+
+function isExpectedSqliteReplayError(err: Error | null): boolean {
+  if (!err) return false;
+  const msg = (err.message || '').toLowerCase();
+  return SQLITE_REPLAY_ERROR_FRAGMENTS.some(fragment => msg.includes(fragment));
+}
+
+// The core tables every healthy install must have. If any are missing while the
+// versions table claims migrations have been applied, the bookkeeping is stale and
+// we purge it so the runner re-applies the migrations from scratch.
+const SQLITE_CORE_TABLES = ['orders', 'raw_data', 'app_log'];
+
+function sqliteRun(db: sqlite3.Database, sql: string, params: any[] = []): Promise<{ ok: boolean; err: Error | null }> {
+  return new Promise((resolve) => {
+    db.run(sql, params, function (err: Error | null) {
+      resolve({ ok: !err, err });
+    });
+  });
+}
+
+function sqliteAll<T = any>(db: sqlite3.Database, sql: string, params: any[] = []): Promise<T[]> {
+  return new Promise((resolve) => {
+    db.all(sql, params, (err: Error | null, rows: T[]) => {
+      resolve(err || !Array.isArray(rows) ? [] : rows);
+    });
+  });
+}
+
 async function runSqliteMigrations(db, migrationsPath) {
   console.log('Running SQLite migrations from:', migrationsPath);
 
   // 1. Ensure versions table exists
-  await new Promise<void>((resolve) => {
-    db.run('CREATE TABLE IF NOT EXISTS versions (version INTEGER PRIMARY KEY, filename TEXT, applied_at DATETIME DEFAULT CURRENT_TIMESTAMP)', () => resolve());
-  });
+  await sqliteRun(db, 'CREATE TABLE IF NOT EXISTS versions (version INTEGER PRIMARY KEY, filename TEXT, applied_at DATETIME DEFAULT CURRENT_TIMESTAMP)');
 
-  // 2. Add filename column for backward compatibility (silently skip if exists)
-  await new Promise<void>((resolve) => {
-    db.run('ALTER TABLE versions ADD COLUMN filename TEXT', () => resolve());
-  });
+  // 2. Add filename column for backward compatibility (idempotent — old DBs may pre-date this column)
+  await sqliteRun(db, 'ALTER TABLE versions ADD COLUMN filename TEXT');
 
   // 3. Get migration files
   if (!fs.existsSync(migrationsPath)) {
-    console.log('SQLite migration directory not found, skipping');
+    log.error(`SQLite migration directory not found: ${migrationsPath}`);
     return;
   }
 
@@ -75,22 +107,36 @@ async function runSqliteMigrations(db, migrationsPath) {
     .sort();
 
   if (migrationFiles.length === 0) {
-    console.log('No SQLite migration files found');
+    log.warn('No SQLite migration files found');
     return;
   }
 
-  // 4. Get applied migrations (return empty set on error)
-  const appliedFilenames = await new Promise<Set<string>>((resolve) => {
-    db.all('SELECT filename FROM versions WHERE filename IS NOT NULL', (err: Error | null, rows: { filename: string }[]) => {
-      if (err || !Array.isArray(rows)) {
-        resolve(new Set());
-        return;
-      }
-      resolve(new Set(rows.map(row => row.filename)));
-    });
-  });
+  // 4. Self-heal stale bookkeeping. If the versions table claims migrations are
+  //    applied but the core tables don't actually exist, the prior runner recorded
+  //    a "success" after silently swallowing statement errors. Purge those rows so
+  //    the migrations re-run instead of being skipped forever.
+  const presentTables = new Set(
+    (await sqliteAll<{ name: string }>(db, "SELECT name FROM sqlite_master WHERE type='table'"))
+      .map(row => row.name)
+  );
+  const missingCoreTables = SQLITE_CORE_TABLES.filter(name => !presentTables.has(name));
+  if (missingCoreTables.length > 0) {
+    log.warn(`SQLite core tables missing (${missingCoreTables.join(', ')}); purging stale versions rows so migrations re-run`);
+    const purge = await sqliteRun(db, 'DELETE FROM versions');
+    if (!purge.ok) {
+      log.error(`Failed to purge stale versions rows: ${purge.err?.message}`);
+    }
+  }
 
-  // 5. Run migrations - permissive mode
+  // 5. Get applied migrations (return empty set on error)
+  const appliedFilenames = new Set(
+    (await sqliteAll<{ filename: string }>(db, 'SELECT filename FROM versions WHERE filename IS NOT NULL'))
+      .map(row => row.filename)
+  );
+
+  // 6. Run migrations. Real per-statement failures stop that migration and leave
+  //    its versions row absent so the next launch retries — never record a
+  //    migration as applied when its statements actually failed.
   let successCount = 0;
   for (const file of migrationFiles) {
     if (appliedFilenames.has(file)) {
@@ -101,7 +147,6 @@ async function runSqliteMigrations(db, migrationsPath) {
     const filePath = path.join(migrationsPath, file);
     const sql = fs.readFileSync(filePath, 'utf8');
 
-    // Split into statements
     const statements = sql.split('\n')
       .filter(line => !line.trim().startsWith('--'))
       .join('\n')
@@ -109,18 +154,32 @@ async function runSqliteMigrations(db, migrationsPath) {
       .map(s => s.trim())
       .filter(s => s.length > 0);
 
-    // Execute each statement - silently skip errors
+    let migrationFailed = false;
     for (const statement of statements) {
-      await new Promise<void>((resolve) => {
-        db.run(statement, () => resolve());
-      });
+      const { ok, err } = await sqliteRun(db, statement);
+      if (ok) continue;
+
+      if (isExpectedSqliteReplayError(err)) {
+        console.log(`SQLite migration ${file} replay note: ${err?.message}`);
+        continue;
+      }
+
+      log.error(`SQLite migration ${file} failed: ${err?.message}\nStatement: ${statement}`);
+      migrationFailed = true;
+      break;
     }
 
-    // Record migration as complete (silently skip if already recorded)
+    if (migrationFailed) {
+      log.error(`SQLite migration ${file} did NOT complete cleanly; leaving versions row absent so next launch retries`);
+      continue;
+    }
+
     const version = parseInt(file.split('.')[0], 10);
-    await new Promise<void>((resolve) => {
-      db.run('INSERT INTO versions (version, filename) VALUES (?, ?)', [version, file], () => resolve());
-    });
+    const insert = await sqliteRun(db, 'INSERT OR IGNORE INTO versions (version, filename) VALUES (?, ?)', [version, file]);
+    if (!insert.ok) {
+      log.error(`Failed to record SQLite migration ${file} as applied: ${insert.err?.message}`);
+      continue;
+    }
 
     console.log(`✅ SQLite migration ${file} completed (${statements.length} statements)`);
     successCount++;
@@ -178,7 +237,7 @@ async function copySqliteMigrationFiles(): Promise<void> {
 
   try {
     if (!fs.existsSync(sourceDir)) {
-      console.error(`SQLite migration source directory not found: ${sourceDir}`);
+      log.error(`SQLite migration source directory not found: ${sourceDir}`);
       return;
     }
 
@@ -196,7 +255,7 @@ async function copySqliteMigrationFiles(): Promise<void> {
       console.log(`Synced SQLite migration file: ${file}`);
     }
   } catch (err) {
-    console.error('Error copying SQLite migration files:', err);
+    log.error(`Error copying SQLite migration files: ${formatUnknownError(err)}`);
   }
 }
 
@@ -207,7 +266,7 @@ async function copyMySQLMigrationFiles(): Promise<void> {
 
   try {
     if (!fs.existsSync(sourceDir)) {
-      console.error(`MySQL migration source directory not found: ${sourceDir}`);
+      log.error(`MySQL migration source directory not found: ${sourceDir}`);
       return;
     }
 
@@ -225,7 +284,7 @@ async function copyMySQLMigrationFiles(): Promise<void> {
       console.log(`Synced MySQL migration file: ${file}`);
     }
   } catch (err) {
-    console.error('Error copying MySQL migration files:', err);
+    log.error(`Error copying MySQL migration files: ${formatUnknownError(err)}`);
   }
 }
 
@@ -342,7 +401,7 @@ try {
           return { status: 'success', message: 'Settings successfully exported.' };
         }
       } catch (err) {
-        console.error('Failed to save settings:', err);
+        log.error(`Failed to save settings: ${formatUnknownError(err)}`);
         return { status: 'error', message: 'Failed to export settings.' };
       }
     });
@@ -482,7 +541,7 @@ try {
       };
 
       if (!replyChannel) {
-        console.error('sqlite3-query invoked without reply channel.');
+        log.error('sqlite3-query invoked without reply channel');
         return;
       }
 
@@ -498,7 +557,7 @@ try {
       const safeParams = params ?? [];
 
       const handleError = (err: any) => {
-        console.error('SQLite query error:', err?.message || err);
+        log.error(`SQLite query error: ${err?.message || err}`);
         respond({
           __sqliteError: true,
           message: err?.message || 'Unknown SQLite error'
@@ -564,7 +623,7 @@ try {
 
         sqlite3Obj.run('PRAGMA wal_checkpoint(PASSIVE)', function (err) {
           if (err) {
-            console.error('Error running SQLite WAL checkpoint:', err);
+            log.error(`Error running SQLite WAL checkpoint: ${err.message || err}`);
             reject(err);
           } else {
             resolve({ success: true });
@@ -605,7 +664,7 @@ try {
       sqlite3Obj = await new Promise<sqlite3.Database>((resolve, reject) => {
         setupSqlite(store, (db, err) => {
           if (err) {
-            console.error('Error during SQLite setup:', err);
+            log.error(`Error during SQLite setup: ${formatUnknownError(err)}`);
             return reject(err);
           }
           console.info('SQLite setup complete');
@@ -672,7 +731,7 @@ try {
         }
       });
     } catch (error) {
-      console.error('Failed to initialize the application:', error);
+      log.error(`Failed to initialize the application: ${formatUnknownError(error)}`);
       // If initialization fails, quit the app to prevent it from running in a broken state
       app.quit();
     }

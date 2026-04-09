@@ -274,7 +274,10 @@ export class SettingsComponent implements OnInit, OnDestroy {
         try {
           await this.databaseService.resetMysqlMigrations();
         } catch (err) {
-          // MySQL reset failed — ask user if they want to proceed anyway
+          // MySQL reset failed — ask user if they want to proceed anyway.
+          // (The Settings flow is explicit/manual, so surface failures here.
+          // The automatic schema-error dialog uses performForceRerunMigrations
+          // which silently best-efforts the MySQL reset instead.)
           const proceed = await this.electronService.ipcRenderer.invoke('show-confirm-dialog', {
             type: 'warning',
             buttons: ['Cancel', 'Proceed Anyway'],

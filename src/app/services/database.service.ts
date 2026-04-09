@@ -16,11 +16,21 @@ export class DatabaseService {
   private migrationDir: string; // Path for migrations
   private hasRunMigrations = false;
   private migrationAutoRetryCount = 0;
+  // Once the schema-error dialog has been shown (and accepted) in this session,
+  // don't show it again — the user is either restarting or has declined.
+  private schemaErrorPromptShown = false;
   private static readonly DDL_ERROR_CODES = new Set(['ER_BAD_FIELD_ERROR', 'ER_NO_SUCH_TABLE', 'ER_NO_SUCH_COLUMN']);
   private static readonly DDL_ERROR_PATTERNS = [
     /unknown column/i,
     /table .+ doesn't exist/i,
     /column .+ (cannot be null|doesn't have a default)/i,
+  ];
+  // SQLite errors look different from MySQL — `no such table: orders`,
+  // `no such column: x`, `table orders has no column named x`.
+  private static readonly SQLITE_DDL_ERROR_PATTERNS = [
+    /no such table/i,
+    /no such column/i,
+    /has no column named/i,
   ];
   private static readonly MIGRATION_REPLAY_ERROR_CODES = new Set([
     'ER_TABLE_EXISTS_ERROR',
@@ -445,6 +455,77 @@ export class DatabaseService {
     });
   }
 
+  private isSqliteDdlError(err: any): boolean {
+    const message = (err?.message ?? '').toString();
+    return DatabaseService.SQLITE_DDL_ERROR_PATTERNS.some(pattern => pattern.test(message));
+  }
+
+  /**
+   * Centralized prompt for both SQLite and MySQL schema-out-of-sync errors.
+   * Asks the user whether to re-run migrations now (which restarts the app).
+   * Once shown in a session, won't re-show until the user cancels — that
+   * prevents stacking dialogs when many queries fail in quick succession.
+   */
+  private async promptSchemaErrorAndRerunIfConfirmed(source: 'MySQL' | 'SQLite', error: any): Promise<void> {
+    if (this.schemaErrorPromptShown) {
+      return;
+    }
+    this.schemaErrorPromptShown = true;
+
+    try {
+      const result = await this.electronService.ipcRenderer.invoke('show-confirm-dialog', {
+        type: 'warning',
+        buttons: ['Cancel', 'Re-run Migrations Now'],
+        defaultId: 1,
+        cancelId: 0,
+        title: `Database Schema Issue (${source})`,
+        message: `${source} database schema appears to be out of sync.`,
+        detail: `Error: ${error?.message ?? error}\n\nClick "Re-run Migrations Now" to repair the schema. The application will restart automatically once the migrations are reset.`
+      });
+
+      if (result?.response === 1) {
+        await this.performForceRerunMigrations();
+      } else {
+        // User cancelled — let the prompt fire again later if more DDL errors come in
+        this.schemaErrorPromptShown = false;
+      }
+    } catch (dialogErr) {
+      this.schemaErrorPromptShown = false;
+      console.error('Failed to show schema error dialog:', dialogErr);
+    }
+  }
+
+  /**
+   * Shared force-rerun routine used by both the Settings button and the
+   * automatic schema-error dialog. MySQL reset is best-effort — if MySQL is
+   * unreachable we still proceed with the SQLite reset and restart so the
+   * client isn't left stuck.
+   */
+  public async performForceRerunMigrations(): Promise<void> {
+    try {
+      await this.resetMysqlMigrations();
+    } catch (err) {
+      console.warn('MySQL migration reset failed (proceeding with SQLite reset anyway):', err);
+    }
+    await this.electronService.ipcRenderer.invoke('force-rerun-migrations');
+  }
+
+  /**
+   * Wrapper around ElectronService.execSqliteQuery that intercepts SQLite
+   * DDL errors (missing table / column) and prompts the user to re-run
+   * migrations. All renderer-side SQLite traffic should go through this so
+   * schema drift surfaces consistently for both databases.
+   */
+  private execSqlite(sql: string, params: any[] = []): Promise<any> {
+    return this.electronService.execSqliteQuery(sql, params).catch((err: any) => {
+      if (this.isSqliteDdlError(err)) {
+        this.logCriticalDatabaseIssue(`SQLite DDL error: ${err?.message ?? err}`, 'database');
+        this.promptSchemaErrorAndRerunIfConfirmed('SQLite', err).catch(() => {});
+      }
+      throw err;
+    });
+  }
+
   execQuery(query: string, data: any, success: any, errorf: any, callback = null) {
     if (!this.mysqlPool) {
       errorf({ error: 'Database Connection not found' });
@@ -471,17 +552,10 @@ export class DatabaseService {
               console.warn(`⚠️ DDL error detected (${queryError.code}), triggering migration re-run (attempt ${this.migrationAutoRetryCount}/2)...`);
               this.checkAndRunMigrations(null).catch(e => console.error('Auto-migration re-run failed:', e));
             } else {
-              // Self-healing exhausted — notify user to force re-run migrations manually
+              // Self-healing exhausted — prompt the user to repair via force-rerun
               this.logCriticalDatabaseIssue(`DDL error persists after ${this.migrationAutoRetryCount} migration re-runs: ${queryError.message}`, 'migration');
-              console.error(`❌ DDL error persists after ${this.migrationAutoRetryCount} migration re-runs. Manual intervention required.`);
-              this.electronService.ipcRenderer.invoke('show-confirm-dialog', {
-                type: 'warning',
-                buttons: ['OK'],
-                defaultId: 0,
-                title: 'Database Schema Issue',
-                message: 'MySQL database schema appears to be out of sync.',
-                detail: `Error: ${queryError.message}\n\nPlease go to Settings and use "Force Re-run Migrations" to repair the database schema.`
-              }).catch(() => {});
+              console.error(`❌ DDL error persists after ${this.migrationAutoRetryCount} migration re-runs. Prompting user to re-run migrations.`);
+              this.promptSchemaErrorAndRerunIfConfirmed('MySQL', queryError).catch(() => {});
             }
           }
           errorf(queryError);
@@ -520,7 +594,7 @@ export class DatabaseService {
       data.mysql_inserted = mysqlInserted ? 1 : 0;
       const sqlitePlaceholders = Object.values(data).map(() => '?').join(',');
       const sqliteQuery = `INSERT INTO orders (${Object.keys(data).join(',')}, mysql_inserted) VALUES (${sqlitePlaceholders}, ?)`;
-      this.electronService.execSqliteQuery(sqliteQuery, [...Object.values(data), data.mysql_inserted])
+      this.execSqlite(sqliteQuery, [...Object.values(data), data.mysql_inserted])
         .then(success)
         .catch(errorf);
     };
@@ -545,7 +619,7 @@ export class DatabaseService {
   resyncTestResultsToMySQL(success: any, errorf: any) {
     const sqliteQuery = 'SELECT * FROM orders WHERE mysql_inserted = 0';
 
-    this.electronService.execSqliteQuery(sqliteQuery, [])
+    this.execSqlite(sqliteQuery, [])
       .then((records) => {
         if (records.length === 0) {
           success('No records to resync.');
@@ -584,7 +658,7 @@ export class DatabaseService {
 
   private updateSQLiteAfterMySQLInsert(record: any) {
     const updateQuery = 'UPDATE orders SET mysql_inserted = 1 WHERE order_id = ?';
-    this.electronService.execSqliteQuery(updateQuery, [record.order_id])
+    this.execSqlite(updateQuery, [record.order_id])
       .then(() => {
         console.log('Record successfully resynced and updated in SQLite:', record.order_id);
       })
@@ -611,7 +685,7 @@ export class DatabaseService {
     }, (err) => {
       // MySQL connection failed, fallback to SQLite
       console.error('MySQL connection error:', err);
-      that.electronService.execSqliteQuery(recentRawDataQuery, null)
+      that.execSqlite(recentRawDataQuery, null)
         .then(results => success(results))
         .catch(errorf);
     });
@@ -640,7 +714,7 @@ export class DatabaseService {
 
     recentResultsQuery += ' ORDER BY added_on DESC LIMIT 1000';
 
-    this.electronService.execSqliteQuery(recentResultsQuery, queryParams)
+    this.execSqlite(recentResultsQuery, queryParams)
       .then(results => {
         subject.next(results);
         subject.complete();
@@ -680,7 +754,7 @@ export class DatabaseService {
     // Step 1: Get the maximum `lims_sync_date_time` from SQLite
     const sqliteMaxQuery = 'SELECT MAX(lims_sync_date_time) as maxSyncDate FROM orders';
 
-    that.electronService.execSqliteQuery(sqliteMaxQuery, [])
+    that.execSqlite(sqliteMaxQuery, [])
       .then((sqliteResult: any) => {
         const maxSyncDate = sqliteResult[0]?.maxSyncDate || '0000-00-00 00:00:00'; // Default to the earliest date
         //console.log('SQLite max lims_sync_date_time:', maxSyncDate);
@@ -711,7 +785,7 @@ export class DatabaseService {
                   SET lims_sync_status = ?, lims_sync_date_time = ?
                   WHERE order_id = ?
                 `;
-                return that.electronService.execSqliteQuery(sqliteUpdateQuery, [
+                return that.execSqlite(sqliteUpdateQuery, [
                   record.lims_sync_status,
                   record.lims_sync_date_time,
                   record.order_id
@@ -759,7 +833,7 @@ export class DatabaseService {
         subject.complete();
       });
     }, (err) => {
-      this.electronService.execSqliteQuery(query, null)
+      this.execSqlite(query, null)
         .then(res => {
           subject.next(res[0]);
           subject.complete();
@@ -784,7 +858,7 @@ export class DatabaseService {
       data.mysql_inserted = mysqlInserted ? 1 : 0;
       const sqlitePlaceholders = Object.values(data).map(() => '?').join(',');
       const sqliteQuery = `INSERT INTO raw_data (${Object.keys(data).join(',')}, mysql_inserted) VALUES (${sqlitePlaceholders}, ?)`;
-      this.electronService.execSqliteQuery(sqliteQuery, [...Object.values(data), data.mysql_inserted])
+      this.execSqlite(sqliteQuery, [...Object.values(data), data.mysql_inserted])
         .then(success)
         .catch(errorf);
     };
@@ -809,7 +883,7 @@ export class DatabaseService {
   resyncRawDataToMySQL(success: any, errorf: any) {
     const sqliteQuery = 'SELECT * FROM raw_data WHERE mysql_inserted = 0';
 
-    this.electronService.execSqliteQuery(sqliteQuery, [])
+    this.execSqlite(sqliteQuery, [])
       .then((records) => {
         if (records.length === 0) {
           success('No raw data records to resync.');
@@ -845,7 +919,7 @@ export class DatabaseService {
 
   private updateSQLiteAfterMySQLInsertRawData(record: any) {
     const updateQuery = 'UPDATE raw_data SET mysql_inserted = 1 WHERE id = ?';
-    this.electronService.execSqliteQuery(updateQuery, [record.id])
+    this.execSqlite(updateQuery, [record.id])
       .then(() => {
         console.log('Raw data record successfully resynced and updated in SQLite:', record.id);
       })
@@ -861,7 +935,7 @@ export class DatabaseService {
     const mysqlQuery = 'INSERT INTO app_log (' + Object.keys(data).join(',') + ') VALUES (' + placeholders + ')';
 
     // Insert into SQLite first
-    that.electronService.execSqliteQuery(sqliteQuery, Object.values(data))
+    that.execSqlite(sqliteQuery, Object.values(data))
       .then((sqliteResults: any) => {
         success({ sqlite: sqliteResults });
       })
@@ -892,7 +966,7 @@ export class DatabaseService {
 
     const sqlitePromises = logs.map(log => {
       const params = [log.message, log.type, log.message, log.instrumentId, log.timestamp, 0];
-      return this.electronService.execSqliteQuery(sqliteQuery, params).catch(e => {
+      return this.execSqlite(sqliteQuery, params).catch(e => {
         console.error('SQLite log insert failed', e);
       });
     });
@@ -905,7 +979,7 @@ export class DatabaseService {
   resyncAppLogToMySQL(success: any, errorf: any) {
     const sqliteQuery = 'SELECT * FROM app_log WHERE mysql_inserted = 0';
 
-    this.electronService.execSqliteQuery(sqliteQuery, [])
+    this.execSqlite(sqliteQuery, [])
       .then((records) => {
         if (records.length === 0) {
           success('No app log records to resync.');
@@ -946,7 +1020,7 @@ export class DatabaseService {
   private updateSQLiteAfterMySQLInsertAppLog(recordIds: any[]) {
     const placeholders = recordIds.map(() => '?').join(',');
     const updateQuery = `UPDATE app_log SET mysql_inserted = 1 WHERE id IN (${placeholders})`;
-    this.electronService.execSqliteQuery(updateQuery, recordIds)
+    this.execSqlite(updateQuery, recordIds)
       .then(() => {
         console.log('App log records successfully resynced and updated in SQLite:', recordIds.length);
       })
@@ -958,7 +1032,7 @@ export class DatabaseService {
   fetchRecentLogs(instrumentId: string, limit: number = 200): Observable<any[]> {
     const subject = new Subject<any[]>();
     const query = 'SELECT * FROM app_log WHERE instrument_id = ? ORDER BY id DESC LIMIT ?';
-    this.electronService.execSqliteQuery(query, [instrumentId, limit])
+    this.execSqlite(query, [instrumentId, limit])
       .then(rows => {
         // Defensive: ensure rows is an array before mapping
         if (!Array.isArray(rows)) {
