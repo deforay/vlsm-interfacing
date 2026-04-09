@@ -2,8 +2,13 @@ name: Build All Platforms
 
 on:
   push:
-    tags: ['v*']           # still supports tag pushes
+    tags: ['v*']           # still supports tag pushes (Linux only by default)
   workflow_dispatch:        # and manual runs
+    inputs:
+      build_windows:
+        description: 'Also build Windows installers (slow, ~20 min)'
+        type: boolean
+        default: false
 
 permissions:
   contents: write
@@ -61,6 +66,10 @@ jobs:
   build-windows:
     runs-on: windows-latest
     name: Build Windows x64
+    # Only build Windows on manual dispatch when explicitly requested.
+    # Tag pushes (releases) ship Linux only by default — request a Windows
+    # build on demand via the "Run workflow" button.
+    if: github.event_name == 'workflow_dispatch' && inputs.build_windows == true
 
     steps:
       - uses: actions/checkout@v4
@@ -158,7 +167,9 @@ jobs:
           tag_name: ${{ env.RELEASE_TAG }}        # e.g. v3.1.5 from package.json
           name: ${{ env.RELEASE_TAG }}
           generate_release_notes: true
-          fail_on_unmatched_files: true
+          # Windows build is opt-in via workflow_dispatch — when it's skipped,
+          # dist/windows/ won't exist, so don't fail on unmatched patterns.
+          fail_on_unmatched_files: false
           files: |
             dist/linux/*
             dist/windows/*
