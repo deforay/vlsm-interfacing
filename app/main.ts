@@ -173,7 +173,7 @@ function createUniversalMySQLPoolConfig(baseConfig: any) {
 
 
 async function copySqliteMigrationFiles(): Promise<void> {
-  const sourceDir = path.join(serve ? __dirname : process.resourcesPath, 'sqlite-migrations');
+  const sourceDir = path.join(__dirname, 'sqlite-migrations');
   const targetDir = path.join(app.getPath('userData'), 'sqlite-migrations');
 
   try {
@@ -202,7 +202,7 @@ async function copySqliteMigrationFiles(): Promise<void> {
 
 
 async function copyMySQLMigrationFiles(): Promise<void> {
-  const sourceDir = path.join(serve ? __dirname : process.resourcesPath, 'mysql-migrations');
+  const sourceDir = path.join(__dirname, 'mysql-migrations');
   const targetDir = path.join(app.getPath('userData'), 'mysql-migrations');
 
   try {
@@ -629,7 +629,10 @@ try {
       const startupTime = new Date().toISOString();
       console.log(`\n${'='.repeat(80)}\n🚀 APPLICATION STARTED - ${startupTime}\n${'='.repeat(80)}\n`);
 
-      const trayIconPath = 'dist/browser/assets/icons/favicon.png';
+      let trayIconPath = path.join(__dirname, './browser/assets/icons/favicon.png');
+      if (fs.existsSync(path.join(__dirname, '../dist/browser/assets/icons/favicon.png'))) {
+        trayIconPath = path.join(__dirname, '../dist/browser/assets/icons/favicon.png');
+      }
       try {
         const icon = nativeImage.createFromPath(trayIconPath);
         tray = new Tray(icon);

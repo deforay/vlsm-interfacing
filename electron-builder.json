@@ -1,7 +1,7 @@
 {
   "productName": "vlsm-interfacing",
   "appId": "com.deforay.vlsm-interfacing",
-  "asar": true,
+  "asar": false,
   "directories": {
     "output": "release/"
   },

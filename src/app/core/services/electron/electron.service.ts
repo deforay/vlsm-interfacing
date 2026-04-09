@@ -125,11 +125,15 @@ export class ElectronService {
     this.ipcRenderer.invoke('dialog', method, config);
   }
 
-  execSqliteQuery(sql: any, args?: any): any {
-    return new Promise((resolve) => {
+  execSqliteQuery(sql: any, args?: any): Promise<any> {
+    return new Promise((resolve, reject) => {
       const uniqueEvent = `sqlite3-reply-${Date.now()}-${Math.random()}`;
       this.ipcRenderer.once(uniqueEvent, (_, arg) => {
-        resolve(arg);
+        if (arg && arg.__sqliteError) {
+          reject(new Error(arg.message || 'Unknown SQLite error'));
+        } else {
+          resolve(arg);
+        }
       });
       this.ipcRenderer.send('sqlite3-query', sql, args, uniqueEvent);
     });
