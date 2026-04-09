@@ -24,6 +24,25 @@ function setupSqlite(storeInstance: Store, callback: (db: sqlite3.Database, err?
     sqlitePath = path.join(app.getPath('userData'), sqliteDbName);
     ensureDirectoryExistence(sqlitePath);
 
+    // If the main DB file is missing but the WAL/SHM sidecars are still
+    // around (e.g. someone deleted interface.db while the app was running on
+    // Linux, leaving the sidecars orphaned on disk), purge the orphans before
+    // we open a fresh DB at the same path. SQLite usually copes with mismatched
+    // sidecars but this avoids any ambiguity.
+    if (!fs.existsSync(sqlitePath)) {
+      for (const suffix of ['-wal', '-shm']) {
+        const sidecar = `${sqlitePath}${suffix}`;
+        if (fs.existsSync(sidecar)) {
+          try {
+            fs.unlinkSync(sidecar);
+            log.warn(`Removed orphaned SQLite sidecar: ${sidecar}`);
+          } catch (cleanupErr) {
+            log.error(`Failed to remove orphaned SQLite sidecar ${sidecar}: ${cleanupErr}`);
+          }
+        }
+      }
+    }
+
     // Enable verbose mode for better debugging
     sqlite3.verbose();
 

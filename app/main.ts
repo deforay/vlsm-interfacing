@@ -231,6 +231,51 @@ function createUniversalMySQLPoolConfig(baseConfig: any) {
 }
 
 
+// Daily on-disk backup of interface.db with 7-day rotation. Runs at startup
+// before the SQLite connection is opened so the snapshot is guaranteed
+// consistent (no WAL/checkpoint races). The cost — a few hundred KB of disk
+// per client per day — buys recovery from accidental deletion, AV quarantine,
+// or anything else that wipes the live DB without warning.
+async function backupSqliteDb(): Promise<void> {
+  try {
+    const dbPath = path.join(app.getPath('userData'), sqliteDbName);
+    if (!fs.existsSync(dbPath)) {
+      // Nothing to back up — fresh install or post-deletion launch.
+      return;
+    }
+    const stat = await fs.promises.stat(dbPath);
+    if (stat.size === 0) {
+      return; // empty stub, nothing worth saving
+    }
+
+    const backupDir = path.join(app.getPath('userData'), 'backups');
+    await fs.promises.mkdir(backupDir, { recursive: true });
+
+    const stamp = new Date().toISOString().slice(0, 10); // YYYY-MM-DD
+    const target = path.join(backupDir, `${sqliteDbName}.${stamp}.bak`);
+    if (!fs.existsSync(target)) {
+      await fs.promises.copyFile(dbPath, target);
+      log.info(`SQLite backup written: ${target}`);
+    }
+
+    // Rotate — keep only the most recent 7 daily backups
+    const backups = (await fs.promises.readdir(backupDir))
+      .filter(name => name.startsWith(`${sqliteDbName}.`) && name.endsWith('.bak'))
+      .sort();
+    while (backups.length > 7) {
+      const oldest = backups.shift();
+      if (oldest) {
+        await fs.promises.unlink(path.join(backupDir, oldest));
+        log.info(`Pruned old SQLite backup: ${oldest}`);
+      }
+    }
+  } catch (err) {
+    // Backup is best-effort — never block startup if it fails
+    log.error(`SQLite backup failed: ${formatUnknownError(err)}`);
+  }
+}
+
+
 async function copySqliteMigrationFiles(): Promise<void> {
   const sourceDir = path.join(__dirname, 'sqlite-migrations');
   const targetDir = path.join(app.getPath('userData'), 'sqlite-migrations');
@@ -660,6 +705,11 @@ try {
 
   app.on('ready', async () => {
     try {
+      // Snapshot the existing SQLite file BEFORE opening it. Doing this here
+      // (rather than after) means the file is closed by every other process,
+      // so the copy can't race with an in-flight write or a WAL checkpoint.
+      await backupSqliteDb();
+
       // First, set up the SQLite database connection
       sqlite3Obj = await new Promise<sqlite3.Database>((resolve, reject) => {
         setupSqlite(store, (db, err) => {
