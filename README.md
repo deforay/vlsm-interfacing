@@ -21,7 +21,23 @@ A standalone Electron application that receives test results from laboratory ins
 - Import/Export settings for backup and replication across machines
 - Dashboard with result statistics
 
-## Building Locally
+## Install
+
+```bash
+# Install latest version
+curl -fsSL https://raw.githubusercontent.com/deforay/vlsm-interfacing/main/scripts/install.sh | bash
+
+# Install a specific version
+curl -fsSL https://raw.githubusercontent.com/deforay/vlsm-interfacing/main/scripts/install.sh | bash -s -- --tag v4.0.3
+```
+
+## Getting Started
+
+See the [User Guide](USER_GUIDE.md) for step-by-step setup instructions covering login, settings configuration, and using the console.
+
+## Build From Source
+
+For developers or anyone who wants to build the application locally from source.
 
 **Prerequisites:** [Node.js LTS](https://nodejs.org)
 
@@ -41,7 +57,3 @@ npm run electron:build
 ```
 
 The production build output will be in the `release/` directory.
-
-## Getting Started
-
-See the [User Guide](USER_GUIDE.md) for step-by-step setup instructions covering login, settings configuration, and using the console.
