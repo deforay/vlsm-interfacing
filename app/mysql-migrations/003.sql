@@ -1,5 +1,5 @@
 -- Add instrument_id column to raw_data table
-ALTER TABLE `raw_data` ADD COLUMN `instrument_id` VARCHAR(128) NULL AFTER `machine`;
+ALTER TABLE `raw_data` ADD COLUMN `instrument_id` VARCHAR(128) NULL;
 
 -- Update existing records to set instrument_id equal to machine
 UPDATE `raw_data` SET `instrument_id` = `machine` WHERE `instrument_id` IS NULL;

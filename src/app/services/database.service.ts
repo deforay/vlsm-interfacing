@@ -292,8 +292,9 @@ export class DatabaseService {
 
           console.log(`🔧 Processing ${statements.length} SQL statements...`);
 
-          let migrationFailed = false;
-
+          // Permissive mode: log unexpected errors but keep going so one bad
+          // statement can't block the rest of the file or cause an infinite
+          // replay loop. Mirrors bin/interface-migrate.php behaviour.
           for (let i = 0; i < statements.length; i++) {
             const statement = statements[i];
             try {
@@ -304,16 +305,10 @@ export class DatabaseService {
                 continue;
               }
 
-              migrationFailed = true;
               hadUnexpectedFailures = true;
-              that.logCriticalDatabaseIssue(`Migration ${migration.file} failed on statement ${i + 1}: ${stmtErr.message}`, 'migration');
-              console.error(`❌ Migration ${migration.file} failed on statement ${i + 1}:`, stmtErr.message);
-              break;
+              that.logCriticalDatabaseIssue(`Migration ${migration.file} statement ${i + 1} failed (continuing): ${stmtErr.message}`, 'migration');
+              console.error(`❌ Migration ${migration.file} statement ${i + 1} failed (continuing):`, stmtErr.message);
             }
-          }
-
-          if (migrationFailed) {
-            continue;
           }
 
           // Record migration as completed
