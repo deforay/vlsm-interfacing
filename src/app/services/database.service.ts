@@ -546,10 +546,15 @@ export class DatabaseService {
     });
   }
 
-  private logCriticalDatabaseIssue(message: string, category: 'database' | 'migration' = 'database', instrumentId: string | null = null): void {
+  private logCriticalDatabaseIssue(
+    message: string,
+    category: 'database' | 'migration' = 'database',
+    instrumentId: string | null = null,
+    displayInConsole = true
+  ): void {
     this.loggingService.log('error', message, instrumentId, {
       category,
-      displayInConsole: true
+      displayInConsole
     });
   }
 
@@ -578,7 +583,7 @@ export class DatabaseService {
         cancelId: 0,
         title: `Database Schema Issue (${source})`,
         message: `${source} database schema appears to be out of sync.`,
-        detail: `Error: ${error?.message ?? error}\n\nClick "Re-run Migrations Now" to repair the schema. The application will restart automatically once the migrations are reset.`
+        detail: `Error: ${error?.message ?? error}\n\nClick "Re-run Migrations Now" to force every ${source} migration file to replay. The application will restart after the replay request is saved.`
       });
 
       if (result?.response === 1) {
@@ -628,7 +633,7 @@ export class DatabaseService {
   private execSqlite(sql: string, params: any[] = []): Promise<any> {
     return this.electronService.execSqliteQuery(sql, params).catch((err: any) => {
       if (this.isSqliteDdlError(err)) {
-        this.logCriticalDatabaseIssue(`SQLite DDL error: ${err?.message ?? err}`, 'database');
+        this.logCriticalDatabaseIssue(`SQLite DDL error: ${err?.message ?? err}`, 'database', null, false);
         this.promptSchemaErrorAndRerunIfConfirmed('SQLite', err).catch(() => {});
       }
       throw err;
@@ -662,7 +667,7 @@ export class DatabaseService {
               this.checkAndRunMigrations(null).catch(e => console.error('Auto-migration re-run failed:', e));
             } else {
               // Self-healing exhausted — prompt the user to repair via force-rerun
-              this.logCriticalDatabaseIssue(`DDL error persists after ${this.migrationAutoRetryCount} migration re-runs: ${queryError.message}`, 'migration');
+              this.logCriticalDatabaseIssue(`DDL error persists after ${this.migrationAutoRetryCount} migration re-runs: ${queryError.message}`, 'migration', null, false);
               console.error(`❌ DDL error persists after ${this.migrationAutoRetryCount} migration re-runs. Prompting user to re-run migrations.`);
               this.promptSchemaErrorAndRerunIfConfirmed('MySQL', queryError).catch(() => {});
             }
