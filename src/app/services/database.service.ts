@@ -732,12 +732,11 @@ export class DatabaseService {
             if (this.migrationAutoRetryCount < 2) {
               this.migrationAutoRetryCount++;
               this.hasRunMigrations = false;
-              console.warn(`⚠️ DDL error detected (${queryError.code}), triggering migration re-run (attempt ${this.migrationAutoRetryCount}/2)...`);
+              this.logCriticalDatabaseIssue(`DDL error (${queryError.code}), migration re-run attempt ${this.migrationAutoRetryCount}/2. Query: ${query}`, 'migration', null, false);
               this.checkAndRunMigrations(null).catch(e => console.error('Auto-migration re-run failed:', e));
             } else {
               // Self-healing exhausted — prompt the user to repair via force-rerun
-              this.logCriticalDatabaseIssue(`DDL error persists after ${this.migrationAutoRetryCount} migration re-runs: ${queryError.message}`, 'migration', null, false);
-              console.error(`❌ DDL error persists after ${this.migrationAutoRetryCount} migration re-runs. Prompting user to re-run migrations.`);
+              this.logCriticalDatabaseIssue(`DDL error persists after ${this.migrationAutoRetryCount} migration re-runs. Query: ${query} | Error: ${queryError.message}`, 'migration', null, false);
               this.promptSchemaErrorAndRerunIfConfirmed('MySQL', queryError).catch(() => {});
             }
           }
@@ -773,14 +772,13 @@ export class DatabaseService {
     // WHY: the first failing query is often log/result traffic racing ahead of
     // migration replay. Repair known schema drift immediately, then retry once
     // before falling back to the migration prompt.
-    console.warn(`MySQL DDL error detected; repairing schema before retry: ${queryError?.message ?? queryError}`);
+    this.logCriticalDatabaseIssue(`MySQL DDL error; repairing schema before retry. Query: ${query} | Error: ${queryError?.message ?? queryError}`, 'migration', null, false);
     this.ensureMysqlSchemaCompatibility()
       .then(() => {
         this.execQuery(query, data, success, errorf, callback, false);
       })
       .catch((repairError) => {
-        console.error('MySQL schema compatibility repair failed:', repairError);
-        this.logCriticalDatabaseIssue(`MySQL schema repair failed: ${repairError?.message ?? repairError}`, 'migration', null, false);
+        this.logCriticalDatabaseIssue(`MySQL schema repair failed: ${repairError?.message ?? repairError}. Retrying query: ${query}`, 'migration', null, false);
         this.execQuery(query, data, success, errorf, callback, false);
       });
   }
@@ -812,7 +810,7 @@ export class DatabaseService {
         () => handleSQLiteInsert(true),
         (mysqlError) => {
           handleSQLiteInsert(false);
-          console.error('Error inserting record into MySQL:', mysqlError);
+          this.logCriticalDatabaseIssue(`Error inserting into MySQL orders: ${mysqlError?.message ?? mysqlError}`, 'database', orderData.instrument_id);
         }
       );
     }, (err) => {
@@ -849,8 +847,7 @@ export class DatabaseService {
       this.execQuery(mysqlInsert.query, mysqlInsert.values,
         () => this.updateSQLiteAfterMySQLInsert(record),
         (mysqlError: any) => {
-          console.error('Error inserting record into MySQL:', mysqlError);
-          // No need to update SQLite as the mysql_inserted is already 0
+          this.logCriticalDatabaseIssue(`Error resyncing order ${record.order_id} to MySQL: ${mysqlError?.message ?? mysqlError}`, 'database', record.instrument_id);
         }
       );
     });
@@ -1077,7 +1074,7 @@ export class DatabaseService {
         () => handleSQLiteInsert(true),
         (mysqlError) => {
           handleSQLiteInsert(false);
-          console.error('Error inserting record into MySQL:', mysqlError);
+          this.logCriticalDatabaseIssue(`Error inserting into MySQL raw_data: ${mysqlError?.message ?? mysqlError}`, 'database', rawData.instrument_id);
         }
       );
     }, (err) => {
@@ -1112,7 +1109,7 @@ export class DatabaseService {
       this.execQuery(mysqlInsert.query, mysqlInsert.values,
         () => this.updateSQLiteAfterMySQLInsertRawData(record),
         (mysqlError: any) => {
-          console.error('Error inserting raw data record into MySQL:', mysqlError);
+          this.logCriticalDatabaseIssue(`Error resyncing raw_data ${record.id} to MySQL: ${mysqlError?.message ?? mysqlError}`, 'database', record.instrument_id);
         }
       );
     });
@@ -1152,7 +1149,7 @@ export class DatabaseService {
       that.execQuery(mysqlQuery, Object.values(data), (mysqlResults) => {
         //console.log('MySQL Inserted:', mysqlResults);
       }, (mysqlError) => {
-        console.error('Error inserting into MySQL:', mysqlError);
+        that.logCriticalDatabaseIssue(`Error inserting into MySQL app_log: ${mysqlError?.message ?? mysqlError}`, 'database', data.instrument_id);
         errorf(mysqlError);
       });
     }, (mysqlError) => {
