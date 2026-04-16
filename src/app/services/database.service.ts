@@ -640,7 +640,7 @@ export class DatabaseService {
     });
   }
 
-  execQuery(query: string, data: any, success: any, errorf: any, callback = null) {
+  execQuery(query: string, data: any, success: any, errorf: any, callback = null, retryAfterSchemaRepair = true) {
     if (!this.mysqlPool) {
       errorf({ error: 'Database Connection not found' });
       return;
@@ -657,9 +657,13 @@ export class DatabaseService {
           connection.release();
           // If the error is DDL-related (missing table/column), trigger a migration re-run.
           // Cap at 2 auto-retries per session to prevent infinite loops if a migration can't fix the issue.
-          const isDdlError = DatabaseService.DDL_ERROR_CODES.has(queryError.code)
-            || DatabaseService.DDL_ERROR_PATTERNS.some(p => p.test(queryError.message));
+          const isDdlError = this.isMysqlDdlError(queryError);
           if (isDdlError) {
+            if (retryAfterSchemaRepair) {
+              this.repairMysqlSchemaAndRetryQuery(queryError, query, data, success, errorf, callback);
+              return;
+            }
+
             if (this.migrationAutoRetryCount < 2) {
               this.migrationAutoRetryCount++;
               this.hasRunMigrations = false;
@@ -693,6 +697,27 @@ export class DatabaseService {
         }
       });
     });
+  }
+
+  private isMysqlDdlError(error: any): boolean {
+    return DatabaseService.DDL_ERROR_CODES.has(error?.code)
+      || DatabaseService.DDL_ERROR_PATTERNS.some(pattern => pattern.test(error?.message ?? ''));
+  }
+
+  private repairMysqlSchemaAndRetryQuery(queryError: any, query: string, data: any, success: any, errorf: any, callback: any): void {
+    // WHY: the first failing query is often log/result traffic racing ahead of
+    // migration replay. Repair known schema drift immediately, then retry once
+    // before falling back to the migration prompt.
+    console.warn(`MySQL DDL error detected; repairing schema before retry: ${queryError?.message ?? queryError}`);
+    this.ensureMysqlSchemaCompatibility()
+      .then(() => {
+        this.execQuery(query, data, success, errorf, callback, false);
+      })
+      .catch((repairError) => {
+        console.error('MySQL schema compatibility repair failed:', repairError);
+        this.logCriticalDatabaseIssue(`MySQL schema repair failed: ${repairError?.message ?? repairError}`, 'migration', null, false);
+        this.execQuery(query, data, success, errorf, callback, false);
+      });
   }
 
 
