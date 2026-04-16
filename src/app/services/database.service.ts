@@ -62,6 +62,47 @@ export class DatabaseService {
     /multiple primary key defined/i,
   ];
   private static readonly MYSQL_APP_LOG_RESYNC_BATCH_SIZE = 25;
+  private static readonly MYSQL_ORDER_COLUMNS = [
+    'instrument_id',
+    'order_id',
+    'test_id',
+    'test_type',
+    'created_date',
+    'test_unit',
+    'results',
+    'tested_by',
+    'analysed_date_time',
+    'specimen_date_time',
+    'authorised_date_time',
+    'result_accepted_date_time',
+    'machine_used',
+    'test_location',
+    'created_at',
+    'result_status',
+    'lims_sync_status',
+    'lims_sync_date_time',
+    'repeated',
+    'test_description',
+    'is_printed',
+    'printed_at',
+    'raw_text',
+    'added_on',
+    'notes',
+  ];
+  private static readonly SQLITE_ORDER_COLUMNS = [
+    ...DatabaseService.MYSQL_ORDER_COLUMNS,
+    'mysql_inserted',
+  ];
+  private static readonly MYSQL_RAW_DATA_COLUMNS = [
+    'data',
+    'machine',
+    'added_on',
+    'instrument_id',
+  ];
+  private static readonly SQLITE_RAW_DATA_COLUMNS = [
+    ...DatabaseService.MYSQL_RAW_DATA_COLUMNS,
+    'mysql_inserted',
+  ];
   private readonly moment = (window as any).require('moment');
   private readonly path: any = (window as any).require('path');
 
@@ -454,6 +495,29 @@ export class DatabaseService {
     return Number(rows?.[0]?.column_count ?? 0) > 0;
   }
 
+  private filterRecordColumns(record: any, allowedColumns: readonly string[]): any {
+    const filteredRecord: any = {};
+
+    allowedColumns.forEach((columnName) => {
+      if (Object.prototype.hasOwnProperty.call(record, columnName)) {
+        filteredRecord[columnName] = record[columnName];
+      }
+    });
+
+    return filteredRecord;
+  }
+
+  private buildInsertQuery(tableName: string, record: any): { query: string; values: any[] } {
+    const columns = Object.keys(record);
+    const placeholders = columns.map(() => '?').join(',');
+    const escapedColumns = columns.map(columnName => `\`${columnName}\``).join(',');
+
+    return {
+      query: `INSERT INTO \`${tableName}\` (${escapedColumns}) VALUES (${placeholders})`,
+      values: Object.values(record),
+    };
+  }
+
   private extractMigrationStatements(sql: string): string[] {
     return sql
       .replace(/\/\*[\s\S]*?\*\//g, '\n')
@@ -722,25 +786,28 @@ export class DatabaseService {
 
 
   recordTestResults(data: any, success: any, errorf: any) {
-    const placeholders = Object.values(data).map(() => '?').join(',');
-    const mysqlQuery = 'INSERT INTO orders (' + Object.keys(data).join(',') + ') VALUES (' + placeholders + ')';
+    const orderData = { ...data };
     // Ensure instrument_id is set if not already present
-    if (!data.instrument_id && data.machine_used) {
-      data.instrument_id = data.machine_used;
+    if (!orderData.instrument_id && orderData.machine_used) {
+      orderData.instrument_id = orderData.machine_used;
     }
 
     const handleSQLiteInsert = (mysqlInserted: boolean) => {
-      data.mysql_inserted = mysqlInserted ? 1 : 0;
-      const sqlitePlaceholders = Object.values(data).map(() => '?').join(',');
-      const sqliteQuery = `INSERT INTO orders (${Object.keys(data).join(',')}, mysql_inserted) VALUES (${sqlitePlaceholders}, ?)`;
-      this.execSqlite(sqliteQuery, [...Object.values(data), data.mysql_inserted])
+      const sqliteRecord = this.filterRecordColumns({
+        ...orderData,
+        mysql_inserted: mysqlInserted ? 1 : 0,
+      }, DatabaseService.SQLITE_ORDER_COLUMNS);
+      const sqliteInsert = this.buildInsertQuery('orders', sqliteRecord);
+      this.execSqlite(sqliteInsert.query, sqliteInsert.values)
         .then(success)
         .catch(errorf);
     };
 
     this.checkMysqlConnection(null, () => {
       // MySQL connected
-      this.execQuery(mysqlQuery, [...Object.values(data)],
+      const mysqlRecord = this.filterRecordColumns(orderData, DatabaseService.MYSQL_ORDER_COLUMNS);
+      const mysqlInsert = this.buildInsertQuery('orders', mysqlRecord);
+      this.execQuery(mysqlInsert.query, mysqlInsert.values,
         () => handleSQLiteInsert(true),
         (mysqlError) => {
           handleSQLiteInsert(false);
@@ -774,15 +841,11 @@ export class DatabaseService {
 
   private processResyncRecords(records: any[], success: any, errorf: any) {
     records.forEach((record: any) => {
-      // Exclude `mysql_inserted` from the record before inserting into MySQL
-      const mysqlRecord = { ...record };
-      delete mysqlRecord.mysql_inserted;
-      delete mysqlRecord.id;
+      // WHY: SQLite has local sync metadata that MySQL should never receive.
+      const mysqlRecord = this.filterRecordColumns(record, DatabaseService.MYSQL_ORDER_COLUMNS);
+      const mysqlInsert = this.buildInsertQuery('orders', mysqlRecord);
 
-      const placeholders = Object.values(mysqlRecord).map(() => '?').join(',');
-      const t = 'INSERT INTO orders (' + Object.keys(mysqlRecord).join(',') + ') VALUES (' + placeholders + ')';
-
-      this.execQuery(t, Object.values(mysqlRecord),
+      this.execQuery(mysqlInsert.query, mysqlInsert.values,
         () => this.updateSQLiteAfterMySQLInsert(record),
         (mysqlError: any) => {
           console.error('Error inserting record into MySQL:', mysqlError);
@@ -992,20 +1055,24 @@ export class DatabaseService {
   // In database.service.ts, update the recordRawData method:
 
   recordRawData(data, success, errorf) {
+    const rawData = { ...data };
 
     const handleSQLiteInsert = (mysqlInserted: boolean) => {
-      data.mysql_inserted = mysqlInserted ? 1 : 0;
-      const sqlitePlaceholders = Object.values(data).map(() => '?').join(',');
-      const sqliteQuery = `INSERT INTO raw_data (${Object.keys(data).join(',')}, mysql_inserted) VALUES (${sqlitePlaceholders}, ?)`;
-      this.execSqlite(sqliteQuery, [...Object.values(data), data.mysql_inserted])
+      const sqliteRecord = this.filterRecordColumns({
+        ...rawData,
+        mysql_inserted: mysqlInserted ? 1 : 0,
+      }, DatabaseService.SQLITE_RAW_DATA_COLUMNS);
+      const sqliteInsert = this.buildInsertQuery('raw_data', sqliteRecord);
+      this.execSqlite(sqliteInsert.query, sqliteInsert.values)
         .then(success)
         .catch(errorf);
     };
 
     this.checkMysqlConnection(null, () => {
       // MySQL connected
-      const mysqlQuery = 'INSERT INTO raw_data (' + Object.keys(data).join(',') + ') VALUES (' + Object.values(data).map(() => '?').join(',') + ')';
-      this.execQuery(mysqlQuery, [...Object.values(data)],
+      const mysqlRecord = this.filterRecordColumns(rawData, DatabaseService.MYSQL_RAW_DATA_COLUMNS);
+      const mysqlInsert = this.buildInsertQuery('raw_data', mysqlRecord);
+      this.execQuery(mysqlInsert.query, mysqlInsert.values,
         () => handleSQLiteInsert(true),
         (mysqlError) => {
           handleSQLiteInsert(false);
@@ -1038,14 +1105,10 @@ export class DatabaseService {
 
   private processResyncRawDataRecords(records: any[], success: any, errorf: any) {
     records.forEach((record: any) => {
-      const mysqlRecord = { ...record };
-      delete mysqlRecord.mysql_inserted;
-      delete mysqlRecord.id;
+      const mysqlRecord = this.filterRecordColumns(record, DatabaseService.MYSQL_RAW_DATA_COLUMNS);
+      const mysqlInsert = this.buildInsertQuery('raw_data', mysqlRecord);
 
-      const placeholders = Object.keys(mysqlRecord).map(() => '?').join(',');
-      const t = 'INSERT INTO raw_data (' + Object.keys(mysqlRecord).join(',') + ') VALUES (' + placeholders + ')';
-
-      this.execQuery(t, Object.values(mysqlRecord),
+      this.execQuery(mysqlInsert.query, mysqlInsert.values,
         () => this.updateSQLiteAfterMySQLInsertRawData(record),
         (mysqlError: any) => {
           console.error('Error inserting raw data record into MySQL:', mysqlError);
