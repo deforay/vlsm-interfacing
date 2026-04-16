@@ -34,16 +34,34 @@ export class DatabaseService {
   ];
   private static readonly MIGRATION_REPLAY_ERROR_CODES = new Set([
     'ER_TABLE_EXISTS_ERROR',
+    'ER_CANT_DROP_FIELD_OR_KEY',
     'ER_DUP_FIELDNAME',
+    'ER_DUP_ENTRY',
+    'ER_DUP_INDEX',
     'ER_DUP_KEYNAME',
+    'ER_DUP_UNIQUE',
+    'ER_FK_COLUMN_CANNOT_DROP',
+    'ER_FK_COLUMN_CANNOT_DROP_CHILD',
+    'ER_FK_COLUMN_CANNOT_DROP_PARENT',
+    'ER_TABLESPACE_EXISTS',
     'ER_MULTIPLE_PRI_KEY',
   ]);
   private static readonly MIGRATION_REPLAY_ERROR_PATTERNS = [
     /already exists/i,
+    /can't drop .+ check that .+ exists/i,
+    /cannot drop .+ needed in a foreign key constraint/i,
+    /cannot drop index .+ needed in a foreign key constraint/i,
+    /duplicate/i,
     /duplicate column name/i,
+    /duplicate entry/i,
+    /duplicate foreign key constraint name/i,
+    /duplicate index/i,
     /duplicate key name/i,
+    /duplicate unique/i,
+    /foreign key constraint .+ already exists/i,
     /multiple primary key defined/i,
   ];
+  private static readonly MYSQL_APP_LOG_RESYNC_BATCH_SIZE = 25;
   private readonly moment = (window as any).require('moment');
   private readonly path: any = (window as any).require('path');
 
@@ -156,14 +174,18 @@ export class DatabaseService {
    */
   private async checkAndRunMigrations(connection) {
     const that = this;
+    const forceReplay = await that.isForceMigrationReplayRequested();
 
-    if (that.hasRunMigrations) {
+    if (that.hasRunMigrations && !forceReplay) {
       console.log('Migrations already run, skipping...');
       return;
     }
     console.log('🚀 Starting MySQL migrations...');
     console.log('Target database:', that.commonSettings.mysqlDb);
     console.log('Migration directory:', that.migrationDir);
+    if (forceReplay) {
+      console.log('MySQL force replay requested; every migration file will be attempted');
+    }
 
     try {
       // STEP 1: Ensure database exists using a temporary connection (without database parameter)
@@ -235,7 +257,13 @@ export class DatabaseService {
       // STEP 6: Get already executed migrations — self-healing: if versions table is stale/corrupt, reset it
       let executedResults: any[];
       try {
-        executedResults = await that.execQueryPromise('SELECT version, filename FROM versions ORDER BY version', []);
+        if (forceReplay) {
+          await that.execQueryPromise('DELETE FROM versions', []);
+          executedResults = [];
+          console.log('✅ MySQL versions table cleared for force replay');
+        } else {
+          executedResults = await that.execQueryPromise('SELECT version, filename FROM versions ORDER BY version', []);
+        }
       } catch (versionsQueryErr) {
         console.warn('⚠️ Versions table query failed, resetting migration tracking:', versionsQueryErr.message);
         await that.execQueryPromise('DROP TABLE IF EXISTS versions', []);
@@ -245,6 +273,8 @@ export class DatabaseService {
       }
       const executedVersions = executedResults.map((row: any) => row.version);
       console.log('Previously executed versions:', executedVersions);
+
+      await that.ensureMysqlSchemaCompatibility();
 
       // STEP 7: Identify pending migrations
       const migrations = migrationFiles
@@ -263,6 +293,8 @@ export class DatabaseService {
 
       if (migrations.length === 0) {
         console.log('✅ All migrations already executed');
+        that.hasRunMigrations = true;
+        await that.clearForceMigrationReplayRequest(forceReplay);
         return;
       }
 
@@ -292,9 +324,10 @@ export class DatabaseService {
 
           console.log(`🔧 Processing ${statements.length} SQL statements...`);
 
+          let migrationHadUnexpectedFailures = false;
+
           // Permissive mode: log unexpected errors but keep going so one bad
-          // statement can't block the rest of the file or cause an infinite
-          // replay loop. Mirrors bin/interface-migrate.php behaviour.
+          // statement can't block later repair statements in the same file.
           for (let i = 0; i < statements.length; i++) {
             const statement = statements[i];
             try {
@@ -306,9 +339,15 @@ export class DatabaseService {
               }
 
               hadUnexpectedFailures = true;
+              migrationHadUnexpectedFailures = true;
               that.logCriticalDatabaseIssue(`Migration ${migration.file} statement ${i + 1} failed (continuing): ${stmtErr.message}`, 'migration');
               console.error(`❌ Migration ${migration.file} statement ${i + 1} failed (continuing):`, stmtErr.message);
             }
+          }
+
+          if (migrationHadUnexpectedFailures) {
+            console.error(`❌ Migration ${migration.file} had unexpected failures; leaving it pending for retry`);
+            continue;
           }
 
           // Record migration as completed
@@ -337,18 +376,82 @@ export class DatabaseService {
       }
 
       // Final summary
+      await that.ensureMysqlSchemaCompatibility();
       console.log(`\n🎯 Migration Summary: ${successCount}/${migrations.length} processed`);
       that.hasRunMigrations = !hadUnexpectedFailures;
       if (hadUnexpectedFailures) {
         console.warn('⚠️ MySQL migrations completed with unexpected failures. Pending migrations will retry later.');
       } else {
         that.migrationAutoRetryCount = 0; // Reset so future DDL errors can trigger re-runs again
+        await that.clearForceMigrationReplayRequest(forceReplay);
       }
 
     } catch (error) {
       // Permissive mode - log and continue, but don't set hasRunMigrations so retry is possible
       console.log('ℹ️ Migration process completed with some skipped items');
     }
+  }
+
+  private async isForceMigrationReplayRequested(): Promise<boolean> {
+    try {
+      return await this.electronService.isForceMigrationReplayRequested();
+    } catch (err) {
+      console.warn('Could not read force migration replay flag:', err);
+      return false;
+    }
+  }
+
+  private async clearForceMigrationReplayRequest(wasForceReplay: boolean): Promise<void> {
+    if (!wasForceReplay) {
+      return;
+    }
+
+    try {
+      await this.electronService.clearForceMigrationReplayRequest();
+    } catch (err) {
+      console.warn('Could not clear force migration replay flag:', err);
+    }
+  }
+
+  private async ensureMysqlSchemaCompatibility(): Promise<void> {
+    await this.ensureMysqlColumn('app_log', 'log_type', 'ALTER TABLE `app_log` ADD COLUMN `log_type` VARCHAR(20) NULL');
+    await this.ensureMysqlColumn('app_log', 'log_message', 'ALTER TABLE `app_log` ADD COLUMN `log_message` TEXT NULL');
+    await this.ensureMysqlColumn('app_log', 'instrument_id', 'ALTER TABLE `app_log` ADD COLUMN `instrument_id` VARCHAR(255) NULL');
+    await this.ensureMysqlColumn('raw_data', 'instrument_id', 'ALTER TABLE `raw_data` ADD COLUMN `instrument_id` VARCHAR(128) NULL');
+    await this.ensureMysqlColumn('orders', 'notes', 'ALTER TABLE `orders` ADD COLUMN `notes` TEXT NULL');
+  }
+
+  private async ensureMysqlColumn(tableName: string, columnName: string, alterSql: string): Promise<void> {
+    const tableExists = await this.mysqlTableExists(tableName);
+    if (!tableExists) {
+      return;
+    }
+
+    const columnExists = await this.mysqlColumnExists(tableName, columnName);
+    if (columnExists) {
+      return;
+    }
+
+    // WHY: older installations can have stale migration history that says a
+    // migration ran even though a later column in that file was never added.
+    console.warn(`Repairing missing MySQL column ${tableName}.${columnName}`);
+    await this.execQueryPromise(alterSql, []);
+  }
+
+  private async mysqlTableExists(tableName: string): Promise<boolean> {
+    const rows = await this.execQueryPromise(
+      'SELECT COUNT(*) AS table_count FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_SCHEMA = ? AND TABLE_NAME = ?',
+      [this.commonSettings.mysqlDb, tableName]
+    );
+    return Number(rows?.[0]?.table_count ?? 0) > 0;
+  }
+
+  private async mysqlColumnExists(tableName: string, columnName: string): Promise<boolean> {
+    const rows = await this.execQueryPromise(
+      'SELECT COUNT(*) AS column_count FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = ? AND TABLE_NAME = ? AND COLUMN_NAME = ?',
+      [this.commonSettings.mysqlDb, tableName, columnName]
+    );
+    return Number(rows?.[0]?.column_count ?? 0) > 0;
   }
 
   private extractMigrationStatements(sql: string): string[] {
@@ -479,7 +582,7 @@ export class DatabaseService {
       });
 
       if (result?.response === 1) {
-        await this.performForceRerunMigrations();
+        await this.performForceRerunMigrations(source);
       } else {
         // User cancelled — let the prompt fire again later if more DDL errors come in
         this.schemaErrorPromptShown = false;
@@ -492,15 +595,26 @@ export class DatabaseService {
 
   /**
    * Shared force-rerun routine used by both the Settings button and the
-   * automatic schema-error dialog. MySQL reset is best-effort — if MySQL is
-   * unreachable we still proceed with the SQLite reset and restart so the
-   * client isn't left stuck.
+   * automatic schema-error dialog.
    */
-  public async performForceRerunMigrations(): Promise<void> {
+  public async performForceRerunMigrations(source: 'MySQL' | 'SQLite' = 'MySQL'): Promise<void> {
     try {
       await this.resetMysqlMigrations();
     } catch (err) {
-      console.warn('MySQL migration reset failed (proceeding with SQLite reset anyway):', err);
+      if (source === 'MySQL') {
+        this.schemaErrorPromptShown = false;
+        await this.electronService.ipcRenderer.invoke('show-confirm-dialog', {
+          type: 'error',
+          buttons: ['OK'],
+          defaultId: 0,
+          title: 'MySQL Migration Reset Failed',
+          message: 'Could not reset MySQL migration history.',
+          detail: `Error: ${err?.message ?? err}\n\nThe application was not restarted because MySQL migrations would be skipped again. Check the MySQL connection and try re-running migrations.`
+        });
+        throw err;
+      }
+
+      console.warn('MySQL migration reset failed while repairing SQLite schema:', err);
     }
     await this.electronService.ipcRenderer.invoke('force-rerun-migrations');
   }
@@ -989,27 +1103,48 @@ export class DatabaseService {
   }
 
   private processResyncAppLogRecords(records: any[], success: any, errorf: any) {
-    const mysqlValues = records.map(log => [log.log, log.log_type, log.log_message, log.instrument_id, log.added_on]);
     const mysqlQuery = 'INSERT INTO app_log (log, log_type, log_message, instrument_id, added_on) VALUES ?';
+    const batches = this.chunkArray(records, DatabaseService.MYSQL_APP_LOG_RESYNC_BATCH_SIZE);
+    let batchIndex = 0;
 
     this.checkMysqlConnection(null, () => {
-      this.execQuery(mysqlQuery, [mysqlValues],
-        () => {
-          const recordIds = records.map(r => r.id);
-          this.updateSQLiteAfterMySQLInsertAppLog(recordIds);
+      const processNextBatch = () => {
+        const batch = batches[batchIndex];
+        if (!batch) {
           success('App log resync process completed.');
-        },
-        (mysqlError) => {
-          if (mysqlError) {
-            this.logCriticalDatabaseIssue(`Error inserting log batch into MySQL: ${mysqlError?.message ?? mysqlError}`, 'database', records.find(log => !!log.instrument_id)?.instrument_id ?? null);
-          }
-          errorf(mysqlError);
+          return;
         }
-      );
+
+        batchIndex++;
+        const mysqlValues = batch.map(log => [log.log, log.log_type, log.log_message, log.instrument_id, log.added_on]);
+        this.execQuery(mysqlQuery, [mysqlValues],
+          () => {
+            const recordIds = batch.map(r => r.id);
+            this.updateSQLiteAfterMySQLInsertAppLog(recordIds);
+            processNextBatch();
+          },
+          (mysqlError) => {
+            if (mysqlError) {
+              this.logCriticalDatabaseIssue(`Error inserting log batch into MySQL: ${mysqlError?.message ?? mysqlError}`, 'database', batch.find(log => !!log.instrument_id)?.instrument_id ?? null);
+            }
+            errorf(mysqlError);
+          }
+        );
+      };
+
+      processNextBatch();
     }, () => {
       // Mysql not available
       errorf('MySQL not available');
     });
+  }
+
+  private chunkArray<T>(items: T[], batchSize: number): T[][] {
+    const chunks: T[][] = [];
+    for (let i = 0; i < items.length; i += batchSize) {
+      chunks.push(items.slice(i, i + batchSize));
+    }
+    return chunks;
   }
 
   private updateSQLiteAfterMySQLInsertAppLog(recordIds: any[]) {

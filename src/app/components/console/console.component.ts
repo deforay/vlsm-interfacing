@@ -297,11 +297,6 @@ export class ConsoleComponent implements OnInit, OnDestroy {
     this.instrumentLogs[instrumentId].logs.push(logEntry);
     this.instrumentLogs[instrumentId].logs.sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime());
 
-    if (instrumentId === ConsoleComponent.SYSTEM_LOG_ID) {
-      this.systemLogsExpanded = true;
-    }
-
-
     // Re-filter logs
     this.filterInstrumentLogs({ connectionParams: { instrumentId } });
 

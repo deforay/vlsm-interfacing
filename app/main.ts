@@ -12,6 +12,7 @@ let win: BrowserWindow = null;
 let store = new Store();
 let sqlite3Obj: sqlite3.Database = null;
 let sqliteDbName: string = 'interface.db';
+const FORCE_MIGRATION_REPLAY_KEY = 'forceMigrationReplayRequested';
 const args = process.argv.slice(1),
   serve = args.some(val => val === '--serve');
 let tray: Tray = null;
@@ -57,7 +58,16 @@ function restartApp() {
 const SQLITE_REPLAY_ERROR_FRAGMENTS = [
   'duplicate column name',
   'already exists',
-  'no such index'
+  'duplicate index',
+  'duplicate constraint',
+  'duplicate foreign key',
+  'index already exists',
+  'table already exists',
+  'column already exists',
+  'no such index',
+  'no such constraint',
+  'no such column',
+  'no such table'
 ];
 
 function isExpectedSqliteReplayError(err: Error | null): boolean {
@@ -87,7 +97,7 @@ function sqliteAll<T = any>(db: sqlite3.Database, sql: string, params: any[] = [
   });
 }
 
-async function runSqliteMigrations(db, migrationsPath) {
+async function runSqliteMigrations(db, migrationsPath, forceReplay = false) {
   console.log('Running SQLite migrations from:', migrationsPath);
 
   // 1. Ensure versions table exists
@@ -129,14 +139,20 @@ async function runSqliteMigrations(db, migrationsPath) {
   }
 
   // 5. Get applied migrations (return empty set on error)
-  const appliedFilenames = new Set(
-    (await sqliteAll<{ filename: string }>(db, 'SELECT filename FROM versions WHERE filename IS NOT NULL'))
-      .map(row => row.filename)
-  );
+  const appliedFilenames = forceReplay
+    ? new Set<string>()
+    : new Set(
+      (await sqliteAll<{ filename: string }>(db, 'SELECT filename FROM versions WHERE filename IS NOT NULL'))
+        .map(row => row.filename)
+    );
 
-  // 6. Run migrations. Real per-statement failures stop that migration and leave
-  //    its versions row absent so the next launch retries — never record a
-  //    migration as applied when its statements actually failed.
+  if (forceReplay) {
+    console.log('SQLite force replay requested; every migration file will be attempted');
+  }
+
+  // 6. Run migrations. Real per-statement failures leave that migration's
+  //    versions row absent so the next launch retries, but remaining statements
+  //    are still attempted to repair as much of the schema as possible.
   let successCount = 0;
   for (const file of migrationFiles) {
     if (appliedFilenames.has(file)) {
@@ -166,7 +182,6 @@ async function runSqliteMigrations(db, migrationsPath) {
 
       log.error(`SQLite migration ${file} failed: ${err?.message}\nStatement: ${statement}`);
       migrationFailed = true;
-      break;
     }
 
     if (migrationFailed) {
@@ -455,6 +470,15 @@ try {
       return app.getPath('userData');
     });
 
+    ipcMain.handle('is-force-migration-replay-requested', () => {
+      return store.get(FORCE_MIGRATION_REPLAY_KEY) === true;
+    });
+
+    ipcMain.handle('clear-force-migration-replay-request', () => {
+      store.delete(FORCE_MIGRATION_REPLAY_KEY);
+      return { success: true };
+    });
+
     ipcMain.handle('mysql-create-pool', (event, config) => {
       const key = JSON.stringify(config);
       if (!mysqlPools[key]) {
@@ -678,6 +702,8 @@ try {
     });
 
     ipcMain.handle('force-rerun-migrations', async () => {
+      store.set(FORCE_MIGRATION_REPLAY_KEY, true);
+
       const db = getSQLiteDBConnection();
       if (db) {
         // DELETE instead of DROP - cleaner, keeps table structure
@@ -724,9 +750,10 @@ try {
 
       // Then, copy and run the migrations
       const migrationsPath = path.join(app.getPath('userData'), 'sqlite-migrations');
+      const forceMigrationReplay = store.get(FORCE_MIGRATION_REPLAY_KEY) === true;
       await copySqliteMigrationFiles();
       await copyMySQLMigrationFiles();
-      await runSqliteMigrations(sqlite3Obj, migrationsPath);
+      await runSqliteMigrations(sqlite3Obj, migrationsPath, forceMigrationReplay);
 
       // IMPORTANT: Register all IPC handlers BEFORE creating the window
       registerIpcHandlers();

@@ -274,21 +274,15 @@ export class SettingsComponent implements OnInit, OnDestroy {
         try {
           await this.databaseService.resetMysqlMigrations();
         } catch (err) {
-          // MySQL reset failed — ask user if they want to proceed anyway.
-          // (The Settings flow is explicit/manual, so surface failures here.
-          // The automatic schema-error dialog uses performForceRerunMigrations
-          // which silently best-efforts the MySQL reset instead.)
-          const proceed = await this.electronService.ipcRenderer.invoke('show-confirm-dialog', {
-            type: 'warning',
-            buttons: ['Cancel', 'Proceed Anyway'],
+          await this.electronService.ipcRenderer.invoke('show-confirm-dialog', {
+            type: 'error',
+            buttons: ['OK'],
             defaultId: 0,
             title: 'MySQL Reset Failed',
             message: 'Could not reset MySQL migration history.',
-            detail: `Error: ${err?.message ?? err}\n\nYou can still proceed to reset the local database and restart. MySQL migrations will be re-applied when the connection is available.`
+            detail: `Error: ${err?.message ?? err}\n\nThe application was not restarted because MySQL migrations would be skipped again. Check the MySQL connection and try re-running migrations.`
           });
-          if (proceed.response !== 1) {
-            return;
-          }
+          return;
         }
         // Reset local migration history and restart app
         await this.electronService.ipcRenderer.invoke('force-rerun-migrations');

@@ -121,6 +121,14 @@ export class ElectronService {
     return this.ipcRenderer.invoke('getUserDataPath');
   }
 
+  isForceMigrationReplayRequested(): Promise<boolean> {
+    return this.ipcRenderer.invoke('is-force-migration-replay-requested');
+  }
+
+  clearForceMigrationReplayRequest(): Promise<{ success: boolean }> {
+    return this.ipcRenderer.invoke('clear-force-migration-replay-request');
+  }
+
   openDialog(method: any, config: any): any {
     this.ipcRenderer.invoke('dialog', method, config);
   }
