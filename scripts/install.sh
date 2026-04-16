@@ -4,6 +4,13 @@ set -euo pipefail
 
 REPO_OWNER="deforay"
 REPO_NAME="vlsm-interfacing"
+TEMP_DOWNLOAD_DIR=""
+
+cleanup_temp_download_dir() {
+  if [[ -n "${TEMP_DOWNLOAD_DIR}" ]]; then
+    rm -rf -- "${TEMP_DOWNLOAD_DIR}"
+  fi
+}
 
 usage() {
   cat <<'EOF'
@@ -116,7 +123,8 @@ install_latest() {
 
   if [[ -z "${download_dir}" ]]; then
     download_dir="$(mktemp -d)"
-    trap 'rm -rf "${download_dir}"' EXIT
+    TEMP_DOWNLOAD_DIR="${download_dir}"
+    trap cleanup_temp_download_dir EXIT
   else
     mkdir -p "${download_dir}"
   fi
