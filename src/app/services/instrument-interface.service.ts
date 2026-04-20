@@ -1,6 +1,6 @@
 import { Injectable } from '@angular/core';
 import { DatabaseService } from './database.service';
-import { InstrumentConnectionStack } from '../interfaces/intrument-connections.interface';
+import { InstrumentConnectionStack } from '../interfaces/instrument-connections.interface';
 import { RawMachineData } from '../interfaces/raw-machine-data.interface';
 import { UtilitiesService } from './utilities.service';
 import { TcpConnectionService } from './tcp-connection.service';

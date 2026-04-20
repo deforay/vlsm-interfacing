@@ -2,7 +2,7 @@ import { Injectable, OnDestroy } from '@angular/core';
 import { BehaviorSubject, Observable } from 'rxjs';
 import { ElectronService } from '../core/services';
 import { ConnectionParams } from '../interfaces/connection-params.interface';
-import { InstrumentConnectionStack } from '../interfaces/intrument-connections.interface';
+import { InstrumentConnectionStack } from '../interfaces/instrument-connections.interface';
 import { UtilitiesService } from './utilities.service';
 
 interface ConnectionHealth {
@@ -116,6 +116,18 @@ export class TcpConnectionService implements OnDestroy {
     if (connectionParams.connectionMode === 'tcpserver') {
       that.utilitiesService.logger('info', `Listening for connection on ${connectionParams.host}:${connectionParams.port}`, instrumentConnectionData.instrumentId);
       instrumentConnectionData.connectionServer = that.net.createServer();
+
+      // Confirm the OS accepted our bind, then start an idle heartbeat so the
+      // user can see we are actively waiting (and that nothing is arriving).
+      instrumentConnectionData.connectionServer.on('listening', function () {
+        const addr = instrumentConnectionData.connectionServer.address();
+        const boundAddress = addr && typeof addr === 'object'
+          ? `${addr.address}:${addr.port}`
+          : `${connectionParams.host}:${connectionParams.port}`;
+        that.utilitiesService.logger('success', `Server bound and listening on ${boundAddress}. Waiting for a client to connect…`, instrumentConnectionData.instrumentId);
+        that._startIdleHeartbeat(instrumentConnectionData, connectionParams);
+      });
+
       instrumentConnectionData.connectionServer.listen({
         port: connectionParams.port,
         host: connectionParams.host,
@@ -126,6 +138,12 @@ export class TcpConnectionService implements OnDestroy {
       instrumentConnectionData.connectionServer.on('connection', function (socket) {
         const clientAddress = socket.remoteAddress;
         that.utilitiesService.logger('info', `Client ${clientAddress} has connected to the Interfacing Server ${connectionParams.host}:${connectionParams.port}`, instrumentConnectionData.instrumentId);
+
+        // A client has arrived — stop the "still waiting" heartbeat
+        that._stopIdleHeartbeat(instrumentConnectionData);
+
+        // Reset retry attempts once a client has successfully connected
+        instrumentConnectionData.reconnectAttempts = 0;
 
         // confirm socket connection from client
         sockets.push(socket);
@@ -181,6 +199,11 @@ export class TcpConnectionService implements OnDestroy {
 
           const logType = hadError ? 'error' : 'info';
           that.utilitiesService.logger(logType, msg, instrumentConnectionData.instrumentId);
+
+          // Client gone — we are idle again; resume heartbeat if the server is still up
+          if (instrumentConnectionData.connectionServer && instrumentConnectionData.connectionServer.listening) {
+            that._startIdleHeartbeat(instrumentConnectionData, connectionParams);
+          }
         });
 
       });
@@ -273,13 +296,23 @@ export class TcpConnectionService implements OnDestroy {
       that.utilitiesService.logger('error', message, instrumentConnectionData.instrumentId);
     }
 
-    // ✅ Always log for TCP server (even without autoconnect)
+    // ✅ Always restart the TCP server after an error — the server must keep listening
     if (connectionParams.connectionMode === 'tcpserver') {
+      instrumentConnectionData.connectionAttemptStatusSubject.next(true);
+      const attempt = instrumentConnectionData.reconnectAttempts ?? 0;
+      const delay = that.getRetryDelay(attempt);
+
       that.utilitiesService.logger(
         'info',
-        `Listening for connection on ${connectionParams.host}:${connectionParams.port}`,
+        `Will restart listening on ${connectionParams.host}:${connectionParams.port} in ${delay / 1000} seconds`,
         instrumentConnectionData.instrumentId
       );
+
+      instrumentConnectionData.reconnectAttempts = attempt + 1;
+      instrumentConnectionData.pendingReconnectTimer = setTimeout(() => {
+        instrumentConnectionData.pendingReconnectTimer = null;
+        that.connect(connectionParams, that.handleTCPCallback);
+      }, delay);
     }
 
     // ✅ Only reconnect (and log) for TCP client if autoconnect is enabled
@@ -301,12 +334,53 @@ export class TcpConnectionService implements OnDestroy {
       );
 
       instrumentConnectionData.reconnectAttempts = attempt + 1;
-      setTimeout(() => {
+      instrumentConnectionData.pendingReconnectTimer = setTimeout(() => {
+        instrumentConnectionData.pendingReconnectTimer = null;
         that.connect(connectionParams, that.handleTCPCallback);
       }, delay);
     }
   }
 
+
+  private _startIdleHeartbeat(instrumentConnectionData: InstrumentConnectionStack, connectionParams: ConnectionParams) {
+    const that = this;
+    that._stopIdleHeartbeat(instrumentConnectionData);
+    instrumentConnectionData.listeningSince = new Date();
+
+    const heartbeatIntervalMs = 60000; // 60s
+    instrumentConnectionData.idleHeartbeatTimer = setInterval(() => {
+      // Guard: only log while we are still listening with no connected client
+      const server = instrumentConnectionData.connectionServer;
+      if (!server || !server.listening || instrumentConnectionData.statusSubject.value) {
+        return;
+      }
+      const waitedMs = Date.now() - (instrumentConnectionData.listeningSince?.getTime() ?? Date.now());
+      const waited = that._formatDuration(waitedMs);
+      that.utilitiesService.logger(
+        'info',
+        `Still listening on ${connectionParams.host}:${connectionParams.port} — no client has connected yet (waiting ${waited})`,
+        instrumentConnectionData.instrumentId
+      );
+    }, heartbeatIntervalMs);
+  }
+
+  private _stopIdleHeartbeat(instrumentConnectionData: InstrumentConnectionStack) {
+    if (instrumentConnectionData.idleHeartbeatTimer) {
+      clearInterval(instrumentConnectionData.idleHeartbeatTimer);
+      instrumentConnectionData.idleHeartbeatTimer = null;
+    }
+    instrumentConnectionData.listeningSince = null;
+  }
+
+  private _formatDuration(ms: number): string {
+    const totalSeconds = Math.floor(ms / 1000);
+    const hours = Math.floor(totalSeconds / 3600);
+    const minutes = Math.floor((totalSeconds % 3600) / 60);
+    const seconds = totalSeconds % 60;
+    if (hours > 0) return `${hours}h ${minutes}m ${seconds}s`;
+    if (minutes > 0) return `${minutes}m ${seconds}s`;
+    return `${seconds}s`;
+  }
 
   private getRetryDelay(attempt: number): number {
     const maxDelay = 300000; // Maximum delay of 5 minutes
@@ -336,6 +410,13 @@ export class TcpConnectionService implements OnDestroy {
     const instrumentConnectionData = that.connectionStack.get(connectionIdentifierKey);
     if (instrumentConnectionData) {
       try {
+        // Cancel any pending auto-reconnect so a user-initiated stop isn't
+        // silently undone by a timer scheduled before the click.
+        if (instrumentConnectionData.pendingReconnectTimer) {
+          clearTimeout(instrumentConnectionData.pendingReconnectTimer);
+          instrumentConnectionData.pendingReconnectTimer = null;
+        }
+        that._stopIdleHeartbeat(instrumentConnectionData);
         instrumentConnectionData.statusSubject.next(false);
         instrumentConnectionData.connectionAttemptStatusSubject.next(false);
 

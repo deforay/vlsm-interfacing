@@ -3,7 +3,7 @@ import { BehaviorSubject, Observable } from 'rxjs';
 import { ElectronStoreService } from './electron-store.service';
 import { UtilitiesService } from './utilities.service';
 import { InstrumentInterfaceService } from './instrument-interface.service';
-import { InstrumentConnectionStack } from '../interfaces/intrument-connections.interface';
+import { InstrumentConnectionStack } from '../interfaces/instrument-connections.interface';
 
 @Injectable({
   providedIn: 'root'
