@@ -231,10 +231,11 @@ export class ConsoleComponent implements OnInit, OnDestroy {
       that.resyncTestResultsToMySQL();
     }, 1000 * 60 * 5);
 
-    // Pull LIMS sync status from MySQL into SQLite every 30s. The external
-    // PHP worker (vlsm/bin/interface.php) writes lims_sync_status to MySQL;
-    // this watermark sync surfaces those updates in the console UI quickly.
-    // Cost when idle: two small indexed queries — negligible.
+    // Pull LIMS sync status from MySQL into SQLite every 30s. Any external
+    // LIS integration (PHP, Python, Node, anything that can talk to MySQL)
+    // writes lims_sync_status + lims_sync_date_time to the shared MySQL
+    // orders table; this watermark sync surfaces those updates in the
+    // console UI quickly. Cost when idle: two small indexed queries.
     that.limsSyncPullInterval = setInterval(() => {
       if (that.mysqlConnected) {
         that.utilitiesService.syncLimsStatusToSQLite(
