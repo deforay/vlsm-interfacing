@@ -1001,16 +1001,15 @@ export class DatabaseService {
     return subject.asObservable();
   }
 
-  syncLimsStatusToSQLite(success: any, errorf: any) {
+  syncLimsStatusToSQLite(success: (result: { updatedCount: number; message: string }) => void, errorf: any) {
     const that = this;
 
     // Step 1: Get the maximum `lims_sync_date_time` from SQLite
     const sqliteMaxQuery = 'SELECT MAX(lims_sync_date_time) as maxSyncDate FROM orders';
 
     that.execSqlite(sqliteMaxQuery, [])
-      .then((sqliteResult: any) => {
-        const maxSyncDate = sqliteResult[0]?.maxSyncDate || '0000-00-00 00:00:00'; // Default to the earliest date
-        //console.log('SQLite max lims_sync_date_time:', maxSyncDate);
+      .then(async (sqliteResult: any) => {
+        const maxSyncDate = sqliteResult[0]?.maxSyncDate || '0000-00-00 00:00:00';
 
         // Step 2: Query MySQL for records with `lims_sync_date_time` greater than `maxSyncDate`
         const mysqlQuery = `
@@ -1022,39 +1021,34 @@ export class DatabaseService {
 
         that.checkMysqlConnection(null, () => {
           that.execQuery(mysqlQuery, [maxSyncDate],
-            (mysqlResults: any[]) => {
-              if (mysqlResults.length === 0) {
-                //console.log('No new updates to sync from MySQL to SQLite.');
-                success('No updates to sync.');
+            async (mysqlResults: any[]) => {
+              if (!mysqlResults || mysqlResults.length === 0) {
+                success({ updatedCount: 0, message: 'No updates to sync.' });
                 return;
               }
 
-              console.log('Records to sync from MySQL to SQLite:', mysqlResults);
-
-              // Step 3: Update SQLite with new data
-              const updatePromises = mysqlResults.map(record => {
-                const sqliteUpdateQuery = `
-                  UPDATE orders
-                  SET lims_sync_status = ?, lims_sync_date_time = ?
-                  WHERE order_id = ?
-                `;
-                return that.execSqlite(sqliteUpdateQuery, [
-                  record.lims_sync_status,
-                  record.lims_sync_date_time,
-                  record.order_id
-                ]);
-              });
-
-              // Wait for all updates to complete
-              Promise.all(updatePromises)
-                .then(() => {
-                  console.log('Sync from MySQL to SQLite completed successfully.');
-                  success('Sync completed.');
-                })
-                .catch(error => {
-                  console.error('Error updating SQLite:', error);
-                  errorf(error);
-                });
+              // Step 3: Update SQLite sequentially. Previously this fanned out
+              // N parallel UPDATEs through IPC; sequencing keeps the renderer
+              // responsive when a large batch arrives at once.
+              const sqliteUpdateQuery = `
+                UPDATE orders
+                SET lims_sync_status = ?, lims_sync_date_time = ?
+                WHERE order_id = ?
+              `;
+              let updated = 0;
+              for (const record of mysqlResults) {
+                try {
+                  await that.execSqlite(sqliteUpdateQuery, [
+                    record.lims_sync_status,
+                    record.lims_sync_date_time,
+                    record.order_id
+                  ]);
+                  updated++;
+                } catch (error) {
+                  console.error('Error updating SQLite for order', record.order_id, error);
+                }
+              }
+              success({ updatedCount: updated, message: 'Sync completed.' });
             },
             (mysqlError) => {
               console.error('Error querying MySQL for updates:', mysqlError);

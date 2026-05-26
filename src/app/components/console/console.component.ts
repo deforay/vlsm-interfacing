@@ -45,6 +45,7 @@ export class ConsoleComponent implements OnInit, OnDestroy {
   public mysqlCheckInterval: any; // Interval for checking MySQL connection
   public mysqlConnected: boolean = false;  // To store the MySQL connection status
   public walCheckpointInterval: any; // Interval for performing SQLite WAL checkpoints
+  public limsSyncPullInterval: any; // Interval for pulling LIMS sync status updates from MySQL
   public data: any;
   public lastOrders: any;
   public showScrollToTop = false;
@@ -230,6 +231,19 @@ export class ConsoleComponent implements OnInit, OnDestroy {
       that.resyncTestResultsToMySQL();
     }, 1000 * 60 * 5);
 
+    // Pull LIMS sync status from MySQL into SQLite every 30s. The external
+    // PHP worker (vlsm/bin/interface.php) writes lims_sync_status to MySQL;
+    // this watermark sync surfaces those updates in the console UI quickly.
+    // Cost when idle: two small indexed queries — negligible.
+    that.limsSyncPullInterval = setInterval(() => {
+      if (that.mysqlConnected) {
+        that.utilitiesService.syncLimsStatusToSQLite(
+          (result) => that._refreshOrdersDisplayAfterLimsPull(result),
+          () => { }
+        );
+      }
+    }, 1000 * 30);
+
     // SQLite WAL checkpoint every 30 minutes
     that.walCheckpointInterval = setInterval(() => {
       that.runSQLiteWalCheckpoint();
@@ -325,6 +339,18 @@ export class ConsoleComponent implements OnInit, OnDestroy {
 
   trackByLogId(_index: number, logEntry: LogEntry): number | string {
     return logEntry.id ?? `${logEntry.timestamp?.getTime()}-${_index}`;
+  }
+
+  private _refreshOrdersDisplayAfterLimsPull(result: { updatedCount: number; message: string }) {
+    // Skip the table re-render when the pull found nothing new — keeps the
+    // 30s tick effectively free while idle. When updates did land, refresh
+    // the visible orders table and the "Last LIMS sync" badge.
+    if (!result || result.updatedCount === 0) {
+      return;
+    }
+    this._ngZone.run(() => {
+      this.refreshRecentResultsAfterSave();
+    });
   }
 
   private refreshRecentResultsAfterSave(): void {
@@ -739,9 +765,7 @@ export class ConsoleComponent implements OnInit, OnDestroy {
         }
       );
       this.utilitiesService.syncLimsStatusToSQLite(
-        (message: any) => {
-          console.log(message);
-        },
+        (result) => this._refreshOrdersDisplayAfterLimsPull(result),
         (error: any) => {
           console.error(error);
         }
@@ -821,7 +845,8 @@ export class ConsoleComponent implements OnInit, OnDestroy {
     [
       this.recentResultsInterval,
       this.mysqlCheckInterval,
-      this.walCheckpointInterval
+      this.walCheckpointInterval,
+      this.limsSyncPullInterval
     ].forEach(interval => {
       if (interval) {
         clearInterval(interval);
