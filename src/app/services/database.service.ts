@@ -62,6 +62,8 @@ export class DatabaseService {
     /multiple primary key defined/i,
   ];
   private static readonly MYSQL_APP_LOG_RESYNC_BATCH_SIZE = 25;
+  private static readonly MYSQL_ORDER_RESYNC_BATCH_SIZE = 25;
+  private static readonly SQLITE_LOG_INSERT_BATCH_SIZE = 100;
   private static readonly MYSQL_ORDER_COLUMNS = [
     'instrument_id',
     'order_id',
@@ -839,20 +841,71 @@ export class DatabaseService {
   }
 
   private processResyncRecords(records: any[], success: any, errorf: any) {
-    records.forEach((record: any) => {
-      // WHY: SQLite has local sync metadata that MySQL should never receive.
-      const mysqlRecord = this.filterRecordColumns(record, DatabaseService.MYSQL_ORDER_COLUMNS);
-      const mysqlInsert = this.buildInsertQuery('orders', mysqlRecord);
+    // WHY: previous version did `records.forEach(execQuery)` which fired N
+    // parallel inserts via IPC on each tick. With a backlog this saturated
+    // the IPC channel and the MySQL connection. Batched, sequential inserts
+    // keep the renderer responsive while still draining the backlog quickly.
+    const columns = DatabaseService.MYSQL_ORDER_COLUMNS;
+    const escapedColumns = columns.map(c => `\`${c}\``).join(',');
+    const mysqlQuery = `INSERT INTO \`orders\` (${escapedColumns}) VALUES ?`;
+    const batches = this.chunkArray(records, DatabaseService.MYSQL_ORDER_RESYNC_BATCH_SIZE);
+    let batchIndex = 0;
 
-      this.execQuery(mysqlInsert.query, mysqlInsert.values,
-        () => this.updateSQLiteAfterMySQLInsert(record),
-        (mysqlError: any) => {
-          this.logCriticalDatabaseIssue(`Error resyncing order ${record.order_id} to MySQL: ${mysqlError?.message ?? mysqlError}`, 'database', record.instrument_id);
+    this.checkMysqlConnection(null, () => {
+      const processNextBatch = () => {
+        const batch = batches[batchIndex];
+        if (!batch) {
+          success('Resync process completed.');
+          return;
         }
-      );
-    });
 
-    success('Resync process completed.');
+        batchIndex++;
+        // Normalize each record to the full column set, nulls for missing
+        // fields. Required for the bulk-insert `VALUES ?` shape.
+        const mysqlValues = batch.map(record =>
+          columns.map(col => record[col] ?? null)
+        );
+
+        this.execQuery(mysqlQuery, [mysqlValues],
+          () => {
+            this.markOrdersAsResynced(batch.map(r => r.order_id));
+            processNextBatch();
+          },
+          (batchError) => {
+            // Whole batch failed (one bad row poisons the bulk INSERT). Log
+            // and move on so we don't get stuck retrying the same batch
+            // forever — those records stay mysql_inserted=0 and will be
+            // retried next tick.
+            const firstInstrumentId = batch.find(r => !!r.instrument_id)?.instrument_id ?? null;
+            this.logCriticalDatabaseIssue(
+              `Error resyncing orders batch (${batch.length} records) to MySQL: ${batchError?.message ?? batchError}`,
+              'database',
+              firstInstrumentId
+            );
+            processNextBatch();
+          }
+        );
+      };
+
+      processNextBatch();
+    }, () => {
+      errorf('MySQL not available');
+    });
+  }
+
+  private markOrdersAsResynced(orderIds: any[]) {
+    if (!orderIds || orderIds.length === 0) {
+      return;
+    }
+    const placeholders = orderIds.map(() => '?').join(',');
+    const updateQuery = `UPDATE orders SET mysql_inserted = 1 WHERE order_id IN (${placeholders})`;
+    this.execSqlite(updateQuery, orderIds)
+      .then(() => {
+        console.log('Order records successfully resynced and updated in SQLite:', orderIds.length);
+      })
+      .catch((error: any) => {
+        console.error('Error updating SQLite after successful MySQL insert for orders:', error);
+      });
   }
 
 
@@ -1162,18 +1215,26 @@ export class DatabaseService {
       return;
     }
 
-    const sqliteQuery = 'INSERT INTO app_log (log, log_type, log_message, instrument_id, added_on, mysql_inserted) VALUES (?, ?, ?, ?, ?, ?)';
+    // WHY: previous version fanned out N parallel single-row inserts via IPC.
+    // Under heavy logging this flooded the main process. Multi-row INSERTs
+    // chunked under the SQLite parameter limit (999) keep IPC quiet and
+    // sequential awaits between chunks let the renderer breathe.
+    const batches = this.chunkArray(logs, DatabaseService.SQLITE_LOG_INSERT_BATCH_SIZE);
+    for (const batch of batches) {
+      const placeholders = batch.map(() => '(?, ?, ?, ?, ?, ?)').join(',');
+      const sqliteQuery = `INSERT INTO app_log (log, log_type, log_message, instrument_id, added_on, mysql_inserted) VALUES ${placeholders}`;
+      const params: any[] = [];
+      for (const log of batch) {
+        params.push(log.message, log.type, log.message, log.instrumentId, log.timestamp, 0);
+      }
+      try {
+        await this.execSqlite(sqliteQuery, params);
+      } catch (e) {
+        console.error('SQLite log batch insert failed', e);
+      }
+    }
 
-    const sqlitePromises = logs.map(log => {
-      const params = [log.message, log.type, log.message, log.instrumentId, log.timestamp, 0];
-      return this.execSqlite(sqliteQuery, params).catch(e => {
-        console.error('SQLite log insert failed', e);
-      });
-    });
-
-    await Promise.all(sqlitePromises);
     this.resyncAppLogToMySQL(() => { }, () => { });
-
   }
 
   resyncAppLogToMySQL(success: any, errorf: any) {

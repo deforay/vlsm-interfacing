@@ -68,19 +68,15 @@ export class ConsoleComponent implements OnInit, OnDestroy {
   private checkConnectionsAfterInactivity() {
     console.log('Checking connection status after inactivity');
 
-    // Check each instrument
     this.availableInstruments.forEach(instrument => {
-      this.availableInstruments.forEach(instrument => {
-        if (instrument.isConnected) {
-          // Verify the connection - this will check socket state and update status
-          const isActuallyConnected = this.tcpService.verifyConnection(instrument.connectionParams);
+      if (instrument.isConnected) {
+        // Verify the connection - this will check socket state and update status
+        const isActuallyConnected = this.tcpService.verifyConnection(instrument.connectionParams);
 
-          // Update your instrument's connected state if needed
-          if (!isActuallyConnected) {
-            instrument.isConnected = false;
-          }
+        if (!isActuallyConnected) {
+          instrument.isConnected = false;
         }
-      });
+      }
     });
   }
 
@@ -224,13 +220,15 @@ export class ConsoleComponent implements OnInit, OnDestroy {
     // Check MySQL connection on regular intervals
     that.mysqlCheckInterval = setInterval(() => {
       that.checkMysqlConnection();
-    }, 1000 * 7);
+    }, 1000 * 15);
 
-    // Refresh last orders every 5 minutes
+    // Background refresh + MySQL resync every 5 minutes. New results trigger
+    // an immediate refresh via resultSaved$, and the user can hit the refresh
+    // button — this tick is just a safety net for idle periods.
     that.recentResultsInterval = setInterval(() => {
       that.fetchRecentResults();
       that.resyncTestResultsToMySQL();
-    }, 1000 * 60 * 1);
+    }, 1000 * 60 * 5);
 
     // SQLite WAL checkpoint every 30 minutes
     that.walCheckpointInterval = setInterval(() => {
