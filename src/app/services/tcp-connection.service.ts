@@ -214,7 +214,10 @@ export class TcpConnectionService implements OnDestroy {
 
       instrumentConnectionData.connectionServer.on('error', function (e) {
         instrumentConnectionData.errorOccurred = true;
-        that._handleClientConnectionIssue(instrumentConnectionData, connectionParams, 'Error while connecting ' + e.code, true);
+        const message = e.code === 'EADDRNOTAVAIL'
+          ? `Cannot bind to ${connectionParams.host}:${connectionParams.port} — that address isn't currently assigned to any network interface on this machine. Check the machine's network configuration (static IP / DHCP reservation).`
+          : 'Error while connecting ' + e.code;
+        that._handleClientConnectionIssue(instrumentConnectionData, connectionParams, message, true, e.code);
       });
 
     } else if (connectionParams.connectionMode === 'tcpclient') {
@@ -287,7 +290,7 @@ export class TcpConnectionService implements OnDestroy {
     }
   }
 
-  private _handleClientConnectionIssue(instrumentConnectionData, connectionParams, message, isError) {
+  private _handleClientConnectionIssue(instrumentConnectionData, connectionParams, message, isError, errorCode?: string) {
     const that = this;
     instrumentConnectionData.statusSubject.next(false);
     that.disconnect(connectionParams);
@@ -299,8 +302,14 @@ export class TcpConnectionService implements OnDestroy {
     // ✅ Always restart the TCP server after an error — the server must keep listening
     if (connectionParams.connectionMode === 'tcpserver') {
       instrumentConnectionData.connectionAttemptStatusSubject.next(true);
+
+      // EADDRNOTAVAIL means the configured host IP isn't on any local NIC right
+      // now (interface down / DHCP slow / wrong config). Use a fixed long delay
+      // instead of exponential backoff, and don't bump the attempt counter so a
+      // real client-disconnect retry afterwards isn't penalised.
+      const isAddressUnavailable = errorCode === 'EADDRNOTAVAIL';
       const attempt = instrumentConnectionData.reconnectAttempts ?? 0;
-      const delay = that.getRetryDelay(attempt);
+      const delay = isAddressUnavailable ? 30000 : that.getRetryDelay(attempt);
 
       that.utilitiesService.logger(
         'info',
@@ -308,7 +317,9 @@ export class TcpConnectionService implements OnDestroy {
         instrumentConnectionData.instrumentId
       );
 
-      instrumentConnectionData.reconnectAttempts = attempt + 1;
+      if (!isAddressUnavailable) {
+        instrumentConnectionData.reconnectAttempts = attempt + 1;
+      }
       instrumentConnectionData.pendingReconnectTimer = setTimeout(() => {
         instrumentConnectionData.pendingReconnectTimer = null;
         that.connect(connectionParams, that.handleTCPCallback);

@@ -66,7 +66,7 @@
       <div class="system-log-drawer-viewer">
         <div class="log-entries">
           <ng-container *ngIf="systemLogCount > 0; else emptySystemLogs">
-            <div class="log-entry" *ngFor="let logEntry of systemLogs.filteredLogs" [innerHTML]="getSafeHtml(logEntry)">
+            <div class="log-entry" *ngFor="let logEntry of systemLogs.filteredLogs; trackBy: trackByLogId" [innerHTML]="getSafeHtml(logEntry)">
             </div>
           </ng-container>
           <ng-template #emptySystemLogs>
@@ -225,7 +225,7 @@
               <ng-container
                 *ngIf="instrumentLogs[instrument.connectionParams.instrumentId] && instrumentLogs[instrument.connectionParams.instrumentId].filteredLogs && instrumentLogs[instrument.connectionParams.instrumentId].filteredLogs.length > 0">
                 <div class="log-entry"
-                  *ngFor="let logEntry of instrumentLogs[instrument.connectionParams.instrumentId].filteredLogs"
+                  *ngFor="let logEntry of instrumentLogs[instrument.connectionParams.instrumentId].filteredLogs; trackBy: trackByLogId"
                   [innerHTML]="getSafeHtml(logEntry)">
                 </div>
               </ng-container>

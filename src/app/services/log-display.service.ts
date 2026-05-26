@@ -2,6 +2,7 @@ import { Injectable } from '@angular/core';
 import { Subject } from 'rxjs';
 
 export interface LogEntry {
+  id?: number;
   type: 'info' | 'success' | 'warn' | 'error' | 'verbose';
   message: string;
   instrumentId?: string;

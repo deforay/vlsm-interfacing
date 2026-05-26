@@ -290,26 +290,45 @@ export class ConsoleComponent implements OnInit, OnDestroy {
     const instrumentId = logEntry.instrumentId ?? ConsoleComponent.SYSTEM_LOG_ID;
     if (!instrumentId) return;
 
-    // Ensure the log structure exists
-    this.instrumentLogs[instrumentId] ??= { logs: [], filteredLogs: [] };
+    const bucket = (this.instrumentLogs[instrumentId] ??= { logs: [], filteredLogs: [] });
 
-    // Add the new log and re-sort
-    this.instrumentLogs[instrumentId].logs.push(logEntry);
-    this.instrumentLogs[instrumentId].logs.sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime());
+    // Newest-first: prepend instead of push+sort. Logs arrive in chronological order.
+    bucket.logs.unshift(logEntry);
 
-    // Re-filter logs
-    this.filterInstrumentLogs({ connectionParams: { instrumentId } });
-
-    // Limit the number of logs to prevent memory issues
-    const MAX_LOG_ENTRIES = 5000;
-    if (this.instrumentLogs[instrumentId].logs.length > MAX_LOG_ENTRIES) {
-      this.instrumentLogs[instrumentId].logs.length = MAX_LOG_ENTRIES;
+    const MAX_LOG_ENTRIES = 1000;
+    if (bucket.logs.length > MAX_LOG_ENTRIES) {
+      bucket.logs.length = MAX_LOG_ENTRIES;
     }
-    if (this.instrumentLogs[instrumentId].filteredLogs.length > MAX_LOG_ENTRIES) {
-      this.instrumentLogs[instrumentId].filteredLogs.length = MAX_LOG_ENTRIES;
+
+    const searchText = this.getInstrumentSearchText(instrumentId);
+    if (searchText) {
+      const needle = searchText.toLowerCase();
+      if (logEntry.message.toLowerCase().includes(needle)) {
+        bucket.filteredLogs.unshift(logEntry);
+        if (bucket.filteredLogs.length > MAX_LOG_ENTRIES) {
+          bucket.filteredLogs.length = MAX_LOG_ENTRIES;
+        }
+      }
+    } else {
+      // No filter active — share the same array reference.
+      bucket.filteredLogs = bucket.logs;
     }
 
     this.cdRef.detectChanges();
+  }
+
+  private getInstrumentSearchText(instrumentId: string): string {
+    if (instrumentId === ConsoleComponent.SYSTEM_LOG_ID) {
+      return (this.systemLogContext.searchText || '').trim();
+    }
+    const instrument = this.availableInstruments?.find(
+      i => i?.connectionParams?.instrumentId === instrumentId
+    );
+    return (instrument?.searchText || '').trim();
+  }
+
+  trackByLogId(_index: number, logEntry: LogEntry): number | string {
+    return logEntry.id ?? `${logEntry.timestamp?.getTime()}-${_index}`;
   }
 
   private refreshRecentResultsAfterSave(): void {
@@ -673,14 +692,16 @@ export class ConsoleComponent implements OnInit, OnDestroy {
       };
     }
 
-    if (!instrument.searchText || instrument.searchText === '') {
-      // If search text is empty, show all logs
-      that.instrumentLogs[instrument.connectionParams.instrumentId].filteredLogs = [...that.instrumentLogs[instrument.connectionParams.instrumentId].logs];
-    } else {
-      // Apply filter on the original logs
-      that.instrumentLogs[instrument.connectionParams.instrumentId].filteredLogs = that.instrumentLogs[instrument.connectionParams.instrumentId].logs.filter((log: LogEntry) =>
-        log.message.toLowerCase().includes(instrument.searchText.trim().toLowerCase())
+    const bucket = that.instrumentLogs[instrument.connectionParams.instrumentId];
+    const searchText = (instrument.searchText || '').trim();
+    if (searchText) {
+      const needle = searchText.toLowerCase();
+      bucket.filteredLogs = bucket.logs.filter((log: LogEntry) =>
+        log.message.toLowerCase().includes(needle)
       );
+    } else {
+      // No filter — share the reference so a new log doesn't force a full copy.
+      bucket.filteredLogs = bucket.logs;
     }
 
     that.cdRef.detectChanges(); // Trigger change detection if needed

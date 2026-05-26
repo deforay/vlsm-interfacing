@@ -8,6 +8,8 @@ export interface LogOptions {
   persist?: boolean;
 }
 
+let logEntrySeq = 0;
+
 @Injectable({
   providedIn: 'root'
 })
@@ -32,6 +34,7 @@ export class LoggingService {
     options: LogOptions = {}
   ) {
     const logEntry: LogEntry = {
+      id: ++logEntrySeq,
       type,
       message,
       instrumentId,
