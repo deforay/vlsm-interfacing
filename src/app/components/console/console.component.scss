@@ -359,17 +359,10 @@ $background-color: #f9fafb;
         white-space: pre-wrap;
         word-break: break-word;
 
-        .text-info {
-          color: #4fc3f7 !important;
-        }
-
-        .text-danger {
-          color: #ff5252 !important;
-        }
-
-        .text-success {
-          color: #4caf50 !important;
-        }
+        &.log-error { color: #ff5252; }
+        &.log-warn  { color: #ffb74d; }
+        &.log-success { color: #4caf50; }
+        &.log-info  { color: #4fc3f7; }
       }
 
       .log-empty {
@@ -711,17 +704,10 @@ $background-color: #f9fafb;
         white-space: pre-wrap;
         word-break: break-all;
 
-        .text-info {
-          color: #4fc3f7 !important;
-        }
-
-        .text-danger {
-          color: #ff5252 !important;
-        }
-
-        .text-success {
-          color: #4caf50 !important;
-        }
+        &.log-error { color: #ff5252; }
+        &.log-warn  { color: #ffb74d; }
+        &.log-success { color: #4caf50; }
+        &.log-info  { color: #4fc3f7; }
       }
 
       .log-empty {

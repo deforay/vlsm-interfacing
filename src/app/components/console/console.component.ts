@@ -1,7 +1,6 @@
 // src/app/components/console/console.component.ts
 
 import { Component, OnInit, NgZone, OnDestroy, ChangeDetectorRef, ViewChild, ElementRef, HostListener } from '@angular/core';
-import { DomSanitizer } from '@angular/platform-browser';
 import { Router } from '@angular/router';
 import { ElectronStoreService } from '../../services/electron-store.service';
 import { InstrumentInterfaceService } from '../../services/instrument-interface.service';
@@ -115,7 +114,6 @@ export class ConsoleComponent implements OnInit, OnDestroy {
   constructor(
     private readonly dialog: MatDialog,
     private readonly cdRef: ChangeDetectorRef,
-    private readonly sanitizer: DomSanitizer,
     private readonly store: ElectronStoreService,
     private readonly _ngZone: NgZone,
     private readonly instrumentInterfaceService: InstrumentInterfaceService,
@@ -772,10 +770,6 @@ export class ConsoleComponent implements OnInit, OnDestroy {
         });
       });
     });
-  }
-
-  getSafeHtml(logEntry: LogEntry) {
-    return this.sanitizer.bypassSecurityTrustHtml(logEntry.message);
   }
 
   private extractPlainText(message: string): string {
