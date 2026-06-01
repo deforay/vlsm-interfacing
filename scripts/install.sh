@@ -1,4 +1,15 @@
 #!/usr/bin/env bash
+#
+# Install the latest VLSM Interfacing release (Debian/Ubuntu, .deb).
+#
+# Quick install:
+#   curl -fsSL https://raw.githubusercontent.com/deforay/vlsm-interfacing/master/scripts/install.sh | bash
+#
+# Install a specific version (note the `bash -s --` to forward flags through the pipe):
+#   curl -fsSL https://raw.githubusercontent.com/deforay/vlsm-interfacing/master/scripts/install.sh | bash -s -- --tag v4.0.3
+#
+# If sudo prompts for a password, download first then run instead of piping:
+#   curl -fsSL https://raw.githubusercontent.com/deforay/vlsm-interfacing/master/scripts/install.sh -o install.sh && bash install.sh
 
 set -euo pipefail
 
