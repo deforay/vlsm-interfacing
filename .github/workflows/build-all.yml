@@ -64,7 +64,12 @@ jobs:
           ldd --version
 
   build-windows:
-    runs-on: windows-latest
+    # Pin to windows-2022 (Visual Studio 2022 / v17). The windows-latest image
+    # now ships Visual Studio 2026 (v18), which the bundled node-gyp can't
+    # detect — its PowerShell VS-finder overflows the stdio buffer
+    # (ERR_CHILD_PROCESS_STDIO_MAXBUFFER) and reports the VS version as
+    # "undefined", so compiling native deps (@vscode/sqlite3) fails.
+    runs-on: windows-2022
     name: Build Windows x64
     # Only build Windows on manual dispatch when explicitly requested.
     # Tag pushes (releases) ship Linux only by default — request a Windows
