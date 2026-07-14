@@ -15,11 +15,14 @@ import { COMMUNICATION_PROTOCOL, LIMS_SYNC_STATUS } from '../constants/domain.co
 })
 
 export class InstrumentInterfaceService {
+  static readonly MAX_INCOMPLETE_HL7_BYTES = 32 * 1024 * 1024;
+  static readonly HL7_BUFFER_INACTIVITY_TIMEOUT_MS = 30 * 60 * 1000;
 
   // WHY: TCP chunks from different analyzers can arrive concurrently. A shared
   // buffer can merge two patients' messages, so each configured instrument owns
   // its incomplete HL7 transmission until the frame separator arrives.
   private readonly hl7ReceiveBuffers = new Map<string, string>();
+  private readonly hl7BufferExpiryTimers = new Map<string, ReturnType<typeof setTimeout>>();
   private connectedInstruments = new Map<string, BehaviorSubject<boolean>>();
   private readonly connectionStatusSubscriptions = new Map<string, Subscription>();
   private readonly resultSavedSubject = new Subject<{ sampleResult: any; instrumentId: string }>();
@@ -38,7 +41,7 @@ export class InstrumentInterfaceService {
   connect(instrument: any) {
     const that = this;
     if (instrument && instrument.connectionParams) {
-      that.hl7ReceiveBuffers.delete(instrument.connectionParams.instrumentId);
+      that.clearInstrumentReceiveState(instrument.connectionParams.instrumentId);
       // Bind 'this' explicitly to handleTCPResponse
       const boundHandleTCPResponse = that.handleTCPResponse.bind(that);
       that.tcpService.connect(instrument.connectionParams, boundHandleTCPResponse);
@@ -57,7 +60,7 @@ export class InstrumentInterfaceService {
   reconnect(instrument: any) {
     const that = this;
     if (instrument && instrument.connectionParams) {
-      that.hl7ReceiveBuffers.delete(instrument.connectionParams.instrumentId);
+      that.clearInstrumentReceiveState(instrument.connectionParams.instrumentId);
       // Bind 'this' explicitly to handleTCPResponse
       const boundHandleTCPResponse = that.handleTCPResponse.bind(that);
       that.tcpService.reconnect(instrument.connectionParams, boundHandleTCPResponse);
@@ -76,12 +79,22 @@ export class InstrumentInterfaceService {
   disconnect(instrument: any) {
     const that = this;
     if (instrument && instrument.connectionParams && instrument.connectionParams.host && instrument.connectionParams.port) {
-      that.hl7ReceiveBuffers.delete(instrument.connectionParams.instrumentId);
+      that.clearInstrumentReceiveState(instrument.connectionParams.instrumentId);
       that.connectionStatusSubscriptions.get(instrument.connectionParams.instrumentId)?.unsubscribe();
       that.connectionStatusSubscriptions.delete(instrument.connectionParams.instrumentId);
       that.tcpService.disconnect(instrument.connectionParams);
       that.updateInstrumentStatus(instrument.connectionParams.instrumentId, false);
     }
+  }
+
+  private clearInstrumentReceiveState(instrumentId: string): void {
+    this.hl7ReceiveBuffers.delete(instrumentId);
+    const expiryTimer = this.hl7BufferExpiryTimers.get(instrumentId);
+    if (expiryTimer) {
+      clearTimeout(expiryTimer);
+      this.hl7BufferExpiryTimers.delete(instrumentId);
+    }
+    this.astmHelper.clearInstrumentBuffer(instrumentId);
   }
 
   // Method used to get connection status for an instrument
@@ -452,6 +465,10 @@ export class InstrumentInterfaceService {
     // Append payload or finalise the transmission via the helper
     const parsingResult = that.astmHelper.appendASTMChunk(instrumentConnectionData, astmText, astmProtocolType, processedInfo);
 
+    if (parsingResult.discarded) {
+      return;
+    }
+
     if (parsingResult.completed) {
       instrumentConnectionData.transmissionStatusSubject.next(false);
       const rawDataPayload = parsingResult.rawData ?? '';
@@ -496,6 +513,19 @@ export class InstrumentInterfaceService {
     const hl7Text = that.utilitiesService.hex2ascii(data.toString('hex'));
     const bufferKey = instrumentConnectionData.instrumentId;
     const bufferedData = (that.hl7ReceiveBuffers.get(bufferKey) ?? '') + hl7Text;
+
+    const bufferedBytes = Buffer.byteLength(bufferedData, 'utf8');
+    if (bufferedBytes > InstrumentInterfaceService.MAX_INCOMPLETE_HL7_BYTES) {
+      that.clearHL7Buffer(bufferKey);
+      instrumentConnectionData.transmissionStatusSubject.next(false);
+      that.utilitiesService.logger(
+        'warn',
+        `Discarded incomplete HL7 transmission after ${bufferedBytes} bytes`,
+        instrumentConnectionData.instrumentId
+      );
+      return;
+    }
+
     that.hl7ReceiveBuffers.set(bufferKey, bufferedData);
 
     that.utilitiesService.logger('info', hl7Text, instrumentConnectionData.instrumentId);
@@ -524,7 +554,7 @@ export class InstrumentInterfaceService {
       completeMessage = completeMessage.replace(/[\r\n\x0B\x0C\u0085\u2028\u2029]+/gm, '\r');
       // The complete frame is now owned by this call. Clear it before parsing
       // so a parser exception cannot contaminate the next transmission.
-      that.hl7ReceiveBuffers.delete(bufferKey);
+      that.clearHL7Buffer(bufferKey);
 
       //console.error(that.strData);
 
@@ -542,7 +572,44 @@ export class InstrumentInterfaceService {
       }
 
       instrumentConnectionData.transmissionStatusSubject.next(false);
+    } else {
+      that.scheduleHL7BufferExpiry(instrumentConnectionData);
     }
+  }
+
+  private clearHL7Buffer(instrumentId: string): void {
+    this.hl7ReceiveBuffers.delete(instrumentId);
+    const expiryTimer = this.hl7BufferExpiryTimers.get(instrumentId);
+    if (expiryTimer) {
+      clearTimeout(expiryTimer);
+      this.hl7BufferExpiryTimers.delete(instrumentId);
+    }
+  }
+
+  private scheduleHL7BufferExpiry(instrumentConnectionData: InstrumentConnectionStack): void {
+    const instrumentId = instrumentConnectionData.instrumentId;
+    const existingTimer = this.hl7BufferExpiryTimers.get(instrumentId);
+    if (existingTimer) {
+      clearTimeout(existingTimer);
+    }
+
+    const expiryTimer = setTimeout(() => {
+      const bufferedData = this.hl7ReceiveBuffers.get(instrumentId);
+      this.hl7BufferExpiryTimers.delete(instrumentId);
+      if (!bufferedData) {
+        return;
+      }
+
+      this.hl7ReceiveBuffers.delete(instrumentId);
+      instrumentConnectionData.transmissionStatusSubject.next(false);
+      this.utilitiesService.logger(
+        'warn',
+        `Discarded inactive HL7 transmission after ${Buffer.byteLength(bufferedData, 'utf8')} bytes`,
+        instrumentId
+      );
+    }, InstrumentInterfaceService.HL7_BUFFER_INACTIVITY_TIMEOUT_MS);
+
+    this.hl7BufferExpiryTimers.set(instrumentId, expiryTimer);
   }
 
 
