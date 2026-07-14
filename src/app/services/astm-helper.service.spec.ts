@@ -56,4 +56,71 @@ describe('ASTMHelperService', () => {
     expect(resultB.rawData).toContain('SAMPLE-B');
     expect(resultB.rawData).not.toContain('SAMPLE-A');
   });
+
+  it('extracts a complete result from a representative ASTM transmission', () => {
+    const service = createService();
+    const instrument = { instrumentId: 'ANALYZER-1' };
+    const payload = [
+      'H|\\^&|||LAB001',
+      'P|1',
+      'O|1|SAMPLE-001||^^^HIVVL|||||||||||||||||||||F',
+      'R|1|^^^HIVVL|1250|copies/mL||||||TECH-1||20260714113000',
+      'L|1|N',
+      ''
+    ].join('\r');
+
+    service.appendASTMChunk(instrument, payload, 'astm-nonchecksum', service.processASTMText(payload));
+    const result = service.appendASTMChunk(
+      instrument,
+      '\x04',
+      'astm-nonchecksum',
+      service.processASTMText('\x04')
+    );
+
+    expect(result.completed).toBe(true);
+    expect(result.sampleResults).toHaveLength(1);
+    expect(result.sampleResults?.[0]).toMatchObject({
+      order_id: 'SAMPLE-001',
+      test_type: 'HIVVL',
+      results: '1250',
+      test_unit: 'copies/mL'
+    });
+  });
+
+  it('does not emit a result before an incomplete transmission receives EOT', () => {
+    const service = createService();
+    const instrument = { instrumentId: 'ANALYZER-1' };
+    const partialPayload = 'H|\\^&|||LAB001\rO|1|SAMPLE-001||^^^HIVVL\r';
+
+    const result = service.appendASTMChunk(
+      instrument,
+      partialPayload,
+      'astm-nonchecksum',
+      service.processASTMText(partialPayload)
+    );
+
+    expect(result).toEqual({ completed: false });
+  });
+
+  it('completes malformed ASTM payloads without inventing sample results', () => {
+    const service = createService();
+    const instrument = { instrumentId: 'ANALYZER-1' };
+    const malformedPayload = 'H|\\^&|||LAB001\rR|1|^^^HIVVL|1250|copies/mL\r';
+
+    service.appendASTMChunk(
+      instrument,
+      malformedPayload,
+      'astm-nonchecksum',
+      service.processASTMText(malformedPayload)
+    );
+    const result = service.appendASTMChunk(
+      instrument,
+      '\x04',
+      'astm-nonchecksum',
+      service.processASTMText('\x04')
+    );
+
+    expect(result.completed).toBe(true);
+    expect(result.sampleResults).toEqual([]);
+  });
 });

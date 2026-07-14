@@ -89,4 +89,36 @@ describe('HL7HelperService', () => {
     expect(result.test_unit).toBe('copies/mL');
     expect(result.notes).toBe('');
   });
+
+  it('parses a representative HL7 result fixture', () => {
+    const message = service.createHL7Message([
+      'MSH|^~\\&|COBAS|LAB001|LIS|LAB001|20260714113000||OUL^R22|MSG-001|P|2.5.1',
+      'SPM|1|SAMPLE-001',
+      'OBR|1|||HIVVL^HIV Viral Load',
+      'OBX|1|NM|HIVVL^HIV Viral Load|1|1250|copies/mL|||||F|||||TECH-1|||20260714113000'
+    ].join('\r'));
+    const spm = message.get('SPM');
+    const obx = message.get('OBX');
+
+    expect(service.isValidHL7Message(message)).toBe(true);
+    expect(service.extractHL7OrderAndTestIDs(spm, message)).toEqual({
+      order_id: 'SAMPLE-001',
+      test_id: 'SAMPLE-001'
+    });
+    expect(service.processHL7ResultValue(obx, service.getHL7ResultStatusType(obx))).toMatchObject({
+      results: '1250',
+      test_unit: 'copies/mL'
+    });
+  });
+
+  it.fails('rejects an HL7 fixture without required result segments', () => {
+    const message = service.createHL7Message([
+      'MSH|^~\\&|COBAS|LAB001|LIS|LAB001|20260714113000||OUL^R22|MSG-002|P|2.5.1',
+      'SPM|1|SAMPLE-002'
+    ].join('\r'));
+
+    // WHY: this desired contract currently fails because the parser returns a
+    // placeholder object for a missing OBX segment rather than null.
+    expect(service.isValidHL7Message(message)).toBe(false);
+  });
 });

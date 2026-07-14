@@ -61,4 +61,42 @@ describe('InstrumentInterfaceService HL7 streams', () => {
     expect(rawMessages[1]).toContain('RESULT-A');
     expect(rawMessages[1]).not.toContain('|B|LAB|');
   });
+
+  it('keeps an incomplete HL7 frame buffered without parsing or persistence', () => {
+    const { service, dbService, tcpService } = createService();
+    const key = '10.0.0.1:5001:tcpserver:hl7';
+    tcpService.connectionStack.set(key, createConnection('ANALYZER-A'));
+    const processSpy = vi.spyOn(service, 'processHL7Data').mockImplementation(() => undefined);
+
+    service.handleTCPResponse(key, Buffer.from('MSH|^~\\&|A|LAB|PARTIAL'));
+
+    expect(processSpy).not.toHaveBeenCalled();
+    expect(dbService.recordRawData).not.toHaveBeenCalled();
+  });
+
+  it('isolates a malformed completed frame from the following transmission', () => {
+    const { service, tcpService } = createService();
+    const key = '10.0.0.1:5001:tcpserver:hl7';
+    tcpService.connectionStack.set(key, createConnection('ANALYZER-A'));
+    const processSpy = vi.spyOn(service, 'processHL7Data').mockImplementation(() => undefined);
+
+    service.handleTCPResponse(key, Buffer.from('NOT-HL7\x1c'));
+    service.handleTCPResponse(key, Buffer.from('MSH|^~\\&|A|LAB|VALID\x1c'));
+
+    expect(processSpy).toHaveBeenCalledTimes(2);
+    expect(processSpy.mock.calls[1][1]).not.toContain('NOT-HL7');
+  });
+
+  it.fails('discards an oversized incomplete HL7 frame', () => {
+    const { service, tcpService } = createService();
+    const key = '10.0.0.1:5001:tcpserver:hl7';
+    const instrument = createConnection('ANALYZER-A');
+    tcpService.connectionStack.set(key, instrument);
+
+    service.handleTCPResponse(key, Buffer.from(`MSH|^~\\&|A|LAB|${'X'.repeat(2 * 1024 * 1024)}`));
+
+    // WHY: an analyzer that never sends FS must not grow renderer memory
+    // without bound. Batch 2 will introduce a documented protocol limit.
+    expect((service as any).hl7ReceiveBuffers.has('ANALYZER-A')).toBe(false);
+  });
 });
