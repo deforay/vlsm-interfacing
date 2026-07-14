@@ -66,8 +66,16 @@ test.describe('Check Home Page', async () => {
   });
 
   test.afterAll( async () => {
-    await context.tracing.stop({ path: 'e2e/tracing/trace.zip' });
-    await app.close();
-    fs.rmSync(userDataDir, { recursive: true, force: true });
+    // WHY: a launch failure can occur before these resources are assigned;
+    // cleanup must preserve the original failure instead of throwing another.
+    if (context) {
+      await context.tracing.stop({ path: 'e2e/tracing/trace.zip' });
+    }
+    if (app) {
+      await app.close();
+    }
+    if (userDataDir) {
+      fs.rmSync(userDataDir, { recursive: true, force: true });
+    }
   });
 });
