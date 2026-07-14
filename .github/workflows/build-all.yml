@@ -38,9 +38,6 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Rebuild native deps
-        run: npm run postinstall
-
       - name: Build application
         run: npm run build:prod
 
@@ -93,9 +90,6 @@ jobs:
 
       - name: Install dependencies
         run: npm ci
-
-      - name: Rebuild native deps
-        run: npm run postinstall
 
       - name: Build application
         run: npm run build:prod

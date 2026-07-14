@@ -6,7 +6,8 @@ import { UtilitiesService } from './utilities.service';
 import { TcpConnectionService } from './tcp-connection.service';
 import { HL7HelperService } from './hl7-helper.service';
 import { ASTMHelperService } from './astm-helper.service';
-import { BehaviorSubject, Observable, Subject } from 'rxjs';
+import { BehaviorSubject, Observable, Subject, Subscription } from 'rxjs';
+import { COMMUNICATION_PROTOCOL, LIMS_SYNC_STATUS } from '../constants/domain.constants';
 
 
 @Injectable({
@@ -15,8 +16,12 @@ import { BehaviorSubject, Observable, Subject } from 'rxjs';
 
 export class InstrumentInterfaceService {
 
-  protected strData = '';
+  // WHY: TCP chunks from different analyzers can arrive concurrently. A shared
+  // buffer can merge two patients' messages, so each configured instrument owns
+  // its incomplete HL7 transmission until the frame separator arrives.
+  private readonly hl7ReceiveBuffers = new Map<string, string>();
   private connectedInstruments = new Map<string, BehaviorSubject<boolean>>();
+  private readonly connectionStatusSubscriptions = new Map<string, Subscription>();
   private readonly resultSavedSubject = new Subject<{ sampleResult: any; instrumentId: string }>();
   public readonly resultSaved$ = this.resultSavedSubject.asObservable();
 
@@ -33,36 +38,47 @@ export class InstrumentInterfaceService {
   connect(instrument: any) {
     const that = this;
     if (instrument && instrument.connectionParams) {
+      that.hl7ReceiveBuffers.delete(instrument.connectionParams.instrumentId);
       // Bind 'this' explicitly to handleTCPResponse
       const boundHandleTCPResponse = that.handleTCPResponse.bind(that);
       that.tcpService.connect(instrument.connectionParams, boundHandleTCPResponse);
 
       // Update instrument status based on TCP connection status
-      that.tcpService.getStatusObservable(instrument.connectionParams)
-        .subscribe(status => {
+      that.connectionStatusSubscriptions.get(instrument.connectionParams.instrumentId)?.unsubscribe();
+      const statusObservable = that.tcpService.getStatusObservable(instrument.connectionParams);
+      if (statusObservable) {
+        that.connectionStatusSubscriptions.set(instrument.connectionParams.instrumentId, statusObservable.subscribe(status => {
           that.updateInstrumentStatus(instrument.connectionParams.instrumentId, status);
-        });
+        }));
+      }
     }
   }
 
   reconnect(instrument: any) {
     const that = this;
     if (instrument && instrument.connectionParams) {
+      that.hl7ReceiveBuffers.delete(instrument.connectionParams.instrumentId);
       // Bind 'this' explicitly to handleTCPResponse
       const boundHandleTCPResponse = that.handleTCPResponse.bind(that);
       that.tcpService.reconnect(instrument.connectionParams, boundHandleTCPResponse);
 
       // Update instrument status based on TCP connection status
-      that.tcpService.getStatusObservable(instrument.connectionParams)
-        .subscribe(status => {
+      that.connectionStatusSubscriptions.get(instrument.connectionParams.instrumentId)?.unsubscribe();
+      const statusObservable = that.tcpService.getStatusObservable(instrument.connectionParams);
+      if (statusObservable) {
+        that.connectionStatusSubscriptions.set(instrument.connectionParams.instrumentId, statusObservable.subscribe(status => {
           that.updateInstrumentStatus(instrument.connectionParams.instrumentId, status);
-        });
+        }));
+      }
     }
   }
 
   disconnect(instrument: any) {
     const that = this;
     if (instrument && instrument.connectionParams && instrument.connectionParams.host && instrument.connectionParams.port) {
+      that.hl7ReceiveBuffers.delete(instrument.connectionParams.instrumentId);
+      that.connectionStatusSubscriptions.get(instrument.connectionParams.instrumentId)?.unsubscribe();
+      that.connectionStatusSubscriptions.delete(instrument.connectionParams.instrumentId);
       that.tcpService.disconnect(instrument.connectionParams);
       that.updateInstrumentStatus(instrument.connectionParams.instrumentId, false);
     }
@@ -147,7 +163,7 @@ export class InstrumentInterfaceService {
 
         // Standard fields
         sampleResult.result_status = 1;
-        sampleResult.lims_sync_status = 0;
+        sampleResult.lims_sync_status = LIMS_SYNC_STATUS.PENDING;
 
         // Extract datetime fields
         const dateTimeFields = that.hl7Helper.extractHL7DateTimeFields(singleObx);
@@ -226,7 +242,7 @@ export class InstrumentInterfaceService {
 
         // Standard fields
         sampleResult.result_status = 1;
-        sampleResult.lims_sync_status = 0;
+        sampleResult.lims_sync_status = LIMS_SYNC_STATUS.PENDING;
 
         // Extract datetime fields
         const dateTimeFields = that.hl7Helper.extractHL7DateTimeFields(singleObx);
@@ -305,7 +321,7 @@ export class InstrumentInterfaceService {
 
         // Standard fields
         sampleResult.result_status = 1;
-        sampleResult.lims_sync_status = 0;
+        sampleResult.lims_sync_status = LIMS_SYNC_STATUS.PENDING;
 
         // Extract datetime fields
         const dateTimeFields = that.hl7Helper.extractHL7DateTimeFields(singleObx);
@@ -398,7 +414,7 @@ export class InstrumentInterfaceService {
 
         // Standard fields
         sampleResult.result_status = 1;
-        sampleResult.lims_sync_status = 0;
+        sampleResult.lims_sync_status = LIMS_SYNC_STATUS.PENDING;
 
         // Extract datetime fields
         const dateTimeFields = that.hl7Helper.extractHL7DateTimeFields(singleObx);
@@ -478,19 +494,21 @@ export class InstrumentInterfaceService {
     instrumentConnectionData.transmissionStatusSubject.next(true);
     that.utilitiesService.logger('info', 'Receiving HL7 data', instrumentConnectionData.instrumentId);
     const hl7Text = that.utilitiesService.hex2ascii(data.toString('hex'));
-    that.strData += hl7Text;
+    const bufferKey = instrumentConnectionData.instrumentId;
+    const bufferedData = (that.hl7ReceiveBuffers.get(bufferKey) ?? '') + hl7Text;
+    that.hl7ReceiveBuffers.set(bufferKey, bufferedData);
 
     that.utilitiesService.logger('info', hl7Text, instrumentConnectionData.instrumentId);
 
     // If there is a File Separator or 1C or ASCII 28 character,
     // it means the stream has ended and we can proceed with saving this data
-    if (that.strData.includes('\x1c')) {
+    if (bufferedData.includes('\x1c')) {
       // Let us store this Raw Data before we process it
       instrumentConnectionData.transmissionStatusSubject.next(false);
       that.utilitiesService.logger('info', 'Received File Separator Character. Ready to process HL7 data', instrumentConnectionData.instrumentId);
 
       const rawData: RawMachineData = {
-        data: that.strData,
+        data: bufferedData,
         machine: instrumentConnectionData.instrumentId,
         instrument_id: instrumentConnectionData.instrumentId
       };
@@ -501,26 +519,28 @@ export class InstrumentInterfaceService {
       });
 
 
-      that.strData = that.strData.replace(/[\x0b\x1c]/g, '');
-      that.strData = that.strData.trim();
-      that.strData = that.strData.replace(/[\r\n\x0B\x0C\u0085\u2028\u2029]+/gm, '\r');
+      let completeMessage = bufferedData.replace(/[\x0b\x1c]/g, '');
+      completeMessage = completeMessage.trim();
+      completeMessage = completeMessage.replace(/[\r\n\x0B\x0C\u0085\u2028\u2029]+/gm, '\r');
+      // The complete frame is now owned by this call. Clear it before parsing
+      // so a parser exception cannot contaminate the next transmission.
+      that.hl7ReceiveBuffers.delete(bufferKey);
 
       //console.error(that.strData);
 
       if (instrumentConnectionData.machineType === 'abbott-alinity-m') {
-        that.processHL7DataAlinity(instrumentConnectionData, that.strData);
+        that.processHL7DataAlinity(instrumentConnectionData, completeMessage);
       }
       else if (instrumentConnectionData.machineType === 'roche-cobas-5800') {
-        that.processHL7DataRoche5800(instrumentConnectionData, that.strData);
+        that.processHL7DataRoche5800(instrumentConnectionData, completeMessage);
       }
       else if (instrumentConnectionData.machineType === 'roche-cobas-6800') {
-        that.processHL7DataRoche68008800(instrumentConnectionData, that.strData);
+        that.processHL7DataRoche68008800(instrumentConnectionData, completeMessage);
       }
       else {
-        that.processHL7Data(instrumentConnectionData, that.strData);
+        that.processHL7Data(instrumentConnectionData, completeMessage);
       }
 
-      that.strData = '';
       instrumentConnectionData.transmissionStatusSubject.next(false);
     }
   }
@@ -529,19 +549,20 @@ export class InstrumentInterfaceService {
   handleTCPResponse(connectionIdentifierKey: string, data: Buffer) {
     const that = this;
     const instrumentConnectionData = that.tcpService.connectionStack.get(connectionIdentifierKey);
-    // First ensure the instrument is marked as connected
-    if (instrumentConnectionData) {
-      // Explicitly mark as connected whenever we receive data
-      instrumentConnectionData.statusSubject.next(true);
+    if (!instrumentConnectionData) {
+      that.utilitiesService.logger('error', `Received data for unknown connection ${connectionIdentifierKey}`, null);
+      return;
     }
+    // First ensure the instrument is marked as connected
+    instrumentConnectionData.statusSubject.next(true);
 
     // Then process the data based on protocol
-    if (instrumentConnectionData.connectionProtocol === 'hl7') {
+    if (instrumentConnectionData.connectionProtocol === COMMUNICATION_PROTOCOL.HL7) {
       that.receiveHL7(instrumentConnectionData, data);
-    } else if (instrumentConnectionData.connectionProtocol === 'astm-nonchecksum') {
-      that.receiveASTM('astm-nonchecksum', instrumentConnectionData, data);
-    } else if (instrumentConnectionData.connectionProtocol === 'astm-checksum') {
-      that.receiveASTM('astm-checksum', instrumentConnectionData, data);
+    } else if (instrumentConnectionData.connectionProtocol === COMMUNICATION_PROTOCOL.ASTM_NON_CHECKSUM) {
+      that.receiveASTM(COMMUNICATION_PROTOCOL.ASTM_NON_CHECKSUM, instrumentConnectionData, data);
+    } else if (instrumentConnectionData.connectionProtocol === COMMUNICATION_PROTOCOL.ASTM_CHECKSUM) {
+      that.receiveASTM(COMMUNICATION_PROTOCOL.ASTM_CHECKSUM, instrumentConnectionData, data);
     }
   }
 

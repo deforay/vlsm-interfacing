@@ -1,3 +1,5 @@
+@use 'sass:color';
+
 /* raw-data.component.scss */
 
 // Color variables
@@ -100,7 +102,7 @@ $code-bg: #f6f8fa;
     color: white;
 
     &:hover:not(:disabled) {
-      background-color: darken($primary-color, 8%);
+      background-color: color.adjust($primary-color, $lightness: -8%);
     }
   }
 
@@ -109,7 +111,7 @@ $code-bg: #f6f8fa;
     color: white;
 
     &:hover:not(:disabled) {
-      background-color: darken($success-color, 8%);
+      background-color: color.adjust($success-color, $lightness: -8%);
     }
   }
 
@@ -201,7 +203,7 @@ $code-bg: #f6f8fa;
   overflow: hidden;
 
   .reprocessing-header {
-    background: linear-gradient(135deg, lighten($info-color, 35%), lighten($info-color, 33%));
+    background: linear-gradient(135deg, color.adjust($info-color, $lightness: 35%), color.adjust($info-color, $lightness: 33%));
     padding: 1rem 1.5rem;
     display: flex;
     align-items: center;
@@ -336,7 +338,7 @@ $code-bg: #f6f8fa;
       }
 
       &::placeholder {
-        color: lighten($text-light, 15%);
+        color: color.adjust($text-light, $lightness: 15%);
       }
     }
   }
@@ -382,7 +384,7 @@ $code-bg: #f6f8fa;
 
     .mat-row {
       transition: all 0.2s ease;
-      border-bottom: 1px solid lighten($border-color, 5%);
+      border-bottom: 1px solid color.adjust($border-color, $lightness: 5%);
       cursor: pointer;
 
       &:hover {
@@ -559,7 +561,7 @@ $code-bg: #f6f8fa;
 
   i {
     font-size: 4rem;
-    color: lighten($text-light, 20%);
+    color: color.adjust($text-light, $lightness: 20%);
     margin-bottom: 1.5rem;
   }
 

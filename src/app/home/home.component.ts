@@ -1,4 +1,4 @@
-import { Component, OnInit } from '@angular/core';
+import { Component } from '@angular/core';
 import { Router } from '@angular/router';
 import { ElectronStoreService } from '../services/electron-store.service';
 
@@ -8,7 +8,7 @@ import { ElectronStoreService } from '../services/electron-store.service';
   templateUrl: './home.component.html',
   styleUrls: ['./home.component.scss']
 })
-export class HomeComponent implements OnInit {
+export class HomeComponent {
   public settings: any = {};
   public appVersion: string = null;
   public user: { login: string; password: string } = {
@@ -24,9 +24,6 @@ export class HomeComponent implements OnInit {
       this.store.set('loggedin', true);
       this.router.navigate(['/console']);
     }
-  }
-
-  ngOnInit(): void {
   }
 
   public doLogin() {

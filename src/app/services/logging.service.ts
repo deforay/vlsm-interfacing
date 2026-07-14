@@ -1,4 +1,4 @@
-import { Injectable, Injector } from '@angular/core';
+import { Injectable, Injector, OnDestroy } from '@angular/core';
 import { LogDisplayService, LogEntry } from './log-display.service';
 import { ElectronService } from '../core/services';
 
@@ -13,18 +13,23 @@ let logEntrySeq = 0;
 @Injectable({
   providedIn: 'root'
 })
-export class LoggingService {
+export class LoggingService implements OnDestroy {
   private logQueue: LogEntry[] = [];
   private isProcessing = false;
   private processingInterval = 10000; // Process queue every 10 seconds
   private databaseServicePromise: Promise<any> | null = null;
+  private readonly queueProcessingTimer: ReturnType<typeof setInterval>;
 
   constructor(
     private injector: Injector,
     private logDisplayService: LogDisplayService,
     private electronService: ElectronService
   ) {
-    setInterval(() => this.processQueue(), this.processingInterval);
+    this.queueProcessingTimer = setInterval(() => this.processQueue(), this.processingInterval);
+  }
+
+  ngOnDestroy(): void {
+    clearInterval(this.queueProcessingTimer);
   }
 
   log(

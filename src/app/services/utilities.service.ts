@@ -79,7 +79,7 @@ export class UtilitiesService {
     return str;
   }
 
-  arrayKeyExists(key, search) { // eslint-disable-line camelcase
+  arrayKeyExists(key, search) {
     //  discuss at: http://locutus.io/php/arrayKeyExists/
     // original by: Kevin van Zonneveld (http://kvz.io)
     // improved by: Felix Geisendoerfer (http://www.debuggable.com/felix)

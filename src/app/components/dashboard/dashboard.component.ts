@@ -1,9 +1,10 @@
 // src/app/components/dashboard/dashboard.component.ts
-import { Component, OnInit } from '@angular/core';
+import { Component, OnDestroy, OnInit } from '@angular/core';
 import { Router, ActivatedRoute } from '@angular/router';
 import { ConnectionManagerService } from '../../services/connection-manager.service';
 import { UtilitiesService } from '../../services/utilities.service';
 import { Subscription } from 'rxjs';
+import { LIMS_SYNC_STATUS } from '../../constants/domain.constants';
 
 interface ResultData {
   added_on: string;
@@ -25,7 +26,7 @@ interface SessionData {
   templateUrl: './dashboard.component.html',
   styleUrls: ['./dashboard.component.scss']
 })
-export class DashboardComponent implements OnInit {
+export class DashboardComponent implements OnInit, OnDestroy {
   data: ResultData[] = [];
   filteredData: ResultData[] = [];
   latestResult?: ResultData;
@@ -106,9 +107,9 @@ export class DashboardComponent implements OnInit {
 
   private updateCounts(data: ResultData[]) {
     this.totalReceivedFromInstrument = data.length;
-    this.syncedToLIS = data.filter(item => item.lims_sync_status === 1).length;
-    this.pendingSyncToLIS = data.filter(item => item.lims_sync_status === 0).length;
-    this.unableSyncToLIS = data.filter(item => item.lims_sync_status === 2).length;
+    this.syncedToLIS = data.filter(item => item.lims_sync_status === LIMS_SYNC_STATUS.SYNCED).length;
+    this.pendingSyncToLIS = data.filter(item => item.lims_sync_status === LIMS_SYNC_STATUS.PENDING).length;
+    this.unableSyncToLIS = data.filter(item => item.lims_sync_status === LIMS_SYNC_STATUS.FAILED).length;
 
     this.latestResult = this.getLatestResult(data);
   }

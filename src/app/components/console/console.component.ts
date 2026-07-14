@@ -1,6 +1,6 @@
 // src/app/components/console/console.component.ts
 
-import { Component, OnInit, NgZone, OnDestroy, ChangeDetectorRef, ViewChild, ElementRef, HostListener } from '@angular/core';
+import { AfterViewInit, ChangeDetectionStrategy, ChangeDetectorRef, Component, ElementRef, HostListener, NgZone, OnDestroy, OnInit, ViewChild } from '@angular/core';
 import { Router } from '@angular/router';
 import { ElectronStoreService } from '../../services/electron-store.service';
 import { InstrumentInterfaceService } from '../../services/instrument-interface.service';
@@ -16,9 +16,9 @@ import { MatCheckboxChange } from '@angular/material/checkbox';
 import { fromEvent, Subscription } from 'rxjs';
 import { MatDialog } from '@angular/material/dialog';
 import { MatSnackBar } from '@angular/material/snack-bar';
-import { ChangeDetectionStrategy } from '@angular/core';
 import { debounceTime, distinctUntilChanged, shareReplay, map, filter } from 'rxjs/operators';
 import { LogDisplayService, LogEntry } from '../../services/log-display.service';
+import { BACKGROUND_INTERVAL_MS } from '../../constants/domain.constants';
 
 export enum SelectType {
   single,
@@ -32,7 +32,7 @@ export enum SelectType {
   styleUrls: ['./console.component.scss'],
   changeDetection: ChangeDetectionStrategy.OnPush
 })
-export class ConsoleComponent implements OnInit, OnDestroy {
+export class ConsoleComponent implements OnInit, AfterViewInit, OnDestroy {
   private static readonly SYSTEM_LOG_ID = '__system__';
   searchTerm: string = '';
   private pickedInitialTab = false; // run-once guard
@@ -60,6 +60,13 @@ export class ConsoleComponent implements OnInit, OnDestroy {
   private resultSavedSubscription: Subscription;
   private logSubscription: Subscription;
   private logClearSubscription: Subscription;
+  private searchSubscription: Subscription;
+  private initialResultsTimeout: ReturnType<typeof setTimeout>;
+  private readonly visibilityChangeHandler = () => {
+    if (document.visibilityState === 'visible') {
+      this.checkConnectionsAfterInactivity();
+    }
+  };
   public systemLogsExpanded = false;
   public systemLogContext = {
     connectionParams: { instrumentId: ConsoleComponent.SYSTEM_LOG_ID },
@@ -148,7 +155,7 @@ export class ConsoleComponent implements OnInit, OnDestroy {
   ngAfterViewInit() {
     // Setup debounced search after view is initialized and input element is available
     if (this.searchInput && this.searchInput.nativeElement) {
-      fromEvent(this.searchInput.nativeElement, 'input').pipe(
+      this.searchSubscription = fromEvent(this.searchInput.nativeElement, 'input').pipe(
         map((event: any) => event.target.value),
         debounceTime(300), // Wait 300ms after last event
         distinctUntilChanged() // Only emit if value changed
@@ -169,11 +176,7 @@ export class ConsoleComponent implements OnInit, OnDestroy {
     // Scroll to the top of the page when the component initializes
     window.scrollTo(0, 0);
 
-    document.addEventListener('visibilitychange', () => {
-      if (document.visibilityState === 'visible') {
-        this.checkConnectionsAfterInactivity();
-      }
-    });
+    document.addEventListener('visibilitychange', this.visibilityChangeHandler);
 
     // Subscribe to available instruments from the connection manager
     that.instrumentsSubscription = that.connectionManagerService.getActiveInstruments()
@@ -205,7 +208,7 @@ export class ConsoleComponent implements OnInit, OnDestroy {
       });
 
     // Fetch last few orders on load
-    setTimeout(() => {
+    this.initialResultsTimeout = setTimeout(() => {
       that.fetchRecentResults();
     }, 600);
 
@@ -221,7 +224,7 @@ export class ConsoleComponent implements OnInit, OnDestroy {
     // Check MySQL connection on regular intervals
     that.mysqlCheckInterval = setInterval(() => {
       that.checkMysqlConnection();
-    }, 1000 * 15);
+    }, BACKGROUND_INTERVAL_MS.MYSQL_HEALTH);
 
     // Background refresh + MySQL resync every 5 minutes. New results trigger
     // an immediate refresh via resultSaved$, and the user can hit the refresh
@@ -229,7 +232,7 @@ export class ConsoleComponent implements OnInit, OnDestroy {
     that.recentResultsInterval = setInterval(() => {
       that.fetchRecentResults();
       that.resyncTestResultsToMySQL();
-    }, 1000 * 60 * 5);
+    }, BACKGROUND_INTERVAL_MS.RESULT_REFRESH);
 
     // Pull LIMS sync status from MySQL into SQLite every 30s. Any external
     // LIS integration (PHP, Python, Node, anything that can talk to MySQL)
@@ -243,12 +246,12 @@ export class ConsoleComponent implements OnInit, OnDestroy {
           () => { }
         );
       }
-    }, 1000 * 30);
+    }, BACKGROUND_INTERVAL_MS.LIMS_STATUS_PULL);
 
     // SQLite WAL checkpoint every 30 minutes
     that.walCheckpointInterval = setInterval(() => {
       that.runSQLiteWalCheckpoint();
-    }, 1000 * 60 * 30); // 30 minutes
+    }, BACKGROUND_INTERVAL_MS.WAL_CHECKPOINT);
 
     // Subscribe to logs from the display service
     that.logSubscription = that.logDisplayService.log$.subscribe(logEntry => {
@@ -842,6 +845,10 @@ export class ConsoleComponent implements OnInit, OnDestroy {
   }
 
   ngOnDestroy() {
+    document.removeEventListener('visibilitychange', this.visibilityChangeHandler);
+    if (this.initialResultsTimeout) {
+      clearTimeout(this.initialResultsTimeout);
+    }
     // Clear intervals
     [
       this.recentResultsInterval,
@@ -860,7 +867,8 @@ export class ConsoleComponent implements OnInit, OnDestroy {
       this.instrumentsSubscription,
       this.resultSavedSubscription,
       this.logSubscription,
-      this.logClearSubscription
+      this.logClearSubscription,
+      this.searchSubscription
     ].forEach(subscription => {
       if (subscription) {
         subscription.unsubscribe();

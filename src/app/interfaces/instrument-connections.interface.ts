@@ -1,10 +1,11 @@
 // src/app/interfaces/instrument-connections.interface.ts
 
 import { BehaviorSubject } from 'rxjs';
+import { CommunicationProtocol, ConnectionMode } from '../constants/domain.constants';
 
 export interface InstrumentConnectionStack {
-  connectionMode?: 'tcpserver' | 'tcpclient';
-  connectionProtocol?: string;
+  connectionMode?: ConnectionMode;
+  connectionProtocol?: CommunicationProtocol;
   instrumentId?: string;
   labName?: string;
   machineType?: string;

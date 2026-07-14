@@ -1,9 +1,11 @@
 // src/app/interfaces/connection-params.interface.ts
 
+import { CommunicationProtocol, ConnectionMode } from '../constants/domain.constants';
+
 export interface ConnectionParams {
   instrumentIndex?: number;
-  connectionMode?: 'tcpserver' | 'tcpclient';
-  connectionProtocol: string;
+  connectionMode?: ConnectionMode;
+  connectionProtocol: CommunicationProtocol;
   host: string;
   port: number;
   instrumentId: string;

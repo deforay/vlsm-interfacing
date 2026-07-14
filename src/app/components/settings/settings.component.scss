@@ -1,3 +1,5 @@
+@use 'sass:color';
+
 /* settings.component.scss */
 
 // Color variables
@@ -99,7 +101,7 @@ $background-color: #f9fafb;
     color: white;
 
     &:hover:not(:disabled) {
-      background-color: darken($primary-color, 8%);
+      background-color: color.adjust($primary-color, $lightness: -8%);
     }
   }
 
@@ -108,7 +110,7 @@ $background-color: #f9fafb;
     color: white;
 
     &:hover:not(:disabled) {
-      background-color: darken($secondary-color, 8%);
+      background-color: color.adjust($secondary-color, $lightness: -8%);
     }
   }
 
@@ -117,7 +119,7 @@ $background-color: #f9fafb;
     color: white;
 
     &:hover:not(:disabled) {
-      background-color: darken($success-color, 8%);
+      background-color: color.adjust($success-color, $lightness: -8%);
     }
   }
 
@@ -126,7 +128,7 @@ $background-color: #f9fafb;
     color: white;
 
     &:hover:not(:disabled) {
-      background-color: darken($danger-color, 8%);
+      background-color: color.adjust($danger-color, $lightness: -8%);
     }
   }
 
@@ -351,7 +353,7 @@ $background-color: #f9fafb;
 
   .card-header {
     padding: 1.5rem;
-    background: linear-gradient(135deg, lighten($primary-color, 47%), lighten($primary-color, 45%));
+    background: linear-gradient(135deg, color.adjust($primary-color, $lightness: 47%), color.adjust($primary-color, $lightness: 45%));
     border-bottom: 1px solid $border-color;
     display: flex;
     justify-content: space-between;
@@ -445,7 +447,7 @@ $background-color: #f9fafb;
   }
 
   &::placeholder {
-    color: lighten($text-light, 15%);
+    color: color.adjust($text-light, $lightness: 15%);
   }
 }
 
@@ -588,7 +590,7 @@ select.form-control {
   .empty-illustration {
     display: inline-block;
     font-size: 4rem;
-    color: lighten($text-light, 20%);
+    color: color.adjust($text-light, $lightness: 20%);
     margin-bottom: 1.5rem;
     line-height: 1;
     /* avoids vertical stretch on some browsers */

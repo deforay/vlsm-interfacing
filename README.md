@@ -57,3 +57,15 @@ npm run electron:build
 ```
 
 The production build output will be in the `release/` directory.
+
+## Verification
+
+Run the local quality gate before submitting a change:
+
+```bash
+npm run verify
+```
+
+This checks lint rules, unit tests, the Electron main-process compilation, and
+the optimized Angular production build. The same gate runs automatically for
+pull requests and pushes to `master`.

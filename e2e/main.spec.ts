@@ -1,14 +1,26 @@
 import { BrowserContext, ElectronApplication, Page, _electron as electron } from 'playwright';
 import { test, expect } from '@playwright/test';
-const PATH = require('path');
+import * as fs from 'fs';
+import * as os from 'os';
+import * as path from 'path';
 
 test.describe('Check Home Page', async () => {
   let app: ElectronApplication;
   let firstWindow: Page;
   let context: BrowserContext;
+  let userDataDir: string;
 
   test.beforeAll( async () => {
-    app = await electron.launch({ args: [PATH.join(__dirname, '../app/main.js'), PATH.join(__dirname, '../app/package.json')] });
+    // WHY: never let automated tests read or migrate an operator's real local
+    // database and settings. Each run gets a disposable Electron profile.
+    userDataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'vlsm-interfacing-e2e-'));
+    app = await electron.launch({
+      args: [
+        path.join(__dirname, '../app/main.js'),
+        path.join(__dirname, '../app/package.json'),
+        `--user-data-dir=${userDataDir}`
+      ]
+    });
     context = app.context();
     await context.tracing.start({ screenshots: true, snapshots: true });
     firstWindow = await app.firstWindow();
@@ -46,14 +58,16 @@ test.describe('Check Home Page', async () => {
   //   expect(screenshot).toMatchSnapshot(`home-${browserName}.png`);
   // });
 
-  test('Check title', async () => {
+  test('shows the application login screen', async () => {
     const elem = await firstWindow.$('app-home h1');
     const text = await elem.innerText();
-    expect(text).toBe('App works !');
+    expect(text.trim()).toBe('Instrument Interfacing Tool');
+    await expect(firstWindow.getByRole('button', { name: 'Sign in' })).toBeVisible();
   });
 
   test.afterAll( async () => {
     await context.tracing.stop({ path: 'e2e/tracing/trace.zip' });
     await app.close();
+    fs.rmSync(userDataDir, { recursive: true, force: true });
   });
 });

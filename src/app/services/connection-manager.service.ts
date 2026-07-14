@@ -3,10 +3,16 @@ import { Injectable, OnDestroy } from '@angular/core';
 import { InstrumentInterfaceService } from './instrument-interface.service';
 import { ElectronStoreService } from './electron-store.service';
 import { TcpConnectionService } from './tcp-connection.service';
-import { BehaviorSubject, Observable } from 'rxjs';
+import { BehaviorSubject, Observable, Subscription, timer } from 'rxjs';
 import { ConnectionParams } from '../interfaces/connection-params.interface';
-import { timer } from 'rxjs';
 import { filter } from 'rxjs/operators';
+import {
+  AUTO_CONNECT,
+  BACKGROUND_INTERVAL_MS,
+  COMMUNICATION_PROTOCOL,
+  CommunicationProtocol,
+  CONNECTION_MODE
+} from '../constants/domain.constants';
 
 @Injectable({
   providedIn: 'root'
@@ -17,6 +23,10 @@ export class ConnectionManagerService implements OnDestroy {
   private commonSettings: any = null;
   private instrumentsSettings: any = null;
   private activeInstrumentsSubject = new BehaviorSubject<any[]>([]);
+  private storeSubscription: Subscription;
+  private statusSyncSubscription: Subscription;
+  private readonly instrumentStatusSubscriptions = new Map<string, Subscription>();
+  private readonly pendingInstrumentTimers = new Map<string, Set<ReturnType<typeof setTimeout>>>();
 
   constructor(
     private instrumentInterfaceService: InstrumentInterfaceService,
@@ -27,7 +37,8 @@ export class ConnectionManagerService implements OnDestroy {
     this.loadSettings();
 
     // Subscribe to store changes to update instruments if settings change
-    this.store.electronStoreObservable().subscribe(electronStoreObject => {
+    this.storeSubscription = this.store.electronStoreObservable().subscribe(electronStoreObject => {
+      if (!electronStoreObject) return;
       this.commonSettings = electronStoreObject.commonConfig;
       this.instrumentsSettings = electronStoreObject.instrumentsConfig;
       this.updateInstrumentsList();
@@ -71,6 +82,7 @@ export class ConnectionManagerService implements OnDestroy {
           if (instrument.isConnected || instrument.connectionInProcess) {
             this.tcpService.disconnect(instrument.connectionParams);
           }
+          this.clearInstrumentResources(instrumentId);
           this.activeInstruments.delete(instrumentId);
         }
       }
@@ -81,11 +93,14 @@ export class ConnectionManagerService implements OnDestroy {
       let instrumentId = instrumentSetting.analyzerMachineName;
 
       // Standardize protocol names
-      let protocol = instrumentSetting.interfaceCommunicationProtocol;
-      if (protocol == 'astm-elecsys') {
-        protocol = 'astm-nonchecksum';
-      } else if (protocol == 'astm-concatenated') {
-        protocol = 'astm-checksum';
+      const configuredProtocol = instrumentSetting.interfaceCommunicationProtocol as string;
+      let protocol: CommunicationProtocol;
+      if (configuredProtocol === 'astm-elecsys') {
+        protocol = COMMUNICATION_PROTOCOL.ASTM_NON_CHECKSUM;
+      } else if (configuredProtocol === 'astm-concatenated') {
+        protocol = COMMUNICATION_PROTOCOL.ASTM_CHECKSUM;
+      } else {
+        protocol = configuredProtocol as CommunicationProtocol;
       }
 
       // Create connection parameters
@@ -99,7 +114,7 @@ export class ConnectionManagerService implements OnDestroy {
         machineType: instrumentSetting.analyzerMachineType,
         labName: this.commonSettings.labName,
         displayorder: instrumentSetting.displayorder,
-        interfaceAutoConnect: this.commonSettings ? this.commonSettings.interfaceAutoConnect : 'yes'
+        interfaceAutoConnect: this.commonSettings ? this.commonSettings.interfaceAutoConnect : AUTO_CONNECT.ENABLED
 
       };
 
@@ -130,8 +145,8 @@ export class ConnectionManagerService implements OnDestroy {
         instrument.statusText = this.getStatusText(instrument);
 
         // If auto-connect is enabled and settings changed, reconnect after a delay
-        if (settingsChanged && connectionParams.interfaceAutoConnect === 'yes') {
-          setTimeout(() => {
+        if (settingsChanged && connectionParams.interfaceAutoConnect === AUTO_CONNECT.ENABLED) {
+          this.scheduleInstrumentTask(instrumentId, () => {
             console.log(`Reconnecting ${instrumentId} after settings change`);
             this.reconnect(instrument);
           }, 2000); // Longer delay to ensure proper cleanup
@@ -143,7 +158,7 @@ export class ConnectionManagerService implements OnDestroy {
           isConnected: false,
           connectionInProcess: false,
           transmissionInProgress: false,
-          instrumentButtonText: connectionParams.connectionMode === 'tcpserver' ? 'Start Server' : 'Connect',
+          instrumentButtonText: connectionParams.connectionMode === CONNECTION_MODE.SERVER ? 'Start Server' : 'Connect',
           statusText: this.getStatusText({
             isConnected: false,
             connectionInProcess: false,
@@ -155,8 +170,8 @@ export class ConnectionManagerService implements OnDestroy {
         this.activeInstruments.set(instrumentId, instrument);
 
         // If auto-connect is enabled, connect after a short delay
-        if (connectionParams.interfaceAutoConnect === 'yes') {
-          setTimeout(() => {
+        if (connectionParams.interfaceAutoConnect === AUTO_CONNECT.ENABLED) {
+          this.scheduleInstrumentTask(instrumentId, () => {
             this.reconnect(instrument);
           }, 1000);
         }
@@ -186,7 +201,7 @@ export class ConnectionManagerService implements OnDestroy {
 
     // Check if transmitting - has highest priority
     if (instrument.transmissionInProgress) {
-      return instrument.connectionParams.connectionMode === 'tcpserver'
+      return instrument.connectionParams.connectionMode === CONNECTION_MODE.SERVER
         ? 'Server Transmitting Data...'
         : 'Client Transmitting Data...';
     }
@@ -194,20 +209,20 @@ export class ConnectionManagerService implements OnDestroy {
     // Check if connected - second highest priority
     // This is important - connected takes precedence over connectionInProcess
     if (instrument.isConnected) {
-      return instrument.connectionParams.connectionMode === 'tcpserver'
+      return instrument.connectionParams.connectionMode === CONNECTION_MODE.SERVER
         ? 'Server Connected'
         : 'Client Connected';
     }
 
     // Check connection in process - lower priority than connected status
     if (instrument.connectionInProcess) {
-      return instrument.connectionParams.connectionMode === 'tcpserver'
+      return instrument.connectionParams.connectionMode === CONNECTION_MODE.SERVER
         ? 'Server Listening...'
         : 'Client Connecting...';
     }
 
     // Default disconnected state
-    return instrument.connectionParams.connectionMode === 'tcpserver'
+    return instrument.connectionParams.connectionMode === CONNECTION_MODE.SERVER
       ? 'Server Disconnected'
       : 'Client Disconnected';
   }
@@ -265,7 +280,7 @@ export class ConnectionManagerService implements OnDestroy {
     // Update instrument state before connecting
     if (instrumentFromMap) {
       instrumentFromMap.connectionInProcess = true;
-      const isTcpServer = instrumentFromMap.connectionParams.connectionMode === 'tcpserver';
+      const isTcpServer = instrumentFromMap.connectionParams.connectionMode === CONNECTION_MODE.SERVER;
       instrumentFromMap.instrumentButtonText = isTcpServer ? 'Waiting for client..' : 'Connecting...';
       instrumentFromMap.statusText = isTcpServer ? 'Server Listening...' : 'Client Connecting...';
       this.notifyInstrumentsChanged();
@@ -313,9 +328,9 @@ export class ConnectionManagerService implements OnDestroy {
     console.log(`Waiting ${portReleaseDelay}ms for port release before reconnecting ${instrument.connectionParams.instrumentId}`);
 
     // Wait for port to be released
-    setTimeout(() => {
+    this.scheduleInstrumentTask(instrument.connectionParams.instrumentId, () => {
       if (instrumentFromMap) {
-        const isTcpServer = instrumentFromMap.connectionParams.connectionMode === 'tcpserver';
+        const isTcpServer = instrumentFromMap.connectionParams.connectionMode === CONNECTION_MODE.SERVER;
         instrumentFromMap.instrumentButtonText = isTcpServer ? 'Waiting for client...' : 'Connecting...';
         instrumentFromMap.statusText = isTcpServer ? 'Server Listening...' : 'Client Connecting...';
         this.notifyInstrumentsChanged();
@@ -332,6 +347,7 @@ export class ConnectionManagerService implements OnDestroy {
     if (!instrument || !instrument.connectionParams) return;
 
     const connectionMode = instrument.connectionParams.instrumentId;
+    this.clearInstrumentTimers(connectionMode);
 
     // Update session data with disconnect time
     const sessionData = JSON.parse(localStorage.getItem('sessionDatas') || '{}');
@@ -352,9 +368,18 @@ export class ConnectionManagerService implements OnDestroy {
 
 
   private updateInstrumentStatusSubscription(instrument: any) {
+    const instrumentId = instrument.connectionParams.instrumentId;
+    const subscriptions = new Subscription();
+
+    // WHY: reconnects reuse the same subjects. Keeping old subscribers would
+    // multiply UI updates and retain component state for the lifetime of the app.
+    this.instrumentStatusSubscriptions.get(instrumentId)?.unsubscribe();
+    this.instrumentStatusSubscriptions.set(instrumentId, subscriptions);
+
     // Subscribe to connection status changes
-    this.tcpService.getStatusObservable(instrument.connectionParams)
-      .subscribe(status => {
+    const statusObservable = this.tcpService.getStatusObservable(instrument.connectionParams);
+    if (statusObservable) {
+      subscriptions.add(statusObservable.subscribe(status => {
         const instrumentFromMap = this.activeInstruments.get(instrument.connectionParams.instrumentId);
         if (instrumentFromMap) {
           //console.log(`Status update for ${instrumentFromMap.connectionParams.instrumentId}: isConnected=${status}`);
@@ -389,16 +414,18 @@ export class ConnectionManagerService implements OnDestroy {
 
           this.notifyInstrumentsChanged();
         }
-      });
+      }));
+    }
 
     // Subscribe to connection attempt status
-    this.tcpService.getConnectionAttemptObservable(instrument.connectionParams)
-      .subscribe(status => {
+    const attemptObservable = this.tcpService.getConnectionAttemptObservable(instrument.connectionParams);
+    if (attemptObservable) {
+      subscriptions.add(attemptObservable.subscribe(status => {
         const instrumentFromMap = this.activeInstruments.get(instrument.connectionParams.instrumentId);
         if (instrumentFromMap) {
           console.log(`Connection attempt update for ${instrumentFromMap.connectionParams.instrumentId}: inProcess=${status}`);
 
-          const isTcpServer = instrumentFromMap.connectionParams.connectionMode === 'tcpserver';
+          const isTcpServer = instrumentFromMap.connectionParams.connectionMode === CONNECTION_MODE.SERVER;
 
           // Only update connection process status if we're not already connected
           // This prevents "Listening" status when already connected
@@ -416,11 +443,13 @@ export class ConnectionManagerService implements OnDestroy {
 
           this.notifyInstrumentsChanged();
         }
-      });
+      }));
+    }
 
     // Subscribe to transmission status
-    this.tcpService.getTransmissionStatusObservable(instrument.connectionParams)
-      .subscribe(status => {
+    const transmissionObservable = this.tcpService.getTransmissionStatusObservable(instrument.connectionParams);
+    if (transmissionObservable) {
+      subscriptions.add(transmissionObservable.subscribe(status => {
         const instrumentFromMap = this.activeInstruments.get(instrument.connectionParams.instrumentId);
         if (instrumentFromMap) {
           console.log(`Transmission update for ${instrumentFromMap.connectionParams.instrumentId}: transmitting=${status}`);
@@ -430,7 +459,7 @@ export class ConnectionManagerService implements OnDestroy {
           // Update status text to reflect transmission
           if (status) {
             // If transmitting data, show a special status
-            instrumentFromMap.statusText = instrumentFromMap.connectionParams.connectionMode === 'tcpserver'
+            instrumentFromMap.statusText = instrumentFromMap.connectionParams.connectionMode === CONNECTION_MODE.SERVER
               ? 'Server Transmitting Data...'
               : 'Client Transmitting Data...';
           } else {
@@ -440,7 +469,8 @@ export class ConnectionManagerService implements OnDestroy {
 
           this.notifyInstrumentsChanged();
         }
-      });
+      }));
+    }
   }
 
   private generateUuid(): string {
@@ -468,6 +498,7 @@ export class ConnectionManagerService implements OnDestroy {
     if (!instrument || !instrument.connectionParams) return;
 
     console.log(`Cancelling connection attempt for ${instrument.connectionParams.instrumentId}`);
+    this.clearInstrumentTimers(instrument.connectionParams.instrumentId);
 
     // First, update the instrument status
     const instrumentFromMap = this.activeInstruments.get(instrument.connectionParams.instrumentId);
@@ -478,7 +509,7 @@ export class ConnectionManagerService implements OnDestroy {
       instrumentFromMap.transmissionInProgress = false;
 
       // Update UI elements
-      const isTcpServer = instrumentFromMap.connectionParams.connectionMode === 'tcpserver';
+      const isTcpServer = instrumentFromMap.connectionParams.connectionMode === CONNECTION_MODE.SERVER;
       instrumentFromMap.instrumentButtonText = isTcpServer ? 'Start Server' : 'Connect';
       instrumentFromMap.statusText = isTcpServer ? 'Server Disconnected' : 'Client Disconnected';
 
@@ -506,7 +537,7 @@ export class ConnectionManagerService implements OnDestroy {
       instrumentFromMap.connectionInProcess = false;
       instrumentFromMap.transmissionInProgress = false;
 
-      const isTcpServer = instrumentFromMap.connectionParams.connectionMode === 'tcpserver';
+      const isTcpServer = instrumentFromMap.connectionParams.connectionMode === CONNECTION_MODE.SERVER;
       instrumentFromMap.instrumentButtonText = isTcpServer ? 'Start Server' : 'Connect';
       instrumentFromMap.statusText = isTcpServer ? 'Server Disconnected' : 'Client Disconnected';
       this.notifyInstrumentsChanged();
@@ -517,7 +548,7 @@ export class ConnectionManagerService implements OnDestroy {
     // You'll need to implement this through your ElectronService or similar service
 
     // After force killing, add a delay then reconnect
-    setTimeout(() => {
+    this.scheduleInstrumentTask(instrument.connectionParams.instrumentId, () => {
       this.reconnect(instrument);
     }, 5000); // 5 seconds to allow port to be fully released
   }
@@ -535,7 +566,7 @@ export class ConnectionManagerService implements OnDestroy {
           inProcess: instrument.connectionInProcess
         });
 
-        return instrument.connectionParams.interfaceAutoConnect === 'yes' &&
+        return instrument.connectionParams.interfaceAutoConnect === AUTO_CONNECT.ENABLED &&
           !instrument.isConnected &&
           !instrument.connectionInProcess;
       });
@@ -547,7 +578,7 @@ export class ConnectionManagerService implements OnDestroy {
       const delay = 2000 + (1000 * index); // Start with 2 seconds, then add 1 second per instrument
       console.log(`Will auto-reconnect ${instrument.connectionParams.instrumentId} after ${delay}ms`);
 
-      setTimeout(() => {
+      this.scheduleInstrumentTask(instrument.connectionParams.instrumentId, () => {
         console.log(`Now auto-reconnecting ${instrument.connectionParams.instrumentId}`);
         this.reconnect(instrument);
       }, delay);
@@ -576,7 +607,7 @@ export class ConnectionManagerService implements OnDestroy {
 
   // Add a periodic status check
   startStatusSyncInterval() {
-    timer(0, 5000).pipe(
+    this.statusSyncSubscription = timer(0, BACKGROUND_INTERVAL_MS.CONNECTION_STATUS).pipe(
       // Only run when document is visible
       filter(() => document.visibilityState === 'visible')
     ).subscribe(() => {
@@ -587,6 +618,40 @@ export class ConnectionManagerService implements OnDestroy {
   }
 
   ngOnDestroy() {
-    // Clean up any resources if needed
+    this.storeSubscription?.unsubscribe();
+    this.statusSyncSubscription?.unsubscribe();
+    this.instrumentStatusSubscriptions.forEach(subscription => subscription.unsubscribe());
+    this.instrumentStatusSubscriptions.clear();
+    this.pendingInstrumentTimers.forEach(timers => {
+      timers.forEach(timeout => clearTimeout(timeout));
+    });
+    this.pendingInstrumentTimers.clear();
+    this.activeInstrumentsSubject.complete();
+  }
+
+  private scheduleInstrumentTask(instrumentId: string, task: () => void, delay: number): void {
+    const timers = this.pendingInstrumentTimers.get(instrumentId) ?? new Set();
+    const timeout = setTimeout(() => {
+      timers.delete(timeout);
+      if (timers.size === 0) {
+        this.pendingInstrumentTimers.delete(instrumentId);
+      }
+      task();
+    }, delay);
+
+    timers.add(timeout);
+    this.pendingInstrumentTimers.set(instrumentId, timers);
+  }
+
+  private clearInstrumentTimers(instrumentId: string): void {
+    const timers = this.pendingInstrumentTimers.get(instrumentId);
+    timers?.forEach(timeout => clearTimeout(timeout));
+    this.pendingInstrumentTimers.delete(instrumentId);
+  }
+
+  private clearInstrumentResources(instrumentId: string): void {
+    this.clearInstrumentTimers(instrumentId);
+    this.instrumentStatusSubscriptions.get(instrumentId)?.unsubscribe();
+    this.instrumentStatusSubscriptions.delete(instrumentId);
   }
 }

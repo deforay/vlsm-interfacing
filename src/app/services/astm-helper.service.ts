@@ -2,6 +2,7 @@
 
 import { Injectable } from '@angular/core';
 import { UtilitiesService } from './utilities.service';
+import { LIMS_SYNC_STATUS } from '../constants/domain.constants';
 
 export interface ASTMProcessingResult {
   completed: boolean;
@@ -357,7 +358,7 @@ export class ASTMHelperService {
 
         sampleResult.raw_text = partData;
         sampleResult.result_status = resultStatus === 'F' ? 1 : 0;
-        sampleResult.lims_sync_status = 0;
+        sampleResult.lims_sync_status = LIMS_SYNC_STATUS.PENDING;
 
         return sampleResult;
       }

@@ -51,7 +51,6 @@ export class ElectronStoreService {
 
   exportSettings(): void {
     const settings = this.getAll();
-    const sensitiveFields = ['mysqlPassword'];
     this.removeSensitiveFields(settings);
     const settingsJSON = JSON.stringify(settings, null, 2);
     (window as any).require('electron').ipcRenderer.invoke('export-settings', settingsJSON)
@@ -68,14 +67,16 @@ export class ElectronStoreService {
     // List of sensitive fields to be removed
     const sensitiveFields = ['mysqlPassword', 'encryptionKey'];
 
-    // Check if commonSettings exists and remove the sensitive fields
-    if (settings && settings.commonSettings) {
+    // Stored settings use commonConfig. Keep the legacy key covered as well so
+    // older imported configurations cannot leak credentials when re-exported.
+    const commonSettingsObjects = [settings?.commonConfig, settings?.commonSettings].filter(Boolean);
+    commonSettingsObjects.forEach(commonSettings => {
       sensitiveFields.forEach(field => {
-        if (settings.commonSettings[field]) {
-          delete settings.commonSettings[field];
+        if (Object.prototype.hasOwnProperty.call(commonSettings, field)) {
+          delete commonSettings[field];
         }
       });
-    }
+    });
 
     // Remove LIS API credentials
     if (settings && settings.lisApiConfig && settings.lisApiConfig.credentials) {
