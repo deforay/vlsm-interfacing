@@ -1,3 +1,4 @@
+import { firstValueFrom } from 'rxjs';
 import { describe, expect, it, vi } from 'vitest';
 import { DatabaseService } from './database.service';
 
@@ -114,5 +115,30 @@ describe('DatabaseService result durability', () => {
     // WHY: a remote insert must be safe to retry even if the local replicated
     // flag could not be updated. Batch 2 will add a stable ingestion identity.
     expect(service.execQuery).toHaveBeenCalledOnce();
+  });
+});
+
+describe('DatabaseService log display', () => {
+  it('returns stored logs as structured plain text', async () => {
+    const service = Object.create(DatabaseService.prototype) as any;
+    service.execSqlite = vi.fn().mockResolvedValue([{
+      id: 7,
+      instrument_id: 'ANALYZER-1',
+      added_on: '2026-07-15T12:15:11.830Z',
+      log_type: 'error',
+      log: 'Connection timed out'
+    }]);
+
+    const entries = await firstValueFrom(
+      service.fetchRecentLogs('ANALYZER-1') as ReturnType<DatabaseService['fetchRecentLogs']>
+    );
+    const [entry] = entries;
+
+    expect(entry).toMatchObject({
+      type: 'error',
+      message: 'Connection timed out',
+      instrumentId: 'ANALYZER-1'
+    });
+    expect(entry.timestamp).toEqual(new Date('2026-07-15T12:15:11.830Z'));
   });
 });

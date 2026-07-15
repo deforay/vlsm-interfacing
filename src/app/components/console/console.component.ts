@@ -735,14 +735,24 @@ export class ConsoleComponent implements OnInit, AfterViewInit, OnDestroy {
 
   copyLog(instrument: { connectionParams: { instrumentId: string | number; }; }) {
     if (this.instrumentLogs[instrument.connectionParams.instrumentId]) {
-      // Join the filtered logs with a newline character, stripping any HTML markup
       const logContent = this.instrumentLogs[instrument.connectionParams.instrumentId].filteredLogs
-        .map(l => this.extractPlainText(l.message))
+        .map((logEntry: LogEntry) => {
+          const timestamp = this.formatLogTimestamp(logEntry.timestamp);
+          return `[${timestamp}] [${logEntry.type}] ${logEntry.message}`;
+        })
         .join('\n');
       this.copyTextToClipboard(logContent);
     } else {
       console.error('No logs found for instrument:', instrument.connectionParams.instrumentId);
     }
+  }
+
+  private formatLogTimestamp(timestamp: Date): string {
+    const value = new Date(timestamp);
+    const pad = (part: number, length = 2) => String(part).padStart(length, '0');
+
+    return `${value.getFullYear()}-${pad(value.getMonth() + 1)}-${pad(value.getDate())} `
+      + `${pad(value.getHours())}:${pad(value.getMinutes())}:${pad(value.getSeconds())}.${pad(value.getMilliseconds(), 3)}`;
   }
 
   clearLiveLog(instrument: any) {
@@ -796,15 +806,6 @@ export class ConsoleComponent implements OnInit, AfterViewInit, OnDestroy {
         });
       });
     });
-  }
-
-  private extractPlainText(message: string): string {
-    if (!message) {
-      return '';
-    }
-    const tempElement = document.createElement('div');
-    tempElement.innerHTML = message;
-    return tempElement.textContent ?? tempElement.innerText ?? '';
   }
 
   checkMysqlConnection() {
