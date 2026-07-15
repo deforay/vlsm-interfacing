@@ -45,7 +45,18 @@ describe('DatabaseService result durability', () => {
     });
 
     expect(service.execQuery).toHaveBeenCalledOnce();
-    expect(service.execSqlite.mock.calls[0][1].at(-1)).toBe(1);
+    expect(service.execQuery.mock.calls[0][0]).toContain('ON DUPLICATE KEY UPDATE');
+    const localInsertValues = service.execSqlite.mock.calls[0][1];
+    const ingestionId = localInsertValues.find(
+      value => typeof value === 'string' && /^[a-f0-9-]{36}$/.test(value)
+    );
+    expect(ingestionId).toBeTruthy();
+    expect(service.execQuery.mock.calls[0][1]).toContain(ingestionId);
+    expect(localInsertValues.at(-1)).toBe(0);
+    expect(service.execSqlite.mock.calls[1]).toEqual([
+      'UPDATE orders SET mysql_inserted = 1 WHERE id IN (?)',
+      [1]
+    ]);
   });
 
   it('falls back to a pending local copy when the MySQL insert fails', async () => {
@@ -63,7 +74,7 @@ describe('DatabaseService result durability', () => {
     expect(service.execSqlite.mock.calls[0][1].at(-1)).toBe(0);
   });
 
-  it('documents the current interruption window after a successful MySQL insert', async () => {
+  it('does not attempt MySQL when the local durability write fails', async () => {
     const service = createService();
     const sqliteFailure = new Error('local disk unavailable');
     service.checkMysqlConnection = vi.fn((_params, success) => success());
@@ -74,13 +85,11 @@ describe('DatabaseService result durability', () => {
       service.recordTestResults(sampleResult, vi.fn(), resolve);
     });
 
-    // This characterization is intentionally expected to change when Batch 2
-    // makes local durability the first persistence boundary.
-    expect(service.execQuery).toHaveBeenCalledOnce();
+    expect(service.execQuery).not.toHaveBeenCalled();
     expect(receivedError).toBe(sqliteFailure);
   });
 
-  it.fails('persists locally before attempting MySQL replication', async () => {
+  it('persists locally before attempting MySQL replication', async () => {
     const service = createService();
     service.checkMysqlConnection = vi.fn((_params, success) => success());
     service.execQuery = vi.fn((_query, _values, success) => success({ insertId: 1 }));
@@ -90,17 +99,26 @@ describe('DatabaseService result durability', () => {
       service.recordTestResults(sampleResult, resolve, reject);
     });
 
-    // WHY: local-first ordering closes the crash window documented above.
-    // Batch 2 will change the implementation and convert this to a normal test.
+    // WHY: local-first ordering closes the crash window between databases.
     expect(service.execSqlite.mock.invocationCallOrder[0])
       .toBeLessThan(service.execQuery.mock.invocationCallOrder[0]);
   });
 
-  it.fails('does not replicate the same pending row twice after a local status-update failure', async () => {
+  it('retries a pending row with the same idempotency identity', async () => {
     const service = createService();
-    const pendingRecord = { ...sampleResult, id: 42, instrument_id: 'ANALYZER-1', mysql_inserted: 0 };
+    const pendingRecord = {
+      ...sampleResult,
+      id: 42,
+      instrument_id: 'ANALYZER-1',
+      ingestion_id: 'stable-ingestion-id',
+      mysql_inserted: 0
+    };
+    const remotelyStoredIds = new Set<string>();
     service.checkMysqlConnection = vi.fn((_params, success) => success());
-    service.execQuery = vi.fn((_query, _values, success) => success({ affectedRows: 1 }));
+    service.execQuery = vi.fn((_query, values, success) => {
+      remotelyStoredIds.add(values[0][0].find(value => value === 'stable-ingestion-id'));
+      success({ affectedRows: 1 });
+    });
     service.execSqlite = vi.fn((query: string) => {
       if (query.startsWith('SELECT')) return Promise.resolve([pendingRecord]);
       return Promise.reject(new Error('status update interrupted'));
@@ -112,9 +130,9 @@ describe('DatabaseService result durability', () => {
     await resync();
     await resync();
 
-    // WHY: a remote insert must be safe to retry even if the local replicated
-    // flag could not be updated. Batch 2 will add a stable ingestion identity.
-    expect(service.execQuery).toHaveBeenCalledOnce();
+    expect(service.execQuery).toHaveBeenCalledTimes(2);
+    expect(service.execQuery.mock.calls[0][0]).toContain('ON DUPLICATE KEY UPDATE');
+    expect(remotelyStoredIds).toEqual(new Set(['stable-ingestion-id']));
   });
 });
 
