@@ -111,14 +111,12 @@ describe('HL7HelperService', () => {
     });
   });
 
-  it.fails('rejects an HL7 fixture without required result segments', () => {
+  it('rejects an HL7 fixture without required result segments', () => {
     const message = service.createHL7Message([
       'MSH|^~\\&|COBAS|LAB001|LIS|LAB001|20260714113000||OUL^R22|MSG-002|P|2.5.1',
       'SPM|1|SAMPLE-002'
     ].join('\r'));
 
-    // WHY: this desired contract currently fails because the parser returns a
-    // placeholder object for a missing OBX segment rather than null.
     expect(service.isValidHL7Message(message)).toBe(false);
   });
 });

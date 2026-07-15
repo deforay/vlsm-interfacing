@@ -1,6 +1,9 @@
 import { BehaviorSubject } from 'rxjs';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { InstrumentInterfaceService } from './instrument-interface.service';
+import { HL7HelperService } from './hl7-helper.service';
+import { ASTMHelperService } from './astm-helper.service';
+import { UtilitiesService } from './utilities.service';
 
 describe('InstrumentInterfaceService HL7 streams', () => {
   afterEach(() => {
@@ -43,6 +46,28 @@ describe('InstrumentInterfaceService HL7 streams', () => {
     );
 
     return { service, dbService, tcpService, astmHelper };
+  };
+
+  const createParsingService = (persistenceSucceeds: boolean) => {
+    const loggingService = { log: vi.fn() };
+    const utilities = new UtilitiesService(null, null, loggingService as any);
+    const dbService = {
+      recordTestResults: vi.fn((_data, success, failure) => {
+        if (persistenceSucceeds) success({ lastID: 1 });
+        else failure(new Error('database write failed'));
+      })
+    };
+    const hl7Helper = new HL7HelperService(utilities);
+    const astmHelper = new ASTMHelperService(utilities);
+    const service = new InstrumentInterfaceService(
+      dbService as any,
+      { connectionStack: new Map() } as any,
+      utilities,
+      hl7Helper,
+      astmHelper
+    );
+
+    return { service, dbService };
   };
 
   it('does not mix fragmented HL7 messages from concurrent instruments', () => {
@@ -139,5 +164,34 @@ describe('InstrumentInterfaceService HL7 streams', () => {
     expect((service as any).hl7ReceiveBuffers.has('ANALYZER-A')).toBe(false);
     expect(astmHelper.clearInstrumentBuffer).toHaveBeenCalledWith('ANALYZER-A');
     expect(tcpService.disconnect).toHaveBeenCalledOnce();
+  });
+
+  it('reports successful persistence after parsing a stored HL7 result', async () => {
+    const { service, dbService } = createParsingService(true);
+    const rawMessage = [
+      'MSH|^~\\&|ANALYZER|LAB001|LIS|LAB001|20260714113000||OUL^R22|MSG-001|P|2.5.1',
+      'SPM|1|SAMPLE-001',
+      'OBR|1|||HIVVL^HIV Viral Load',
+      'OBX|1|ST|HIVVL^HIV Viral Load|1|1250|copies/mL|||||F|||||TECH-1|||20260714113000'
+    ].join('\r');
+
+    const outcomes = await service.processHL7Data(createConnection('ANALYZER-A') as any, rawMessage);
+
+    expect(outcomes).toEqual([true]);
+    expect(dbService.recordTestResults).toHaveBeenCalledOnce();
+  });
+
+  it('reports persistence failure after parsing a stored HL7 result', async () => {
+    const { service } = createParsingService(false);
+    const rawMessage = [
+      'MSH|^~\\&|ANALYZER|LAB001|LIS|LAB001|20260714113000||OUL^R22|MSG-002|P|2.5.1',
+      'SPM|1|SAMPLE-002',
+      'OBR|1|||HIVVL^HIV Viral Load',
+      'OBX|1|ST|HIVVL^HIV Viral Load|1|Failed|||||||X'
+    ].join('\r');
+
+    const outcomes = await service.processHL7Data(createConnection('ANALYZER-A') as any, rawMessage);
+
+    expect(outcomes).toEqual([false]);
   });
 });
