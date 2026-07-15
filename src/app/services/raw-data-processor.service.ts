@@ -9,6 +9,7 @@ import { InstrumentConnectionStack } from '../interfaces/instrument-connections.
   providedIn: 'root'
 })
 export class RawDataProcessorService {
+  private static readonly PERSISTENCE_TIMEOUT_MS = 60_000;
   private reprocessingStatus = new BehaviorSubject<any>({
     inProgress: false,
     processedCount: 0,
@@ -118,6 +119,10 @@ export class RawDataProcessorService {
   }
 
   private getInstrumentSettings(analyzerMachineName: string): any {
+    if (!Array.isArray(this.instrumentsSettings) || !analyzerMachineName) {
+      return null;
+    }
+
     const instrumentSettings = this.instrumentsSettings.find(
       (inst: any) =>
         inst.analyzerMachineName &&
@@ -138,11 +143,6 @@ export class RawDataProcessorService {
     if (flexMatch) {
       this.utilsService.logger('info', `Flexible match found for ${analyzerMachineName}`, analyzerMachineName);
       return flexMatch;
-    }
-
-    if (this.instrumentsSettings.length > 0) {
-      this.utilsService.logger('warn', `Fallback to first instrument setting for ${analyzerMachineName}`, analyzerMachineName);
-      return this.instrumentsSettings[0];
     }
 
     return null;
@@ -169,19 +169,23 @@ export class RawDataProcessorService {
       };
 
 
+      let persistenceResults: boolean[] = [];
       if (protocol === 'hl7') {
+        let persistencePromise: Promise<boolean[]>;
         if (machineType === 'abbott-alinity-m') {
-          this.instrumentInterfaceService.processHL7DataAlinity(instrumentConnectionData, rawData);
+          persistencePromise = this.instrumentInterfaceService.processHL7DataAlinity(instrumentConnectionData, rawData);
         } else if (machineType === 'roche-cobas-5800') {
-          this.instrumentInterfaceService.processHL7DataRoche5800(instrumentConnectionData, rawData);
+          persistencePromise = this.instrumentInterfaceService.processHL7DataRoche5800(instrumentConnectionData, rawData);
         } else if (machineType === 'roche-cobas-6800' || machineType === 'roche-cobas-8800') {
-          this.instrumentInterfaceService.processHL7DataRoche68008800(instrumentConnectionData, rawData);
+          persistencePromise = this.instrumentInterfaceService.processHL7DataRoche68008800(instrumentConnectionData, rawData);
         } else {
-          this.instrumentInterfaceService.processHL7Data(instrumentConnectionData, rawData);
+          persistencePromise = this.instrumentInterfaceService.processHL7Data(instrumentConnectionData, rawData);
         }
+        persistenceResults = await this.withPersistenceTimeout(persistencePromise);
       } else if (protocol === 'astm-checksum' || protocol === 'astm-nonchecksum') {
         const astmData = this.utilsService.removeControlCharacters(rawData, protocol !== 'astm-nonchecksum');
         const parts = astmData.split(this.instrumentInterfaceService['astmHelper'].getStartMarker());
+        const persistencePromises: Promise<boolean>[] = [];
 
         for (const part of parts) {
           if (!part) continue;
@@ -189,17 +193,30 @@ export class RawDataProcessorService {
           const dataBlock = this.instrumentInterfaceService['astmHelper'].getASTMDataBlock(astmArray);
 
           if (Object.keys(dataBlock).length > 0) {
-            this.instrumentInterfaceService['saveASTMDataBlock'](dataBlock, part, instrumentConnectionData);
+            persistencePromises.push(
+              this.instrumentInterfaceService.processStoredASTMDataBlock(dataBlock, part, instrumentConnectionData)
+            );
           }
         }
+        persistenceResults = await this.withPersistenceTimeout(Promise.all(persistencePromises));
       } else {
         throw new Error(`Unsupported protocol: ${protocol}`);
       }
 
-      return true;
+      return persistenceResults.length > 0 && persistenceResults.every(Boolean);
     } catch (error) {
       this.utilsService.logger('error', `InstrumentInterface reprocessing error: ${error}`, entry.instrument_id || entry.machine);
       return false;
     }
+  }
+
+  private withPersistenceTimeout(persistence: Promise<boolean[]>): Promise<boolean[]> {
+    return new Promise((resolve, reject) => {
+      const timeout = setTimeout(() => {
+        reject(new Error('Timed out waiting for reprocessed results to be saved'));
+      }, RawDataProcessorService.PERSISTENCE_TIMEOUT_MS);
+
+      persistence.then(resolve, reject).finally(() => clearTimeout(timeout));
+    });
   }
 }

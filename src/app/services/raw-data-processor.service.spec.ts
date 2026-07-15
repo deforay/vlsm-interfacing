@@ -15,10 +15,10 @@ describe('RawDataProcessorService', () => {
       get: vi.fn((key: string) => key === 'instrumentsConfig' ? [configuredInstrument] : {})
     };
     const instrumentInterface = {
-      processHL7Data: vi.fn(),
-      processHL7DataAlinity: vi.fn(),
-      processHL7DataRoche5800: vi.fn(),
-      processHL7DataRoche68008800: vi.fn()
+      processHL7Data: vi.fn().mockResolvedValue([true]),
+      processHL7DataAlinity: vi.fn().mockResolvedValue([true]),
+      processHL7DataRoche5800: vi.fn().mockResolvedValue([true]),
+      processHL7DataRoche68008800: vi.fn().mockResolvedValue([true])
     };
     const service = new RawDataProcessorService(
       utilities as any,
@@ -45,7 +45,7 @@ describe('RawDataProcessorService', () => {
     expect(instrumentInterface.processHL7Data.mock.calls[0][1]).toBe(rawData);
   });
 
-  it.fails('refuses to reprocess data when no instrument profile matches', async () => {
+  it('refuses to reprocess data when no instrument profile matches', async () => {
     const { service, instrumentInterface } = createService();
 
     const result = await service.reprocessRawData([{
@@ -54,9 +54,33 @@ describe('RawDataProcessorService', () => {
       data: 'MSH|^~\\&|UNKNOWN|LAB001|LIS|LAB001|20260714113000||OUL^R22|MSG-002|P|2.5.1'
     }]);
 
-    // WHY: parsing with the first unrelated profile can create incorrect
-    // clinical result rows. Batch 2 will remove that fallback.
     expect(result).toEqual({ success: 0, failed: 1 });
     expect(instrumentInterface.processHL7Data).not.toHaveBeenCalled();
+  });
+
+  it('reports failure when parsing produces no persisted results', async () => {
+    const { service, instrumentInterface } = createService();
+    instrumentInterface.processHL7Data.mockResolvedValue([]);
+
+    const result = await service.reprocessRawData([{
+      id: 3,
+      instrument_id: 'ANALYZER-1',
+      data: 'MSH|^~\\&|ANALYZER|LAB001|LIS|LAB001|20260714113000||OUL^R22|MSG-003|P|2.5.1'
+    }]);
+
+    expect(result).toEqual({ success: 0, failed: 1 });
+  });
+
+  it('reports failure when a reprocessed result cannot be persisted', async () => {
+    const { service, instrumentInterface } = createService();
+    instrumentInterface.processHL7Data.mockResolvedValue([false]);
+
+    const result = await service.reprocessRawData([{
+      id: 4,
+      instrument_id: 'ANALYZER-1',
+      data: 'MSH|^~\\&|ANALYZER|LAB001|LIS|LAB001|20260714113000||OUL^R22|MSG-004|P|2.5.1'
+    }]);
+
+    expect(result).toEqual({ success: 0, failed: 1 });
   });
 });

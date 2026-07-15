@@ -114,8 +114,9 @@ export class InstrumentInterfaceService {
   }
 
   // HL7 processing methods
-  processHL7DataAlinity(instrumentConnectionData: InstrumentConnectionStack, rawHl7Text: string) {
+  processHL7DataAlinity(instrumentConnectionData: InstrumentConnectionStack, rawHl7Text: string): Promise<boolean[]> {
     const that = this;
+    const persistencePromises: Promise<boolean>[] = [];
     const message = that.hl7Helper.createHL7Message(rawHl7Text.trim());
     const msgID = message.get('MSH.10')?.toString() ?? '';
     const characterSet = message.get('MSH.18')?.toString() ?? 'UNICODE UTF-8';
@@ -132,7 +133,7 @@ export class InstrumentInterfaceService {
       rawText = 'MSH|' + rawText.trim();
       const message = that.hl7Helper.createHL7Message(rawText);
 
-      if (message === '' || message === null || message.get('SPM') === null || message.get('OBX') === null) {
+      if (!that.hl7Helper.isValidHL7Message(message)) {
         return;
       }
 
@@ -188,13 +189,15 @@ export class InstrumentInterfaceService {
         sampleResult.test_location = instrumentConnectionData.labName;
         sampleResult.machine_used = instrumentConnectionData.instrumentId;
 
-        that.saveResult(sampleResult, instrumentConnectionData);
+        persistencePromises.push(that.saveResult(sampleResult, instrumentConnectionData));
       });
     });
+    return Promise.all(persistencePromises);
   }
 
-  processHL7Data(instrumentConnectionData: InstrumentConnectionStack, rawHl7Text: string) {
+  processHL7Data(instrumentConnectionData: InstrumentConnectionStack, rawHl7Text: string): Promise<boolean[]> {
     const that = this;
+    const persistencePromises: Promise<boolean>[] = [];
     const message = that.hl7Helper.createHL7Message(rawHl7Text.trim());
     const msgID = message.get('MSH.10')?.toString() ?? '';
     const characterSet = message.get('MSH.18')?.toString() ?? 'UNICODE UTF-8';
@@ -211,7 +214,7 @@ export class InstrumentInterfaceService {
       rawText = 'MSH|' + rawText.trim();
       const message = that.hl7Helper.createHL7Message(rawText);
 
-      if (message === '' || message === null || message.get('SPM') === null || message.get('OBX') === null) {
+      if (!that.hl7Helper.isValidHL7Message(message)) {
         return;
       }
 
@@ -267,13 +270,15 @@ export class InstrumentInterfaceService {
         sampleResult.test_location = instrumentConnectionData.labName;
         sampleResult.machine_used = instrumentConnectionData.instrumentId;
 
-        that.saveResult(sampleResult, instrumentConnectionData);
+        persistencePromises.push(that.saveResult(sampleResult, instrumentConnectionData));
       });
     });
+    return Promise.all(persistencePromises);
   }
 
-  processHL7DataRoche5800(instrumentConnectionData: InstrumentConnectionStack, rawHl7Text: string) {
+  processHL7DataRoche5800(instrumentConnectionData: InstrumentConnectionStack, rawHl7Text: string): Promise<boolean[]> {
     const that = this;
+    const persistencePromises: Promise<boolean>[] = [];
     const message = that.hl7Helper.createHL7Message(rawHl7Text.trim());
     const msgID = message.get('MSH.10')?.toString() ?? '';
     const characterSet = message.get('MSH.18')?.toString() ?? 'UNICODE UTF-8';
@@ -290,7 +295,7 @@ export class InstrumentInterfaceService {
       rawText = 'MSH|' + rawText.trim();
       const message = that.hl7Helper.createHL7Message(rawText);
 
-      if (message === '' || message === null || message.get('SPM') === null || message.get('OBX') === null) {
+      if (!that.hl7Helper.isValidHL7Message(message)) {
         return;
       }
 
@@ -346,13 +351,15 @@ export class InstrumentInterfaceService {
         sampleResult.test_location = instrumentConnectionData.labName;
         sampleResult.machine_used = instrumentConnectionData.instrumentId;
 
-        that.saveResult(sampleResult, instrumentConnectionData);
+        persistencePromises.push(that.saveResult(sampleResult, instrumentConnectionData));
       });
     });
+    return Promise.all(persistencePromises);
   }
 
-  processHL7DataRoche68008800(instrumentConnectionData: InstrumentConnectionStack, rawHl7Text: string) {
+  processHL7DataRoche68008800(instrumentConnectionData: InstrumentConnectionStack, rawHl7Text: string): Promise<boolean[]> {
     const that = this;
+    const persistencePromises: Promise<boolean>[] = [];
     const message = that.hl7Helper.createHL7Message(rawHl7Text.trim());
     const msgID = message.get('MSH.10')?.toString() ?? '';
     const characterSet = message.get('MSH.18')?.toString() ?? 'UNICODE UTF-8';
@@ -369,7 +376,7 @@ export class InstrumentInterfaceService {
       rawText = 'MSH|' + rawText.trim();
       const message = that.hl7Helper.createHL7Message(rawText);
 
-      if (message === '' || message === null || message.get('SPM') === null || message.get('OBX') === null) {
+      if (!that.hl7Helper.isValidHL7Message(message)) {
         return;
       }
 
@@ -439,9 +446,10 @@ export class InstrumentInterfaceService {
         sampleResult.test_location = instrumentConnectionData.labName;
         sampleResult.machine_used = instrumentConnectionData.instrumentId;
 
-        that.saveResult(sampleResult, instrumentConnectionData);
+        persistencePromises.push(that.saveResult(sampleResult, instrumentConnectionData));
       });
     });
+    return Promise.all(persistencePromises);
   }
 
 
@@ -633,27 +641,36 @@ export class InstrumentInterfaceService {
     }
   }
 
-  private saveResult(sampleResult: any, instrumentConnectionData: InstrumentConnectionStack) {
+  private saveResult(sampleResult: any, instrumentConnectionData: InstrumentConnectionStack): Promise<boolean> {
     const that = this;
-    if (sampleResult) {
-      const data = { ...sampleResult, instrument_id: instrumentConnectionData.instrumentId };
-      that.dbService.recordTestResults(data,
-        (res) => {
-          that.utilitiesService.logger('success', 'Successfully saved result : ' + sampleResult.test_id + '|' + sampleResult.order_id, instrumentConnectionData.instrumentId);
-          that.resultSavedSubject.next({ sampleResult: data, instrumentId: instrumentConnectionData.instrumentId });
-          return true;
-        },
-        (err) => {
-          that.utilitiesService.logger('error', 'Failed to save result : ' + sampleResult.test_id + '|' + sampleResult.order_id + ' | ' + JSON.stringify(err), instrumentConnectionData.instrumentId);
-          return false;
-        });
-    } else {
+    if (!sampleResult) {
       that.utilitiesService.logger('error', 'Failed to save result into the database : ' + JSON.stringify(sampleResult), instrumentConnectionData.instrumentId);
-      return false;
+      return Promise.resolve(false);
     }
+
+    const data = { ...sampleResult, instrument_id: instrumentConnectionData.instrumentId };
+    return new Promise<boolean>((resolve) => {
+      try {
+        that.dbService.recordTestResults(
+          data,
+          () => {
+            that.utilitiesService.logger('success', 'Successfully saved result : ' + sampleResult.test_id + '|' + sampleResult.order_id, instrumentConnectionData.instrumentId);
+            that.resultSavedSubject.next({ sampleResult: data, instrumentId: instrumentConnectionData.instrumentId });
+            resolve(true);
+          },
+          (err) => {
+            that.utilitiesService.logger('error', 'Failed to save result : ' + sampleResult.test_id + '|' + sampleResult.order_id + ' | ' + JSON.stringify(err), instrumentConnectionData.instrumentId);
+            resolve(false);
+          }
+        );
+      } catch (error) {
+        that.utilitiesService.logger('error', 'Failed to start result persistence : ' + JSON.stringify(error), instrumentConnectionData.instrumentId);
+        resolve(false);
+      }
+    });
   }
 
-  private saveASTMDataBlock(dataArray: {}, partData: string, instrumentConnectionData: InstrumentConnectionStack) {
+  private saveASTMDataBlock(dataArray: {}, partData: string, instrumentConnectionData: InstrumentConnectionStack): Promise<boolean> {
     const that = this;
 
     const segmentTypes = Object.keys(dataArray);
@@ -672,8 +689,12 @@ export class InstrumentInterfaceService {
     } else {
       that.utilitiesService.logger('error', 'Order record not found in the following ASTM data block', instrumentConnectionData.instrumentId);
       that.utilitiesService.logger('error', JSON.stringify(dataArray), instrumentConnectionData.instrumentId);
-      return false;
+      return Promise.resolve(false);
     }
+  }
+
+  processStoredASTMDataBlock(dataArray: {}, partData: string, instrumentConnectionData: InstrumentConnectionStack): Promise<boolean> {
+    return this.saveASTMDataBlock(dataArray, partData, instrumentConnectionData);
   }
 
   // TEST ORDERS SECTION

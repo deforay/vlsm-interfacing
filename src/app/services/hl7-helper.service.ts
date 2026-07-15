@@ -1,6 +1,7 @@
 // HL7 Helper Service
 
 import { Injectable } from '@angular/core';
+import type { Message } from 'hl7parser';
 import { UtilitiesService } from './utilities.service';
 
 const randomUUID = () => (window as any).require('crypto').randomUUID();
@@ -401,7 +402,7 @@ export class HL7HelperService {
    * @param rawHl7Text Raw HL7 text to parse
    * @returns Parsed HL7 message object
    */
-  createHL7Message(rawHl7Text: string): any {
+  createHL7Message(rawHl7Text: string): Message {
     return this.hl7parser.create(rawHl7Text.trim());
   }
 
@@ -424,11 +425,9 @@ export class HL7HelperService {
    * @param message HL7 message to validate
    * @returns Boolean indicating if message is valid
    */
-  isValidHL7Message(message: any): boolean {
-    return message !== '' &&
-      message !== null &&
-      message.get('SPM') !== null &&
-      message.get('OBX') !== null;
+  isValidHL7Message(message: Message | null | undefined): boolean {
+    // Missing paths return an EmptyNode rather than null in this parser.
+    return !!message && message.exists('SPM') && message.exists('OBX');
   }
 
   /**
