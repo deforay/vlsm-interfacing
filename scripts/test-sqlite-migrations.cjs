@@ -2,7 +2,8 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
-const { DatabaseSync } = require('node:sqlite');
+const nodeSqlite = require('node:sqlite');
+const { DatabaseSync } = nodeSqlite;
 
 const migrationsDirectory = path.join(__dirname, '..', 'app', 'sqlite-migrations');
 
@@ -71,9 +72,21 @@ function testLegacyUpgrade(migrations, temporaryDirectory) {
   }
 }
 
-function testWalSnapshotCharacterization(temporaryDirectory) {
+async function createOnlineTestBackup(database, destination) {
+  if (typeof nodeSqlite.backup === 'function') {
+    await nodeSqlite.backup(database, destination);
+    return;
+  }
+
+  // Node 22.12-22.15 pre-dates node:sqlite.backup. VACUUM INTO exercises the
+  // same recovery contract for developers using the oldest supported runtime.
+  const escapedDestination = destination.replace(/'/g, "''");
+  database.exec(`VACUUM INTO '${escapedDestination}'`);
+}
+
+async function testOnlineBackupIncludesWalTransactions(temporaryDirectory) {
   const livePath = path.join(temporaryDirectory, 'wal-live.db');
-  const copiedPath = path.join(temporaryDirectory, 'wal-main-file-copy.db');
+  const backupPath = path.join(temporaryDirectory, 'wal-online-backup.db');
   const liveDatabase = new DatabaseSync(livePath);
   try {
     liveDatabase.exec('PRAGMA journal_mode = WAL');
@@ -82,14 +95,13 @@ function testWalSnapshotCharacterization(temporaryDirectory) {
     liveDatabase.exec("INSERT INTO recovery_probe (value) VALUES ('committed-in-wal')");
 
     assert(fs.statSync(`${livePath}-wal`).size > 0, 'Expected a non-empty WAL sidecar');
-    fs.copyFileSync(livePath, copiedPath);
+    await createOnlineTestBackup(liveDatabase, backupPath);
 
-    const copiedDatabase = new DatabaseSync(copiedPath);
+    const copiedDatabase = new DatabaseSync(backupPath);
     try {
       const copiedRows = all(copiedDatabase, 'SELECT value FROM recovery_probe');
-      // WHY: this captures the current startup backup limitation. Copying only
-      // the main file is not a recovery-safe snapshot after an unclean exit.
-      assert.deepEqual(copiedRows, []);
+      assert.deepEqual(copiedRows, [{ value: 'committed-in-wal' }]);
+      assert.deepEqual(all(copiedDatabase, 'PRAGMA quick_check'), [{ quick_check: 'ok' }]);
     } finally {
       copiedDatabase.close();
     }
@@ -98,23 +110,21 @@ function testWalSnapshotCharacterization(temporaryDirectory) {
   }
 }
 
-function main() {
+async function main() {
   const temporaryDirectory = fs.mkdtempSync(path.join(os.tmpdir(), 'vlsm-migrations-'));
   try {
     const migrations = readMigrations();
     assert(migrations.length > 0, 'Expected at least one SQLite migration');
     testFreshInstallation(migrations, temporaryDirectory);
     testLegacyUpgrade(migrations, temporaryDirectory);
-    testWalSnapshotCharacterization(temporaryDirectory);
+    await testOnlineBackupIncludesWalTransactions(temporaryDirectory);
     console.log(`SQLite migration tests passed (${migrations.length} migrations).`);
   } finally {
     fs.rmSync(temporaryDirectory, { recursive: true, force: true });
   }
 }
 
-try {
-  main();
-} catch (error) {
+main().catch(error => {
   console.error(error);
   process.exitCode = 1;
-}
+});

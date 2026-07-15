@@ -97,6 +97,15 @@ function sqliteAll<T = any>(db: sqlite3.Database, sql: string, params: any[] = [
   });
 }
 
+interface SQLiteBackupHandle {
+  completed: boolean;
+  step(pages: number, callback: (err: Error | null, completed?: boolean) => void): void;
+}
+
+interface SQLiteBackupCapableDatabase extends sqlite3.Database {
+  backup(filename: string, callback: (err: Error | null) => void): SQLiteBackupHandle;
+}
+
 async function runSqliteMigrations(db, migrationsPath, forceReplay = false) {
   console.log('Running SQLite migrations from:', migrationsPath);
 
@@ -246,30 +255,41 @@ function createUniversalMySQLPoolConfig(baseConfig: any) {
 }
 
 
-// Daily on-disk backup of interface.db with 7-day rotation. Runs at startup
-// before the SQLite connection is opened so the snapshot is guaranteed
-// consistent (no WAL/checkpoint races). The cost — a few hundred KB of disk
-// per client per day — buys recovery from accidental deletion, AV quarantine,
-// or anything else that wipes the live DB without warning.
-async function backupSqliteDb(): Promise<void> {
+// Daily recovery snapshot with 7-file rotation. SQLite's online backup API
+// includes committed WAL transactions while presenting one consistent database
+// image, which a direct copy of interface.db cannot guarantee after a crash.
+async function backupSqliteDb(db: sqlite3.Database): Promise<void> {
+  let temporaryTarget: string | null = null;
   try {
     const dbPath = path.join(app.getPath('userData'), sqliteDbName);
     if (!fs.existsSync(dbPath)) {
-      // Nothing to back up — fresh install or post-deletion launch.
       return;
     }
-    const stat = await fs.promises.stat(dbPath);
-    if (stat.size === 0) {
-      return; // empty stub, nothing worth saving
+
+    // A newly-created database has nothing useful to recover yet. Avoid
+    // producing a misleading backup before its first migrations run.
+    const applicationTables = await sqliteAll<{ name: string }>(
+      db,
+      "SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%' LIMIT 1"
+    );
+    if (applicationTables.length === 0) {
+      return;
     }
 
     const backupDir = path.join(app.getPath('userData'), 'backups');
     await fs.promises.mkdir(backupDir, { recursive: true });
 
     const stamp = new Date().toISOString().slice(0, 10); // YYYY-MM-DD
-    const target = path.join(backupDir, `${sqliteDbName}.${stamp}.bak`);
+    // Keep legacy .bak files intact on upgrade; the normal seven-file rotation
+    // ages them out after verified snapshots have replaced the recovery window.
+    const target = path.join(backupDir, `${sqliteDbName}.${stamp}.snapshot.bak`);
     if (!fs.existsSync(target)) {
-      await fs.promises.copyFile(dbPath, target);
+      temporaryTarget = `${target}.tmp-${process.pid}`;
+      await fs.promises.rm(temporaryTarget, { force: true });
+      await createOnlineSqliteBackup(db, temporaryTarget);
+      await validateSqliteBackup(temporaryTarget);
+      await fs.promises.rename(temporaryTarget, target);
+      temporaryTarget = null;
       log.info(`SQLite backup written: ${target}`);
     }
 
@@ -287,6 +307,56 @@ async function backupSqliteDb(): Promise<void> {
   } catch (err) {
     // Backup is best-effort — never block startup if it fails
     log.error(`SQLite backup failed: ${formatUnknownError(err)}`);
+  } finally {
+    if (temporaryTarget) {
+      await fs.promises.rm(temporaryTarget, { force: true }).catch(() => undefined);
+    }
+  }
+}
+
+function createOnlineSqliteBackup(db: sqlite3.Database, target: string): Promise<void> {
+  return new Promise((resolve, reject) => {
+    let backup: SQLiteBackupHandle;
+    try {
+      backup = (db as SQLiteBackupCapableDatabase).backup(target, (initializationError) => {
+        if (initializationError) {
+          reject(initializationError);
+          return;
+        }
+
+        backup.step(-1, (stepError, completed) => {
+          if (stepError) {
+            reject(stepError);
+          } else if (completed || backup.completed) {
+            resolve();
+          } else {
+            reject(new Error('SQLite backup stopped before completion'));
+          }
+        });
+      });
+    } catch (error) {
+      reject(error);
+    }
+  });
+}
+
+async function validateSqliteBackup(backupPath: string): Promise<void> {
+  const backupDb = await new Promise<sqlite3.Database>((resolve, reject) => {
+    const openedDb = new sqlite3.Database(backupPath, sqlite3.OPEN_READONLY, (error) => {
+      if (error) reject(error);
+      else resolve(openedDb);
+    });
+  });
+
+  try {
+    const validationRows = await sqliteAll<{ quick_check: string }>(backupDb, 'PRAGMA quick_check');
+    if (validationRows[0]?.quick_check !== 'ok') {
+      throw new Error('SQLite backup validation failed');
+    }
+  } finally {
+    await new Promise<void>((resolve, reject) => {
+      backupDb.close(error => error ? reject(error) : resolve());
+    });
   }
 }
 
@@ -731,11 +801,6 @@ try {
 
   app.on('ready', async () => {
     try {
-      // Snapshot the existing SQLite file BEFORE opening it. Doing this here
-      // (rather than after) means the file is closed by every other process,
-      // so the copy can't race with an in-flight write or a WAL checkpoint.
-      await backupSqliteDb();
-
       // First, set up the SQLite database connection
       sqlite3Obj = await new Promise<sqlite3.Database>((resolve, reject) => {
         setupSqlite(store, (db, err) => {
@@ -747,6 +812,10 @@ try {
           resolve(db);
         });
       });
+
+      // Snapshot the pre-migration database through SQLite itself so committed
+      // WAL transactions are included in the daily recovery point.
+      await backupSqliteDb(sqlite3Obj);
 
       // Then, copy and run the migrations
       const migrationsPath = path.join(app.getPath('userData'), 'sqlite-migrations');
