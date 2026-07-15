@@ -16,7 +16,8 @@
     ]
   },
   "files": [
-    "app/main.ts"
+    "app/main.ts",
+    "app/types/vscode-sqlite3-backup.d.ts"
   ],
   "exclude": [
     "node_modules",

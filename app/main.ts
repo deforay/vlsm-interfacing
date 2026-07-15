@@ -97,15 +97,6 @@ function sqliteAll<T = any>(db: sqlite3.Database, sql: string, params: any[] = [
   });
 }
 
-interface SQLiteBackupHandle {
-  completed: boolean;
-  step(pages: number, callback: (err: Error | null, completed?: boolean) => void): void;
-}
-
-interface SQLiteBackupCapableDatabase extends sqlite3.Database {
-  backup(filename: string, callback: (err: Error | null) => void): SQLiteBackupHandle;
-}
-
 async function runSqliteMigrations(db, migrationsPath, forceReplay = false) {
   console.log('Running SQLite migrations from:', migrationsPath);
 
@@ -316,9 +307,9 @@ async function backupSqliteDb(db: sqlite3.Database): Promise<void> {
 
 function createOnlineSqliteBackup(db: sqlite3.Database, target: string): Promise<void> {
   return new Promise((resolve, reject) => {
-    let backup: SQLiteBackupHandle;
+    let backup: sqlite3.Backup;
     try {
-      backup = (db as SQLiteBackupCapableDatabase).backup(target, (initializationError) => {
+      backup = db.backup(target, (initializationError) => {
         if (initializationError) {
           reject(initializationError);
           return;
