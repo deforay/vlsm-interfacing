@@ -290,6 +290,8 @@ export class ConsoleComponent implements OnInit, AfterViewInit, OnDestroy {
         that.cdRef.detectChanges();
       });
     });
+
+    that.loadRecentSystemLogs();
   }
 
   @HostListener('window:scroll')
@@ -312,7 +314,9 @@ export class ConsoleComponent implements OnInit, AfterViewInit, OnDestroy {
   }
 
   private updateLogUI(logEntry: LogEntry) {
-    const instrumentId = logEntry.instrumentId ?? ConsoleComponent.SYSTEM_LOG_ID;
+    const instrumentId = this.isSystemLog(logEntry)
+      ? ConsoleComponent.SYSTEM_LOG_ID
+      : logEntry.instrumentId ?? ConsoleComponent.SYSTEM_LOG_ID;
     if (!instrumentId) return;
 
     const bucket = (this.instrumentLogs[instrumentId] ??= { logs: [], filteredLogs: [] });
@@ -340,6 +344,12 @@ export class ConsoleComponent implements OnInit, AfterViewInit, OnDestroy {
     }
 
     this.cdRef.detectChanges();
+  }
+
+  private isSystemLog(logEntry: LogEntry): boolean {
+    return logEntry.category === 'system'
+      || logEntry.category === 'database'
+      || logEntry.category === 'migration';
   }
 
   private getInstrumentSearchText(instrumentId: string): string {
@@ -700,6 +710,15 @@ export class ConsoleComponent implements OnInit, AfterViewInit, OnDestroy {
           });
         });
     });
+  }
+
+  private loadRecentSystemLogs(): void {
+    this.utilitiesService.fetchRecentSystemLogs()
+      .subscribe(logs => {
+        this._ngZone.run(() => {
+          this.updateLogsForInstrument(ConsoleComponent.SYSTEM_LOG_ID, logs);
+        });
+      });
   }
 
   // Use connection manager service for connect/disconnect functions

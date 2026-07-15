@@ -240,6 +240,10 @@ export class UtilitiesService {
     return this.dbService.fetchRecentLogs(instrumentId);
   }
 
+  fetchRecentSystemLogs(): Observable<any[]> {
+    return this.dbService.fetchRecentSystemLogs();
+  }
+
   clearLiveLog(instrumentId = null) {
     if (instrumentId) {
       // Clear logs for a specific instrument

@@ -52,6 +52,9 @@ function testFreshInstallation(migrations, temporaryDirectory) {
     assert(rawDataColumns.some(column => column.name === 'mysql_inserted'));
     assert(appLogColumns.some(column => column.name === 'log_type'));
     assert(appLogColumns.some(column => column.name === 'mysql_inserted'));
+    assert(appLogColumns.some(column => column.name === 'category'));
+    const appLogIndexes = all(database, 'PRAGMA index_list(app_log)');
+    assert(appLogIndexes.some(index => index.name === 'idx_app_log_added_on'));
   } finally {
     database.close();
   }
@@ -63,17 +66,20 @@ function testLegacyUpgrade(migrations, temporaryDirectory) {
     database.exec(migrations[0].sql);
     database.exec("INSERT INTO orders (order_id, test_type) VALUES ('LEGACY-001', 'HIVVL')");
     database.exec("INSERT INTO raw_data (data, machine) VALUES ('legacy payload', 'ANALYZER-OLD')");
+    database.exec("INSERT INTO app_log (log) VALUES ('legacy log')");
 
     applyMigrations(database, migrations.slice(1));
 
     const orders = all(database, "SELECT order_id, mysql_inserted, notes, ingestion_id FROM orders WHERE order_id = 'LEGACY-001'");
     const rawData = all(database, "SELECT machine, instrument_id, mysql_inserted FROM raw_data WHERE machine = 'ANALYZER-OLD'");
+    const appLogs = all(database, "SELECT log, category FROM app_log WHERE log = 'legacy log'");
     assert.equal(orders.length, 1);
     assert.equal(orders[0].order_id, 'LEGACY-001');
     assert.equal(orders[0].mysql_inserted, 1);
     assert.equal(orders[0].notes, null);
     assert.match(orders[0].ingestion_id, /^[a-f0-9]{32}$/);
     assert.deepEqual(rawData, [{ machine: 'ANALYZER-OLD', instrument_id: 'ANALYZER-OLD', mysql_inserted: 0 }]);
+    assert.deepEqual(appLogs, [{ log: 'legacy log', category: 'operational' }]);
   } finally {
     database.close();
   }
