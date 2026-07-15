@@ -19,6 +19,30 @@ $status-connected: #43a047;
 $status-disconnected: #e53935;
 $background-color: #f9fafb;
 
+.log-level-filter {
+  min-height: 1.9rem;
+  padding: 0.25rem 0.65rem;
+  border: 1px solid $border-color;
+  border-radius: 999px;
+  background: white;
+  color: $text-color;
+  font-size: 0.75rem;
+  font-weight: 600;
+  cursor: pointer;
+
+  &:focus {
+    outline: none;
+    border-color: $primary-color;
+    box-shadow: 0 0 0 3px rgba($primary-color, 0.1);
+  }
+
+  &.level-error { color: $danger-color; border-color: rgba($danger-color, 0.45); }
+  &.level-warn { color: $warning-color; border-color: rgba($warning-color, 0.45); }
+  &.level-success { color: $success-color; border-color: rgba($success-color, 0.45); }
+  &.level-info { color: $info-color; border-color: rgba($info-color, 0.45); }
+  &.level-verbose { color: $secondary-color; }
+}
+
 // Base styles - Allow scrolling with proper layout
 .app-container {
   font-family: "Roboto", "Segoe UI", Arial, sans-serif;
@@ -357,9 +381,23 @@ $background-color: #f9fafb;
       flex-direction: column-reverse;
 
       .log-entry {
+        display: grid;
+        grid-template-columns: max-content max-content minmax(0, 1fr);
+        align-items: baseline;
+        gap: 0.35rem;
         margin-bottom: 0.35rem;
-        white-space: pre-wrap;
-        word-break: break-word;
+        white-space: normal;
+
+        .log-time,
+        .log-level {
+          white-space: nowrap;
+        }
+
+        .log-text {
+          min-width: 0;
+          white-space: pre-wrap;
+          overflow-wrap: anywhere;
+        }
 
         &.log-error { color: #ff5252; }
         &.log-warn  { color: #ffb74d; }
@@ -701,10 +739,24 @@ $background-color: #f9fafb;
       flex-direction: column-reverse;
 
       .log-entry {
+        display: grid;
+        grid-template-columns: max-content max-content minmax(0, 1fr);
+        align-items: baseline;
+        gap: 0.35rem;
         margin-bottom: 0.25rem; // Reduced from 0.5rem
         padding: 0.125rem 0; // Reduced from 0.25rem 0
-        white-space: pre-wrap;
-        word-break: break-all;
+        white-space: normal;
+
+        .log-time,
+        .log-level {
+          white-space: nowrap;
+        }
+
+        .log-text {
+          min-width: 0;
+          white-space: pre-wrap;
+          overflow-wrap: anywhere;
+        }
 
         &.log-error { color: #ff5252; }
         &.log-warn  { color: #ffb74d; }

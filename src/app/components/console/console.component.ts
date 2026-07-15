@@ -25,6 +25,8 @@ export enum SelectType {
   multiple
 }
 
+type LogLevelFilter = LogEntry['type'] | 'all';
+
 @Component({
   standalone: false,
   selector: 'app-console',
@@ -70,8 +72,17 @@ export class ConsoleComponent implements OnInit, AfterViewInit, OnDestroy {
   public systemLogsExpanded = false;
   public systemLogContext = {
     connectionParams: { instrumentId: ConsoleComponent.SYSTEM_LOG_ID },
-    searchText: ''
+    searchText: '',
+    logLevel: 'all' as LogLevelFilter
   };
+  public readonly logLevelOptions: Array<{ value: LogLevelFilter; label: string }> = [
+    { value: 'all', label: 'All logs' },
+    { value: 'error', label: 'Errors' },
+    { value: 'warn', label: 'Warnings' },
+    { value: 'success', label: 'Success' },
+    { value: 'info', label: 'Info' },
+    { value: 'verbose', label: 'Verbose' }
+  ];
 
   private checkConnectionsAfterInactivity() {
     console.log('Checking connection status after inactivity');
@@ -315,9 +326,9 @@ export class ConsoleComponent implements OnInit, AfterViewInit, OnDestroy {
     }
 
     const searchText = this.getInstrumentSearchText(instrumentId);
-    if (searchText) {
-      const needle = searchText.toLowerCase();
-      if (logEntry.message.toLowerCase().includes(needle)) {
+    const logLevel = this.getInstrumentLogLevel(instrumentId);
+    if (searchText || logLevel !== 'all') {
+      if (this.logMatchesFilters(logEntry, searchText, logLevel)) {
         bucket.filteredLogs.unshift(logEntry);
         if (bucket.filteredLogs.length > MAX_LOG_ENTRIES) {
           bucket.filteredLogs.length = MAX_LOG_ENTRIES;
@@ -339,6 +350,22 @@ export class ConsoleComponent implements OnInit, AfterViewInit, OnDestroy {
       i => i?.connectionParams?.instrumentId === instrumentId
     );
     return (instrument?.searchText || '').trim();
+  }
+
+  private getInstrumentLogLevel(instrumentId: string): LogLevelFilter {
+    if (instrumentId === ConsoleComponent.SYSTEM_LOG_ID) {
+      return this.systemLogContext.logLevel;
+    }
+    const instrument = this.availableInstruments?.find(
+      i => i?.connectionParams?.instrumentId === instrumentId
+    );
+    return instrument?.logLevel || 'all';
+  }
+
+  private logMatchesFilters(log: LogEntry, searchText: string, logLevel: LogLevelFilter): boolean {
+    const matchesLevel = logLevel === 'all' || log.type === logLevel;
+    const matchesSearch = !searchText || log.message.toLowerCase().includes(searchText.toLowerCase());
+    return matchesLevel && matchesSearch;
   }
 
   trackByLogId(_index: number, logEntry: LogEntry): number | string {
@@ -720,10 +747,10 @@ export class ConsoleComponent implements OnInit, AfterViewInit, OnDestroy {
 
     const bucket = that.instrumentLogs[instrument.connectionParams.instrumentId];
     const searchText = (instrument.searchText || '').trim();
-    if (searchText) {
-      const needle = searchText.toLowerCase();
+    const logLevel: LogLevelFilter = instrument.logLevel || 'all';
+    if (searchText || logLevel !== 'all') {
       bucket.filteredLogs = bucket.logs.filter((log: LogEntry) =>
-        log.message.toLowerCase().includes(needle)
+        this.logMatchesFilters(log, searchText, logLevel)
       );
     } else {
       // No filter — share the reference so a new log doesn't force a full copy.
@@ -731,6 +758,11 @@ export class ConsoleComponent implements OnInit, AfterViewInit, OnDestroy {
     }
 
     that.cdRef.detectChanges(); // Trigger change detection if needed
+  }
+
+  setLogLevel(instrument: any, logLevel: LogLevelFilter): void {
+    instrument.logLevel = logLevel;
+    this.filterInstrumentLogs(instrument);
   }
 
   copyLog(instrument: { connectionParams: { instrumentId: string | number; }; }) {
