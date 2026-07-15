@@ -45,6 +45,9 @@ function testFreshInstallation(migrations, temporaryDirectory) {
     assert(orderColumns.some(column => column.name === 'instrument_id'));
     assert(orderColumns.some(column => column.name === 'mysql_inserted'));
     assert(orderColumns.some(column => column.name === 'notes'));
+    assert(orderColumns.some(column => column.name === 'ingestion_id'));
+    const orderIndexes = all(database, 'PRAGMA index_list(orders)');
+    assert(orderIndexes.some(index => index.name === 'idx_orders_ingestion_id' && index.unique === 1));
     assert(rawDataColumns.some(column => column.name === 'instrument_id'));
     assert(rawDataColumns.some(column => column.name === 'mysql_inserted'));
     assert(appLogColumns.some(column => column.name === 'log_type'));
@@ -63,9 +66,13 @@ function testLegacyUpgrade(migrations, temporaryDirectory) {
 
     applyMigrations(database, migrations.slice(1));
 
-    const orders = all(database, "SELECT order_id, mysql_inserted, notes FROM orders WHERE order_id = 'LEGACY-001'");
+    const orders = all(database, "SELECT order_id, mysql_inserted, notes, ingestion_id FROM orders WHERE order_id = 'LEGACY-001'");
     const rawData = all(database, "SELECT machine, instrument_id, mysql_inserted FROM raw_data WHERE machine = 'ANALYZER-OLD'");
-    assert.deepEqual(orders, [{ order_id: 'LEGACY-001', mysql_inserted: 1, notes: null }]);
+    assert.equal(orders.length, 1);
+    assert.equal(orders[0].order_id, 'LEGACY-001');
+    assert.equal(orders[0].mysql_inserted, 1);
+    assert.equal(orders[0].notes, null);
+    assert.match(orders[0].ingestion_id, /^[a-f0-9]{32}$/);
     assert.deepEqual(rawData, [{ machine: 'ANALYZER-OLD', instrument_id: 'ANALYZER-OLD', mysql_inserted: 0 }]);
   } finally {
     database.close();

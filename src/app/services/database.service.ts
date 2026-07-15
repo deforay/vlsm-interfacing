@@ -4,6 +4,7 @@ import { ElectronStoreService } from './electron-store.service';
 import { CryptoService } from './crypto.service'
 import { LoggingService } from './logging.service';
 import { Observable, Subject } from 'rxjs';
+import { v4 as uuidv4 } from 'uuid';
 
 @Injectable({
   providedIn: 'root'
@@ -90,6 +91,7 @@ export class DatabaseService {
     'raw_text',
     'added_on',
     'notes',
+    'ingestion_id',
   ];
   private static readonly SQLITE_ORDER_COLUMNS = [
     ...DatabaseService.MYSQL_ORDER_COLUMNS,
@@ -462,6 +464,8 @@ export class DatabaseService {
     await this.ensureMysqlColumn('raw_data', 'instrument_id', 'ALTER TABLE `raw_data` ADD COLUMN `instrument_id` VARCHAR(128) NULL');
     await this.ensureMysqlColumn('orders', 'instrument_id', 'ALTER TABLE `orders` ADD COLUMN `instrument_id` VARCHAR(128) NULL');
     await this.ensureMysqlColumn('orders', 'notes', 'ALTER TABLE `orders` ADD COLUMN `notes` TEXT NULL');
+    await this.ensureMysqlColumn('orders', 'ingestion_id', 'ALTER TABLE `orders` ADD COLUMN `ingestion_id` VARCHAR(36) NULL');
+    await this.ensureMysqlIndex('orders', 'idx_orders_ingestion_id', 'CREATE UNIQUE INDEX `idx_orders_ingestion_id` ON `orders` (`ingestion_id`)');
   }
 
   private async ensureMysqlColumn(tableName: string, columnName: string, alterSql: string): Promise<void> {
@@ -495,6 +499,26 @@ export class DatabaseService {
       [this.commonSettings.mysqlDb, tableName, columnName]
     );
     return Number(rows?.[0]?.column_count ?? 0) > 0;
+  }
+
+  private async ensureMysqlIndex(tableName: string, indexName: string, createSql: string): Promise<void> {
+    const tableExists = await this.mysqlTableExists(tableName);
+    if (!tableExists) {
+      return;
+    }
+
+    const rows = await this.execQueryPromise(
+      'SELECT COUNT(*) AS index_count FROM INFORMATION_SCHEMA.STATISTICS WHERE TABLE_SCHEMA = ? AND TABLE_NAME = ? AND INDEX_NAME = ?',
+      [this.commonSettings.mysqlDb, tableName, indexName]
+    );
+    if (Number(rows?.[0]?.index_count ?? 0) > 0) {
+      return;
+    }
+
+    // WHY: retry safety depends on the database enforcing ingestion identity,
+    // including installations whose migration history is incomplete.
+    console.warn(`Repairing missing MySQL index ${tableName}.${indexName}`);
+    await this.execQueryPromise(createSql, []);
   }
 
   private filterRecordColumns(record: any, allowedColumns: readonly string[]): any {
@@ -792,32 +816,50 @@ export class DatabaseService {
       orderData.instrument_id = orderData.machine_used;
     }
 
-    const handleSQLiteInsert = (mysqlInserted: boolean) => {
-      const sqliteRecord = this.filterRecordColumns({
-        ...orderData,
-        mysql_inserted: mysqlInserted ? 1 : 0,
-      }, DatabaseService.SQLITE_ORDER_COLUMNS);
-      const sqliteInsert = this.buildInsertQuery('orders', sqliteRecord);
-      this.execSqlite(sqliteInsert.query, sqliteInsert.values)
-        .then(success)
-        .catch(errorf);
-    };
+    const sqliteRecord = this.filterRecordColumns({
+      ...orderData,
+      ingestion_id: orderData.ingestion_id || uuidv4(),
+      mysql_inserted: 0,
+    }, DatabaseService.SQLITE_ORDER_COLUMNS);
+    const sqliteInsert = this.buildInsertQuery('orders', sqliteRecord);
 
+    // SQLite is the durability boundary. Remote availability must never decide
+    // whether an instrument result is safely accepted by this application.
+    this.execSqlite(sqliteInsert.query, sqliteInsert.values)
+      .then((sqliteResult) => {
+        this.replicateOrderToMySQL({ ...sqliteRecord, id: sqliteResult.lastID });
+        success(sqliteResult);
+      })
+      .catch(errorf);
+  }
+
+  private replicateOrderToMySQL(record: any): void {
     this.checkMysqlConnection(null, () => {
-      // MySQL connected
-      const mysqlRecord = this.filterRecordColumns(orderData, DatabaseService.MYSQL_ORDER_COLUMNS);
+      const mysqlRecord = this.filterRecordColumns(record, DatabaseService.MYSQL_ORDER_COLUMNS);
       const mysqlInsert = this.buildInsertQuery('orders', mysqlRecord);
-      this.execQuery(mysqlInsert.query, mysqlInsert.values,
-        () => handleSQLiteInsert(true),
+      const idempotentInsert = `${mysqlInsert.query} ON DUPLICATE KEY UPDATE ingestion_id = VALUES(ingestion_id)`;
+
+      this.execQuery(idempotentInsert, mysqlInsert.values,
+        () => {
+          this.markOrdersAsResynced([record.id]).catch((error: any) => {
+            // A retry is safe because ingestion_id is stable and unique remotely.
+            this.logCriticalDatabaseIssue(
+              `Result replicated but local status update failed: ${error?.message ?? error}`,
+              'database',
+              record.instrument_id
+            );
+          });
+        },
         (mysqlError) => {
-          handleSQLiteInsert(false);
-          this.logCriticalDatabaseIssue(`Error inserting into MySQL orders: ${mysqlError?.message ?? mysqlError}`, 'database', orderData.instrument_id);
+          this.logCriticalDatabaseIssue(
+            `Error inserting into MySQL orders: ${mysqlError?.message ?? mysqlError}`,
+            'database',
+            record.instrument_id
+          );
         }
       );
-    }, (err) => {
-      // MySQL connection failed, insert into SQLite
-      console.error('MySQL connection failed, insert into SQLite:', err.message);
-      handleSQLiteInsert(false);
+    }, (error) => {
+      console.error('MySQL connection failed; result remains queued in SQLite:', error?.message ?? error);
     });
   }
 
@@ -832,11 +874,37 @@ export class DatabaseService {
           return;
         }
 
-        this.processResyncRecords(records, success, errorf);
+        this.ensureOrderIngestionIds(records)
+          .then(preparedRecords => this.processResyncRecords(preparedRecords, success, errorf))
+          .catch(errorf);
       })
       .catch((err: any) => {
         errorf('Error fetching records from SQLite:', err);
       });
+  }
+
+  private async ensureOrderIngestionIds(records: any[]): Promise<any[]> {
+    for (const record of records) {
+      if (record.ingestion_id) {
+        continue;
+      }
+
+      const generatedId = uuidv4();
+      await this.execSqlite(
+        'UPDATE orders SET ingestion_id = ? WHERE id = ? AND ingestion_id IS NULL',
+        [generatedId, record.id]
+      );
+      const [persistedRecord] = await this.execSqlite(
+        'SELECT ingestion_id FROM orders WHERE id = ?',
+        [record.id]
+      );
+      record.ingestion_id = persistedRecord?.ingestion_id;
+      if (!record.ingestion_id) {
+        throw new Error(`Could not assign ingestion identity to local order ${record.id}`);
+      }
+    }
+
+    return records;
   }
 
   private processResyncRecords(records: any[], success: any, errorf: any) {
@@ -846,7 +914,7 @@ export class DatabaseService {
     // keep the renderer responsive while still draining the backlog quickly.
     const columns = DatabaseService.MYSQL_ORDER_COLUMNS;
     const escapedColumns = columns.map(c => `\`${c}\``).join(',');
-    const mysqlQuery = `INSERT INTO \`orders\` (${escapedColumns}) VALUES ?`;
+    const mysqlQuery = `INSERT INTO \`orders\` (${escapedColumns}) VALUES ? ON DUPLICATE KEY UPDATE ingestion_id = VALUES(ingestion_id)`;
     const batches = this.chunkArray(records, DatabaseService.MYSQL_ORDER_RESYNC_BATCH_SIZE);
     let batchIndex = 0;
 
@@ -867,8 +935,16 @@ export class DatabaseService {
 
         this.execQuery(mysqlQuery, [mysqlValues],
           () => {
-            this.markOrdersAsResynced(batch.map(r => r.order_id));
-            processNextBatch();
+            this.markOrdersAsResynced(batch.map(r => r.id))
+              .catch((error: any) => {
+                const firstInstrumentId = batch.find(r => !!r.instrument_id)?.instrument_id ?? null;
+                this.logCriticalDatabaseIssue(
+                  `Results replicated but local status update failed: ${error?.message ?? error}`,
+                  'database',
+                  firstInstrumentId
+                );
+              })
+              .finally(processNextBatch);
           },
           (batchError) => {
             // Whole batch failed (one bad row poisons the bulk INSERT). Log
@@ -892,30 +968,15 @@ export class DatabaseService {
     });
   }
 
-  private markOrdersAsResynced(orderIds: any[]) {
-    if (!orderIds || orderIds.length === 0) {
-      return;
+  private markOrdersAsResynced(recordIds: any[]): Promise<void> {
+    if (!recordIds || recordIds.length === 0) {
+      return Promise.resolve();
     }
-    const placeholders = orderIds.map(() => '?').join(',');
-    const updateQuery = `UPDATE orders SET mysql_inserted = 1 WHERE order_id IN (${placeholders})`;
-    this.execSqlite(updateQuery, orderIds)
+    const placeholders = recordIds.map(() => '?').join(',');
+    const updateQuery = `UPDATE orders SET mysql_inserted = 1 WHERE id IN (${placeholders})`;
+    return this.execSqlite(updateQuery, recordIds)
       .then(() => {
-        console.log('Order records successfully resynced and updated in SQLite:', orderIds.length);
-      })
-      .catch((error: any) => {
-        console.error('Error updating SQLite after successful MySQL insert for orders:', error);
-      });
-  }
-
-
-  private updateSQLiteAfterMySQLInsert(record: any) {
-    const updateQuery = 'UPDATE orders SET mysql_inserted = 1 WHERE order_id = ?';
-    this.execSqlite(updateQuery, [record.order_id])
-      .then(() => {
-        console.log('Record successfully resynced and updated in SQLite:', record.order_id);
-      })
-      .catch((error: any) => {
-        console.error('Error updating SQLite after successful MySQL insert:', error);
+        console.log('Order records successfully resynced and updated in SQLite:', recordIds.length);
       });
   }
 
