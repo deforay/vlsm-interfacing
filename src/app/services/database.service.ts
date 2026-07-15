@@ -65,6 +65,9 @@ export class DatabaseService {
   private static readonly MYSQL_APP_LOG_RESYNC_BATCH_SIZE = 25;
   private static readonly MYSQL_ORDER_RESYNC_BATCH_SIZE = 25;
   private static readonly SQLITE_LOG_INSERT_BATCH_SIZE = 100;
+  private static readonly LOCAL_LOG_RETENTION_DAYS = 30;
+  private static readonly LOCAL_LOG_MAX_ROWS = 50000;
+  private static readonly LOCAL_LOG_PRUNE_INTERVAL_MS = 24 * 60 * 60 * 1000;
   private static readonly MYSQL_ORDER_COLUMNS = [
     'instrument_id',
     'order_id',
@@ -108,6 +111,7 @@ export class DatabaseService {
     'mysql_inserted',
   ];
   private readonly path: any = (window as any).require('path');
+  private lastLocalLogPruneAt = 0;
 
   constructor(private readonly electronService: ElectronService,
     private readonly store: ElectronStoreService,
@@ -461,6 +465,7 @@ export class DatabaseService {
     await this.ensureMysqlColumn('app_log', 'log_type', 'ALTER TABLE `app_log` ADD COLUMN `log_type` VARCHAR(20) NULL');
     await this.ensureMysqlColumn('app_log', 'log_message', 'ALTER TABLE `app_log` ADD COLUMN `log_message` TEXT NULL');
     await this.ensureMysqlColumn('app_log', 'instrument_id', 'ALTER TABLE `app_log` ADD COLUMN `instrument_id` VARCHAR(255) NULL');
+    await this.ensureMysqlColumn('app_log', 'category', "ALTER TABLE `app_log` ADD COLUMN `category` VARCHAR(20) NOT NULL DEFAULT 'operational'");
     await this.ensureMysqlColumn('raw_data', 'instrument_id', 'ALTER TABLE `raw_data` ADD COLUMN `instrument_id` VARCHAR(128) NULL');
     await this.ensureMysqlColumn('orders', 'instrument_id', 'ALTER TABLE `orders` ADD COLUMN `instrument_id` VARCHAR(128) NULL');
     await this.ensureMysqlColumn('orders', 'notes', 'ALTER TABLE `orders` ADD COLUMN `notes` TEXT NULL');
@@ -1275,11 +1280,11 @@ export class DatabaseService {
     // sequential awaits between chunks let the renderer breathe.
     const batches = this.chunkArray(logs, DatabaseService.SQLITE_LOG_INSERT_BATCH_SIZE);
     for (const batch of batches) {
-      const placeholders = batch.map(() => '(?, ?, ?, ?, ?, ?)').join(',');
-      const sqliteQuery = `INSERT INTO app_log (log, log_type, log_message, instrument_id, added_on, mysql_inserted) VALUES ${placeholders}`;
+      const placeholders = batch.map(() => '(?, ?, ?, ?, ?, ?, ?)').join(',');
+      const sqliteQuery = `INSERT INTO app_log (log, log_type, log_message, instrument_id, added_on, category, mysql_inserted) VALUES ${placeholders}`;
       const params: any[] = [];
       for (const log of batch) {
-        params.push(log.message, log.type, log.message, log.instrumentId, log.timestamp, 0);
+        params.push(log.message, log.type, log.message, log.instrumentId, log.timestamp, log.category ?? 'operational', 0);
       }
       try {
         await this.execSqlite(sqliteQuery, params);
@@ -1288,7 +1293,30 @@ export class DatabaseService {
       }
     }
 
+    await this.pruneLocalAppLogsIfDue();
     this.resyncAppLogToMySQL(() => { }, () => { });
+  }
+
+  private async pruneLocalAppLogsIfDue(): Promise<void> {
+    const now = Date.now();
+    if (now - this.lastLocalLogPruneAt < DatabaseService.LOCAL_LOG_PRUNE_INTERVAL_MS) {
+      return;
+    }
+    this.lastLocalLogPruneAt = now;
+
+    try {
+      await this.execSqlite(
+        `DELETE FROM app_log WHERE added_on < datetime('now', '-${DatabaseService.LOCAL_LOG_RETENTION_DAYS} days')`,
+        []
+      );
+      await this.execSqlite(
+        'DELETE FROM app_log WHERE id NOT IN (SELECT id FROM app_log ORDER BY id DESC LIMIT ?)',
+        [DatabaseService.LOCAL_LOG_MAX_ROWS]
+      );
+    } catch (error) {
+      // Do not send retention failures back through the same log pipeline.
+      console.error('Failed to prune local application logs:', error);
+    }
   }
 
   resyncAppLogToMySQL(success: any, errorf: any) {
@@ -1309,7 +1337,7 @@ export class DatabaseService {
   }
 
   private processResyncAppLogRecords(records: any[], success: any, errorf: any) {
-    const mysqlQuery = 'INSERT INTO app_log (log, log_type, log_message, instrument_id, added_on) VALUES ?';
+    const mysqlQuery = 'INSERT INTO app_log (log, log_type, log_message, instrument_id, added_on, category) VALUES ?';
     const batches = this.chunkArray(records, DatabaseService.MYSQL_APP_LOG_RESYNC_BATCH_SIZE);
     let batchIndex = 0;
 
@@ -1322,7 +1350,14 @@ export class DatabaseService {
         }
 
         batchIndex++;
-        const mysqlValues = batch.map(log => [log.log, log.log_type, log.log_message, log.instrument_id, log.added_on]);
+        const mysqlValues = batch.map(log => [
+          log.log,
+          log.log_type,
+          log.log_message,
+          log.instrument_id,
+          log.added_on,
+          log.category ?? 'operational'
+        ]);
         this.execQuery(mysqlQuery, [mysqlValues],
           () => {
             const recordIds = batch.map(r => r.id);
@@ -1331,7 +1366,8 @@ export class DatabaseService {
           },
           (mysqlError) => {
             if (mysqlError) {
-              this.logCriticalDatabaseIssue(`Error inserting log batch into MySQL: ${mysqlError?.message ?? mysqlError}`, 'database', batch.find(log => !!log.instrument_id)?.instrument_id ?? null);
+              // Logging this through app_log would create a recursive failure loop.
+              console.error('Error inserting log batch into MySQL:', mysqlError);
             }
             errorf(mysqlError);
           }
@@ -1367,7 +1403,9 @@ export class DatabaseService {
 
   fetchRecentLogs(instrumentId: string, limit: number = 200): Observable<any[]> {
     const subject = new Subject<any[]>();
-    const query = 'SELECT * FROM app_log WHERE instrument_id = ? ORDER BY id DESC LIMIT ?';
+    const query = `SELECT * FROM app_log
+      WHERE instrument_id = ? AND (category IS NULL OR category = 'operational')
+      ORDER BY id DESC LIMIT ?`;
     this.execSqlite(query, [instrumentId, limit])
       .then(rows => {
         // Defensive: ensure rows is an array before mapping
@@ -1380,13 +1418,42 @@ export class DatabaseService {
           type: row.log_type || 'info',
           message: row.log ?? '',
           instrumentId: row.instrument_id,
-          timestamp: new Date(row.added_on)
+          timestamp: new Date(row.added_on),
+          category: row.category || 'operational'
         }));
         subject.next(logs.reverse());
         subject.complete();
       })
       .catch(err => {
         // Return empty array on error instead of propagating
+        subject.next([]);
+        subject.complete();
+      });
+    return subject.asObservable();
+  }
+
+  fetchRecentSystemLogs(limit: number = 200): Observable<any[]> {
+    const subject = new Subject<any[]>();
+    const query = `SELECT * FROM app_log
+      WHERE log_type IN ('error', 'warn')
+        AND (
+          category IN ('system', 'database', 'migration')
+          OR (instrument_id IS NULL AND (category IS NULL OR category = 'operational'))
+        )
+      ORDER BY id DESC LIMIT ?`;
+    this.execSqlite(query, [limit])
+      .then(rows => {
+        const logs = Array.isArray(rows) ? rows.map(row => ({
+          type: row.log_type || 'error',
+          message: row.log ?? '',
+          instrumentId: row.instrument_id,
+          timestamp: new Date(row.added_on),
+          category: row.category || 'operational'
+        })).reverse() : [];
+        subject.next(logs);
+        subject.complete();
+      })
+      .catch(() => {
         subject.next([]);
         subject.complete();
       });

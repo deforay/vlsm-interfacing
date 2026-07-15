@@ -155,8 +155,45 @@ describe('DatabaseService log display', () => {
     expect(entry).toMatchObject({
       type: 'error',
       message: 'Connection timed out',
-      instrumentId: 'ANALYZER-1'
+      instrumentId: 'ANALYZER-1',
+      category: 'operational'
     });
     expect(entry.timestamp).toEqual(new Date('2026-07-15T12:15:11.830Z'));
+  });
+
+  it('restores recent categorized system warnings and errors', async () => {
+    const service = Object.create(DatabaseService.prototype) as any;
+    service.execSqlite = vi.fn().mockResolvedValue([{
+      id: 8,
+      instrument_id: 'ANALYZER-1',
+      added_on: '2026-07-15T12:16:00.000Z',
+      log_type: 'error',
+      log: 'MySQL write failed',
+      category: 'database'
+    }]);
+
+    const entries = await firstValueFrom(
+      service.fetchRecentSystemLogs() as ReturnType<DatabaseService['fetchRecentSystemLogs']>
+    );
+
+    expect(service.execSqlite.mock.calls[0][0]).toContain("category IN ('system', 'database', 'migration')");
+    expect(entries[0]).toMatchObject({
+      type: 'error',
+      message: 'MySQL write failed',
+      category: 'database'
+    });
+  });
+
+  it('prunes local logs at most once per day', async () => {
+    const service = Object.create(DatabaseService.prototype) as any;
+    service.lastLocalLogPruneAt = 0;
+    service.execSqlite = vi.fn().mockResolvedValue({ changes: 0 });
+
+    await service.pruneLocalAppLogsIfDue();
+    await service.pruneLocalAppLogsIfDue();
+
+    expect(service.execSqlite).toHaveBeenCalledTimes(2);
+    expect(service.execSqlite.mock.calls[0][0]).toContain("datetime('now', '-30 days')");
+    expect(service.execSqlite.mock.calls[1][1]).toEqual([50000]);
   });
 });
