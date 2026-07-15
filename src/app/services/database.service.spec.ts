@@ -46,4 +46,73 @@ describe('DatabaseService result durability', () => {
     expect(service.execQuery).toHaveBeenCalledOnce();
     expect(service.execSqlite.mock.calls[0][1].at(-1)).toBe(1);
   });
+
+  it('falls back to a pending local copy when the MySQL insert fails', async () => {
+    const service = createService();
+    service.checkMysqlConnection = vi.fn((_params, success) => success());
+    service.execQuery = vi.fn((_query, _values, _success, failure) => failure(new Error('write failed')));
+    service.execSqlite = vi.fn().mockResolvedValue({ lastID: 1 });
+    service.logCriticalDatabaseIssue = vi.fn();
+
+    await new Promise<void>((resolve, reject) => {
+      service.recordTestResults(sampleResult, () => resolve(), reject);
+    });
+
+    expect(service.execSqlite).toHaveBeenCalledOnce();
+    expect(service.execSqlite.mock.calls[0][1].at(-1)).toBe(0);
+  });
+
+  it('documents the current interruption window after a successful MySQL insert', async () => {
+    const service = createService();
+    const sqliteFailure = new Error('local disk unavailable');
+    service.checkMysqlConnection = vi.fn((_params, success) => success());
+    service.execQuery = vi.fn((_query, _values, success) => success({ insertId: 1 }));
+    service.execSqlite = vi.fn().mockRejectedValue(sqliteFailure);
+
+    const receivedError = await new Promise<Error>((resolve) => {
+      service.recordTestResults(sampleResult, vi.fn(), resolve);
+    });
+
+    // This characterization is intentionally expected to change when Batch 2
+    // makes local durability the first persistence boundary.
+    expect(service.execQuery).toHaveBeenCalledOnce();
+    expect(receivedError).toBe(sqliteFailure);
+  });
+
+  it.fails('persists locally before attempting MySQL replication', async () => {
+    const service = createService();
+    service.checkMysqlConnection = vi.fn((_params, success) => success());
+    service.execQuery = vi.fn((_query, _values, success) => success({ insertId: 1 }));
+    service.execSqlite = vi.fn().mockResolvedValue({ lastID: 1 });
+
+    await new Promise<void>((resolve, reject) => {
+      service.recordTestResults(sampleResult, resolve, reject);
+    });
+
+    // WHY: local-first ordering closes the crash window documented above.
+    // Batch 2 will change the implementation and convert this to a normal test.
+    expect(service.execSqlite.mock.invocationCallOrder[0])
+      .toBeLessThan(service.execQuery.mock.invocationCallOrder[0]);
+  });
+
+  it.fails('does not replicate the same pending row twice after a local status-update failure', async () => {
+    const service = createService();
+    const pendingRecord = { ...sampleResult, id: 42, instrument_id: 'ANALYZER-1', mysql_inserted: 0 };
+    service.checkMysqlConnection = vi.fn((_params, success) => success());
+    service.execQuery = vi.fn((_query, _values, success) => success({ affectedRows: 1 }));
+    service.execSqlite = vi.fn((query: string) => {
+      if (query.startsWith('SELECT')) return Promise.resolve([pendingRecord]);
+      return Promise.reject(new Error('status update interrupted'));
+    });
+
+    const resync = () => new Promise<void>((resolve, reject) => {
+      service.resyncTestResultsToMySQL(() => resolve(), reject);
+    });
+    await resync();
+    await resync();
+
+    // WHY: a remote insert must be safe to retry even if the local replicated
+    // flag could not be updated. Batch 2 will add a stable ingestion identity.
+    expect(service.execQuery).toHaveBeenCalledOnce();
+  });
 });
