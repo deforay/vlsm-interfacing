@@ -21,7 +21,7 @@
     "electron:build": "npm run build:prod && electron-builder build --publish=never",
     "test": "npm run test:unit && npm run test:migrations",
     "test:unit": "ng test --watch=false",
-    "test:migrations": "node scripts/test-sqlite-migrations.cjs",
+    "test:migrations": "node --experimental-sqlite scripts/test-sqlite-migrations.cjs",
     "test:watch": "ng test",
     "verify": "npm run lint && npm test && npm run build:prod",
     "security:audit": "npm audit --audit-level=high",
