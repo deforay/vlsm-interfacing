@@ -1,8 +1,13 @@
-import { describe, expect, it, vi } from 'vitest';
+import { BehaviorSubject } from 'rxjs';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { ASTMHelperService } from './astm-helper.service';
 import { UtilitiesService } from './utilities.service';
 
 describe('ASTMHelperService', () => {
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
   const createService = () => {
     const utilities = new UtilitiesService(null, null, {
       log: vi.fn()
@@ -100,6 +105,7 @@ describe('ASTMHelperService', () => {
     );
 
     expect(result).toEqual({ completed: false });
+    service.clearInstrumentBuffer('ANALYZER-1');
   });
 
   it('completes malformed ASTM payloads without inventing sample results', () => {
@@ -122,5 +128,43 @@ describe('ASTMHelperService', () => {
 
     expect(result.completed).toBe(true);
     expect(result.sampleResults).toEqual([]);
+  });
+
+  it('discards an oversized incomplete ASTM transmission', () => {
+    const service = createService();
+    const transmissionStatusSubject = new BehaviorSubject(true);
+    const instrument = { instrumentId: 'ANALYZER-1', transmissionStatusSubject };
+    const maximumBytes = ASTMHelperService.MAX_INCOMPLETE_BUFFER_BYTES;
+    const payload = `H|\\^&|||LAB001\r${'X'.repeat(maximumBytes)}`;
+
+    const result = service.appendASTMChunk(
+      instrument,
+      payload,
+      'astm-nonchecksum',
+      service.processASTMText(payload)
+    );
+
+    expect(result).toEqual({ completed: false, discarded: true });
+    expect((service as any).astmBuffers.has('ANALYZER-1')).toBe(false);
+    expect(transmissionStatusSubject.value).toBe(false);
+  });
+
+  it('discards an inactive incomplete ASTM transmission', () => {
+    vi.useFakeTimers();
+    const service = createService();
+    const transmissionStatusSubject = new BehaviorSubject(true);
+    const instrument = { instrumentId: 'ANALYZER-1', transmissionStatusSubject };
+    const payload = 'H|\\^&|||LAB001\rO|1|SAMPLE-001||^^^HIVVL\r';
+
+    service.appendASTMChunk(
+      instrument,
+      payload,
+      'astm-nonchecksum',
+      service.processASTMText(payload)
+    );
+    vi.advanceTimersByTime(ASTMHelperService.BUFFER_INACTIVITY_TIMEOUT_MS);
+
+    expect((service as any).astmBuffers.has('ANALYZER-1')).toBe(false);
+    expect(transmissionStatusSubject.value).toBe(false);
   });
 });

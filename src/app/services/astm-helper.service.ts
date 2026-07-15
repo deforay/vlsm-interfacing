@@ -6,6 +6,7 @@ import { LIMS_SYNC_STATUS } from '../constants/domain.constants';
 
 export interface ASTMProcessingResult {
   completed: boolean;
+  discarded?: boolean;
   rawData?: string;
   sampleResults?: any[];
 }
@@ -14,6 +15,8 @@ export interface ASTMProcessingResult {
   providedIn: 'root'
 })
 export class ASTMHelperService {
+  static readonly MAX_INCOMPLETE_BUFFER_BYTES = 32 * 1024 * 1024;
+  static readonly BUFFER_INACTIVITY_TIMEOUT_MS = 30 * 60 * 1000;
   // Control characters
   protected NAK = '\x15'; // Negative Acknowledge
   protected STX = '\x02'; // Start of Text
@@ -34,6 +37,7 @@ export class ASTMHelperService {
   private astmSequenceNumbers: Map<string, number> = new Map();
   // Buffer ASTM payloads per instrument until we receive EOT
   private astmBuffers: Map<string, string> = new Map();
+  private astmBufferExpiryTimers: Map<string, ReturnType<typeof setTimeout>> = new Map();
 
   constructor(private utilitiesService: UtilitiesService) { }
 
@@ -181,6 +185,15 @@ export class ASTMHelperService {
     this.astmSequenceNumbers.set(instrumentId, 100);
   }
 
+  clearInstrumentBuffer(instrumentId: string): void {
+    this.astmBuffers.delete(instrumentId);
+    const expiryTimer = this.astmBufferExpiryTimers.get(instrumentId);
+    if (expiryTimer) {
+      clearTimeout(expiryTimer);
+      this.astmBufferExpiryTimers.delete(instrumentId);
+    }
+  }
+
   /**
    * Appends an ASTM data chunk to the instrument buffer and, when EOT is received,
    * returns the accumulated payload together with parsed sample results.
@@ -204,7 +217,7 @@ export class ASTMHelperService {
     // When EOT is received, process the accumulated payload and reset the buffer
     if (processedInfo.isEOT) {
       const accumulatedPayload = this.astmBuffers.get(instrumentId) ?? '';
-      this.astmBuffers.delete(instrumentId);
+      this.clearInstrumentBuffer(instrumentId);
 
       if (!accumulatedPayload) {
         this.utilitiesService.logger('warn', 'EOT received without accumulated ASTM payload', instrumentId);
@@ -255,9 +268,49 @@ export class ASTMHelperService {
     // For normal payload frames, append the data (header frames are pre-processed)
     const payloadToAppend = processedInfo.isHeader ? processedInfo.text : astmText;
     const updatedPayload = (this.astmBuffers.get(instrumentId) ?? '') + payloadToAppend;
+
+    if (Buffer.byteLength(updatedPayload, 'utf8') > ASTMHelperService.MAX_INCOMPLETE_BUFFER_BYTES) {
+      const bufferedBytes = Buffer.byteLength(updatedPayload, 'utf8');
+      this.clearInstrumentBuffer(instrumentId);
+      instrumentConnectionData.transmissionStatusSubject?.next(false);
+      this.utilitiesService.logger(
+        'warn',
+        `Discarded incomplete ASTM transmission after ${bufferedBytes} bytes`,
+        instrumentId
+      );
+      return { completed: false, discarded: true };
+    }
+
     this.astmBuffers.set(instrumentId, updatedPayload);
+    this.scheduleBufferExpiry(instrumentConnectionData);
 
     return { completed: false };
+  }
+
+  private scheduleBufferExpiry(instrumentConnectionData: any): void {
+    const instrumentId = instrumentConnectionData.instrumentId;
+    const existingTimer = this.astmBufferExpiryTimers.get(instrumentId);
+    if (existingTimer) {
+      clearTimeout(existingTimer);
+    }
+
+    const expiryTimer = setTimeout(() => {
+      const bufferedData = this.astmBuffers.get(instrumentId);
+      this.astmBufferExpiryTimers.delete(instrumentId);
+      if (!bufferedData) {
+        return;
+      }
+
+      this.astmBuffers.delete(instrumentId);
+      instrumentConnectionData.transmissionStatusSubject?.next(false);
+      this.utilitiesService.logger(
+        'warn',
+        `Discarded inactive ASTM transmission after ${Buffer.byteLength(bufferedData, 'utf8')} bytes`,
+        instrumentId
+      );
+    }, ASTMHelperService.BUFFER_INACTIVITY_TIMEOUT_MS);
+
+    this.astmBufferExpiryTimers.set(instrumentId, expiryTimer);
   }
 
   /**

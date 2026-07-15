@@ -1,8 +1,12 @@
 import { BehaviorSubject } from 'rxjs';
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { InstrumentInterfaceService } from './instrument-interface.service';
 
 describe('InstrumentInterfaceService HL7 streams', () => {
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
   const createConnection = (instrumentId: string) => ({
     connectionProtocol: 'hl7',
     instrumentId,
@@ -20,21 +24,25 @@ describe('InstrumentInterfaceService HL7 streams', () => {
       recordRawData: vi.fn((_data, success) => success())
     };
     const tcpService = {
-      connectionStack: new Map<string, any>()
+      connectionStack: new Map<string, any>(),
+      disconnect: vi.fn()
     };
     const utilitiesService = {
       hex2ascii: (hex: string) => Buffer.from(hex, 'hex').toString('binary'),
       logger: vi.fn()
+    };
+    const astmHelper = {
+      clearInstrumentBuffer: vi.fn()
     };
     const service = new InstrumentInterfaceService(
       dbService as any,
       tcpService as any,
       utilitiesService as any,
       {} as any,
-      {} as any
+      astmHelper as any
     );
 
-    return { service, dbService, tcpService };
+    return { service, dbService, tcpService, astmHelper };
   };
 
   it('does not mix fragmented HL7 messages from concurrent instruments', () => {
@@ -87,16 +95,49 @@ describe('InstrumentInterfaceService HL7 streams', () => {
     expect(processSpy.mock.calls[1][1]).not.toContain('NOT-HL7');
   });
 
-  it.fails('discards an oversized incomplete HL7 frame', () => {
+  it('discards an oversized incomplete HL7 frame', () => {
+    const { service, tcpService } = createService();
+    const key = '10.0.0.1:5001:tcpserver:hl7';
+    const instrument = createConnection('ANALYZER-A');
+    tcpService.connectionStack.set(key, instrument);
+    const maximumBytes = InstrumentInterfaceService.MAX_INCOMPLETE_HL7_BYTES;
+
+    service.handleTCPResponse(key, Buffer.from(`MSH|^~\\&|A|LAB|${'X'.repeat(maximumBytes)}`));
+
+    expect((service as any).hl7ReceiveBuffers.has('ANALYZER-A')).toBe(false);
+    expect(instrument.transmissionStatusSubject.value).toBe(false);
+  });
+
+  it('discards an inactive incomplete HL7 frame', () => {
+    vi.useFakeTimers();
     const { service, tcpService } = createService();
     const key = '10.0.0.1:5001:tcpserver:hl7';
     const instrument = createConnection('ANALYZER-A');
     tcpService.connectionStack.set(key, instrument);
 
-    service.handleTCPResponse(key, Buffer.from(`MSH|^~\\&|A|LAB|${'X'.repeat(2 * 1024 * 1024)}`));
+    service.handleTCPResponse(key, Buffer.from('MSH|^~\\&|A|LAB|PARTIAL'));
+    vi.advanceTimersByTime(InstrumentInterfaceService.HL7_BUFFER_INACTIVITY_TIMEOUT_MS);
 
-    // WHY: an analyzer that never sends FS must not grow renderer memory
-    // without bound. Batch 2 will introduce a documented protocol limit.
     expect((service as any).hl7ReceiveBuffers.has('ANALYZER-A')).toBe(false);
+    expect(instrument.transmissionStatusSubject.value).toBe(false);
+  });
+
+  it('clears incomplete protocol state when an instrument disconnects', () => {
+    const { service, tcpService, astmHelper } = createService();
+    const key = '10.0.0.1:5001:tcpserver:hl7';
+    tcpService.connectionStack.set(key, createConnection('ANALYZER-A'));
+    service.handleTCPResponse(key, Buffer.from('MSH|^~\\&|A|LAB|PARTIAL'));
+
+    service.disconnect({
+      connectionParams: {
+        instrumentId: 'ANALYZER-A',
+        host: '10.0.0.1',
+        port: 5001
+      }
+    });
+
+    expect((service as any).hl7ReceiveBuffers.has('ANALYZER-A')).toBe(false);
+    expect(astmHelper.clearInstrumentBuffer).toHaveBeenCalledWith('ANALYZER-A');
+    expect(tcpService.disconnect).toHaveBeenCalledOnce();
   });
 });
