@@ -48,6 +48,11 @@
       </div>
 
       <div class="system-log-drawer-controls">
+        <select class="log-level-filter" [ngClass]="'level-' + systemLogContext.logLevel"
+          [(ngModel)]="systemLogContext.logLevel" (change)="filterInstrumentLogs(systemLogContext)"
+          aria-label="Filter system logs by level">
+          <option *ngFor="let option of logLevelOptions" [ngValue]="option.value">{{ option.label }}</option>
+        </select>
         <div class="search-box">
           <i class="fa fa-search"></i>
           <input type="text" [(ngModel)]="systemLogContext.searchText" (input)="filterInstrumentLogs(systemLogContext)"
@@ -209,6 +214,11 @@
               Connection Logs
             </h3>
             <div class="log-controls">
+              <select class="log-level-filter" [ngClass]="'level-' + (instrument.logLevel || 'all')"
+                [ngModel]="instrument.logLevel || 'all'" (ngModelChange)="setLogLevel(instrument, $event)"
+                aria-label="Filter connection logs by level">
+                <option *ngFor="let option of logLevelOptions" [ngValue]="option.value">{{ option.label }}</option>
+              </select>
               <div class="search-box">
                 <i class="fa fa-search"></i>
                 <input type="text" [(ngModel)]="instrument.searchText" (input)="filterInstrumentLogs(instrument)"
