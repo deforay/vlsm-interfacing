@@ -105,7 +105,6 @@ export class DatabaseService {
     ...DatabaseService.MYSQL_RAW_DATA_COLUMNS,
     'mysql_inserted',
   ];
-  private readonly moment = (window as any).require('moment');
   private readonly path: any = (window as any).require('path');
 
   constructor(private readonly electronService: ElectronService,
@@ -1317,8 +1316,8 @@ export class DatabaseService {
           return;
         }
         const logs = rows.map(row => ({
-          type: row.log_type,
-          message: this.formatLogMessage(row),
+          type: row.log_type || 'info',
+          message: row.log ?? '',
           instrumentId: row.instrument_id,
           timestamp: new Date(row.added_on)
         }));
@@ -1331,21 +1330,6 @@ export class DatabaseService {
         subject.complete();
       });
     return subject.asObservable();
-  }
-
-  private formatLogMessage(log: any): string {
-    const timestamp = this.moment(log.added_on).format('YYYY-MM-DD HH:mm:ss.SSS');
-    const logType = log.log_type || 'info';
-    // Reverted to old format to restore colors and styling
-    const bootstrapClass = {
-      success: 'success',
-      info: 'info',
-      warn: 'warning',
-      error: 'danger',
-      verbose: 'muted'
-    }[logType] || 'info';
-
-    return `<span class="log-time">[${timestamp}]</span> <span class="log-${logType} text-${bootstrapClass}">[${logType}]</span> <span class="log-text">${log.log}</span>`;
   }
 
   /**

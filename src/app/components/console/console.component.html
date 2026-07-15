@@ -67,7 +67,11 @@
         <div class="log-entries">
           <ng-container *ngIf="systemLogCount > 0; else emptySystemLogs">
             <div *ngFor="let logEntry of systemLogs.filteredLogs; trackBy: trackByLogId"
-              class="log-entry" [ngClass]="'log-' + logEntry.type">{{ logEntry.message }}</div>
+              class="log-entry" [ngClass]="'log-' + logEntry.type">
+              <span class="log-time">[{{ logEntry.timestamp | date:'yyyy-MM-dd HH:mm:ss.SSS' }}]</span>
+              <span class="log-level">[{{ logEntry.type }}]</span>
+              <span class="log-text">{{ logEntry.message }}</span>
+            </div>
           </ng-container>
           <ng-template #emptySystemLogs>
             <div class="log-empty">
@@ -225,7 +229,11 @@
               <ng-container
                 *ngIf="instrumentLogs[instrument.connectionParams.instrumentId] && instrumentLogs[instrument.connectionParams.instrumentId].filteredLogs && instrumentLogs[instrument.connectionParams.instrumentId].filteredLogs.length > 0">
                 <div *ngFor="let logEntry of instrumentLogs[instrument.connectionParams.instrumentId].filteredLogs; trackBy: trackByLogId"
-                  class="log-entry" [ngClass]="'log-' + logEntry.type">{{ logEntry.message }}</div>
+                  class="log-entry" [ngClass]="'log-' + logEntry.type">
+                  <span class="log-time">[{{ logEntry.timestamp | date:'yyyy-MM-dd HH:mm:ss.SSS' }}]</span>
+                  <span class="log-level">[{{ logEntry.type }}]</span>
+                  <span class="log-text">{{ logEntry.message }}</span>
+                </div>
               </ng-container>
               <div class="log-empty"
                 *ngIf="!instrumentLogs[instrument.connectionParams.instrumentId] ||
