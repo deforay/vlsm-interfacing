@@ -41,6 +41,10 @@ export class ElectronStoreService {
     if (storeCopy.encryptionKey) {
       delete storeCopy.encryptionKey;
     }
+    // Connection identity and credentials are managed exclusively in Electron
+    // main and must not flow through renderer settings snapshots or exports.
+    delete storeCopy.intelisConnection;
+    delete storeCopy.sourceInstallationId;
 
     return storeCopy;
   }
@@ -81,6 +85,10 @@ export class ElectronStoreService {
     // Remove LIS API credentials
     if (settings && settings.lisApiConfig && settings.lisApiConfig.credentials) {
       delete settings.lisApiConfig.credentials;
+    }
+    if (settings) {
+      delete settings.intelisConnection;
+      delete settings.sourceInstallationId;
     }
   }
 

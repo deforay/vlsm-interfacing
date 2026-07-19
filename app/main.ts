@@ -6,6 +6,7 @@ import * as sqlite3 from '@vscode/sqlite3';
 
 import * as log from 'electron-log/main';
 import { setupSqlite } from './sqlite3helper.main';
+import { registerIntelisConnectionIpc } from './intelis-connection.main';
 
 const Store = require('electron-store');
 let win: BrowserWindow = null;
@@ -503,6 +504,8 @@ try {
   const mysqlPools: Record<string, any> = {}; // simple in-memory cache of pools
 
   function registerIpcHandlers() {
+    registerIntelisConnectionIpc(store);
+
     ipcMain.handle('export-settings', async (event, settingsJSON) => {
       try {
         const today = new Date();
@@ -646,6 +649,11 @@ try {
         const filePath = filePaths[0];
         const data = fs.readFileSync(filePath, 'utf-8');
         const importedSettings = JSON.parse(data);
+        // Installation identity and credentials are machine-bound. Importing
+        // them would clone an installation and can invalidate telemetry and
+        // result idempotency, so they are never accepted from settings files.
+        delete importedSettings.intelisConnection;
+        delete importedSettings.sourceInstallationId;
         win.webContents.send('imported-settings', importedSettings);
         for (const key in importedSettings) {
           if (importedSettings.hasOwnProperty(key)) {

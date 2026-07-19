@@ -31,5 +31,7 @@ public/system/lib
 # Compiled Electron main process bundles #
 app/main.js
 app/main.js.map
-app/sqlite3helper.main.js
-app/sqlite3helper.main.js.map
+app/*.main.js
+app/*.main.js.map
+shared/*.js
+shared/*.js.map
