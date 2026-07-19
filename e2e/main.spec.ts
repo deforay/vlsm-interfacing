@@ -65,6 +65,33 @@ test.describe('Check Home Page', async () => {
     await expect(firstWindow.getByRole('button', { name: 'Sign in' })).toBeVisible();
   });
 
+  test('guides operators to the correct LIS connection setup', async () => {
+    await firstWindow.getByPlaceholder('Login ID').fill('admin');
+    await firstWindow.getByPlaceholder('Login Password').fill('admin');
+    await firstWindow.getByRole('button', { name: 'Sign in' }).click();
+
+    await expect(firstWindow.getByRole('heading', { name: 'Interface Tool Settings' })).toBeVisible();
+    await firstWindow.getByText('LIS Connection', { exact: true }).click();
+    await expect(firstWindow.getByRole('heading', { name: 'Which system does your laboratory use?' })).toBeVisible();
+    await firstWindow.getByRole('button', { name: /My laboratory uses InteLIS/ }).click();
+    await expect(firstWindow.getByRole('heading', { name: 'Connect to InteLIS' })).toBeVisible();
+    await expect(firstWindow.getByLabel('InteLIS URL')).toBeVisible();
+    await expect(firstWindow.getByLabel('Connection Code')).toBeVisible();
+    await firstWindow.getByRole('button', { name: 'Change connection type' }).click();
+    await firstWindow.getByRole('button', { name: /My laboratory uses another LIS/ }).click();
+    await expect(firstWindow.getByRole('heading', { name: 'Connect to another LIS' })).toBeVisible();
+  });
+
+  test('rejects an insecure InteLIS URL in the main process', async () => {
+    await firstWindow.getByRole('button', { name: 'Change connection type' }).click();
+    await firstWindow.getByRole('button', { name: /My laboratory uses InteLIS/ }).click();
+    await firstWindow.getByLabel('InteLIS URL').fill('http://vlsm.test');
+    await firstWindow.getByLabel('Connection Code').fill('ABCD-EFGH-JKMP-QRST');
+    await firstWindow.getByRole('button', { name: 'Connect to InteLIS' }).click();
+
+    await expect(firstWindow.getByText('InteLIS connections require HTTPS.')).toBeVisible();
+  });
+
   test.afterAll( async () => {
     // WHY: a launch failure can occur before these resources are assigned;
     // cleanup must preserve the original failure instead of throwing another.

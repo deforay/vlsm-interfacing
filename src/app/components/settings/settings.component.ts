@@ -11,6 +11,8 @@ import { Subscription } from 'rxjs';
 import { DatabaseService } from '../../services/database.service';
 import { LisApiService } from '../../services/lis-api.service';
 import { LisApiConfig } from '../../interfaces/lis-api-config.interface';
+import { IntelisConnectionService } from '../../services/intelis-connection.service';
+import { IntelisConnectionState } from '../../../../shared/intelis-connection';
 
 @Component({
   standalone: false,
@@ -26,6 +28,7 @@ export class SettingsComponent implements OnInit, OnDestroy {
   public availableInstruments = [];
   private instrumentsSubscription: Subscription;
   private lisSubscription: Subscription;
+  private intelisSubscription: Subscription;
 
   // Sidebar
   public activeSection: string = 'system';
@@ -34,7 +37,7 @@ export class SettingsComponent implements OnInit, OnDestroy {
     { id: 'system', label: 'System', icon: 'fas fa-cog' },
     { id: 'database', label: 'Database', icon: 'fas fa-database' },
     { id: 'instruments', label: 'Instruments', icon: 'fas fa-microscope' },
-    { id: 'lisapi', label: 'LIS API', icon: 'fas fa-plug' },
+    { id: 'lisapi', label: 'LIS Connection', icon: 'fas fa-plug' },
     { id: 'troubleshoot', label: 'Troubleshooting', icon: 'fas fa-wrench' }
   ];
 
@@ -42,6 +45,10 @@ export class SettingsComponent implements OnInit, OnDestroy {
   public lisInstrumentNames: string[] = [];
   public lisApiFetchStatus: 'idle' | 'loading' | 'success' | 'error' = 'idle';
   public lisApiFetchError: string = '';
+  public intelisConnectionState: IntelisConnectionState = { configured: false };
+  public intelisBusy: boolean = false;
+  public intelisError: string = '';
+  public lisConnectionChoice: 'intelis' | 'other' | null = null;
 
   get sectionSetupStatus(): Record<string, boolean> {
     const common = this.settingsForm?.get('commonSettings');
@@ -49,7 +56,8 @@ export class SettingsComponent implements OnInit, OnDestroy {
     return {
       system: !!(common?.get('labID')?.value && common?.get('labName')?.value),
       database: !!(common?.get('mysqlHost')?.value),
-      instruments: instruments?.length > 0
+      instruments: instruments?.length > 0,
+      lisapi: this.intelisConnectionState.configured || !!this.settingsForm?.get('lisApiSettings.url')?.value
     };
   }
 
@@ -62,7 +70,8 @@ export class SettingsComponent implements OnInit, OnDestroy {
     private readonly cryptoService: CryptoService,
     private connectionManagerService: ConnectionManagerService,
     private readonly databaseService: DatabaseService,
-    private readonly lisApiService: LisApiService
+    private readonly lisApiService: LisApiService,
+    private readonly intelisConnectionService: IntelisConnectionService
   ) {
 
     const commonSettingsStore = this.electronStoreService.get('commonConfig');
@@ -111,6 +120,11 @@ export class SettingsComponent implements OnInit, OnDestroy {
           endpoint: ['/api/results']
         })
       }),
+      intelisConnection: this.formBuilder.group({
+        baseUrl: [''],
+        connectionCode: [''],
+        displayName: ['']
+      }),
       instrumentsSettings: this.formBuilder.array(
         instrumentSettingsStore.map(instrument => this.formBuilder.group(instrument))
       )
@@ -132,6 +146,9 @@ export class SettingsComponent implements OnInit, OnDestroy {
         };
       }
       this.settingsForm.patchValue({ lisApiSettings: decryptedConfig });
+      if (decryptedConfig.url) {
+        this.lisConnectionChoice = 'other';
+      }
     }
 
   }
@@ -149,6 +166,18 @@ export class SettingsComponent implements OnInit, OnDestroy {
       .subscribe(names => {
         this.lisInstrumentNames = names;
       });
+
+    this.intelisSubscription = this.intelisConnectionService.stateChanges()
+      .subscribe(state => {
+        this.intelisConnectionState = state;
+        // An established managed connection is the clearest source of truth when
+        // an older installation also retains an unused custom API configuration.
+        if (state.configured) this.lisConnectionChoice = 'intelis';
+        this.syncIntelisForm(state);
+      });
+    void this.intelisConnectionService.load().then(result => {
+      if (!result.ok) this.intelisError = result.error?.message || 'Unable to load the InteLIS connection.';
+    });
   }
 
   ngOnDestroy(): void {
@@ -158,11 +187,113 @@ export class SettingsComponent implements OnInit, OnDestroy {
     if (this.lisSubscription) {
       this.lisSubscription.unsubscribe();
     }
+    if (this.intelisSubscription) {
+      this.intelisSubscription.unsubscribe();
+    }
+  }
+
+  async connectToIntelis(): Promise<void> {
+    const form = this.settingsForm.get('intelisConnection');
+    const request = {
+      baseUrl: (form.get('baseUrl').value || '').trim(),
+      connectionCode: (form.get('connectionCode').value || '').trim(),
+      displayName: (form.get('displayName').value || '').trim()
+    };
+
+    this.intelisBusy = true;
+    this.intelisError = '';
+    try {
+      const result = await this.intelisConnectionService.connect(request);
+      form.get('connectionCode').setValue('');
+      if (!result.ok) {
+        this.intelisError = result.error?.message || 'Unable to connect to InteLIS.';
+        return;
+      }
+      if (result.data?.connection?.facility) {
+        this.applyConnectedFacility(result.data);
+      }
+      if (result.data?.lastError) {
+        this.intelisError = result.data.lastError.message;
+      }
+    } finally {
+      this.intelisBusy = false;
+    }
+  }
+
+  async refreshIntelisConnection(): Promise<void> {
+    this.intelisBusy = true;
+    this.intelisError = '';
+    try {
+      const result = await this.intelisConnectionService.refresh();
+      if (result.data?.connection?.facility) {
+        this.applyConnectedFacility(result.data);
+      }
+      if (!result.ok) {
+        this.intelisError = result.error?.message || 'Unable to refresh the InteLIS connection.';
+      }
+    } finally {
+      this.intelisBusy = false;
+    }
+  }
+
+  async forgetIntelisConnection(): Promise<void> {
+    const result = await this.electronService.ipcRenderer.invoke('show-confirm-dialog', {
+      type: 'warning',
+      buttons: ['Cancel', 'Forget Connection'],
+      defaultId: 0,
+      title: 'Forget InteLIS Connection',
+      message: 'Forget the InteLIS connection on this computer?',
+      detail: 'This does not revoke the installation in InteLIS. You will need a Reconnect Code from the facility page to connect this computer again.'
+    });
+    if (result.response !== 1) return;
+
+    const forgotten = await this.intelisConnectionService.forget();
+    if (!forgotten.ok) {
+      this.intelisError = forgotten.error?.message || 'Unable to forget the InteLIS connection.';
+      return;
+    }
+    this.intelisError = '';
+    this.settingsForm.get('intelisConnection.connectionCode').setValue('');
+  }
+
+  get intelisMachineCount(): number {
+    return (this.intelisConnectionState.connection?.instruments || [])
+      .reduce((count, instrument) => count + (instrument.machines?.length || 0), 0);
+  }
+
+  private syncIntelisForm(state: IntelisConnectionState): void {
+    if (!state.configured) return;
+    this.settingsForm.get('intelisConnection').patchValue({
+      baseUrl: state.baseUrl || '',
+      displayName: state.installation?.displayName || ''
+    }, { emitEvent: false });
+  }
+
+  private applyConnectedFacility(state: IntelisConnectionState): void {
+    const facility = state.connection?.facility;
+    if (!facility) return;
+
+    const labID = facility.code || String(facility.id);
+    this.settingsForm.get('commonSettings').patchValue({ labID, labName: facility.name });
+
+    // The authenticated InteLIS profile is authoritative. Persist these two
+    // neutral lab fields immediately so runtime connections use the correct lab
+    // even if the operator leaves Settings without submitting unrelated changes.
+    const current = this.electronStoreService.get('commonConfig') || {};
+    this.electronStoreService.set('commonConfig', { ...current, labID, labName: facility.name });
   }
 
   setActiveSection(sectionId: string): void {
     this.activeSection = sectionId;
     this.sidebarCollapsed = true;
+  }
+
+  selectLisConnection(choice: 'intelis' | 'other'): void {
+    this.lisConnectionChoice = choice;
+  }
+
+  showLisConnectionChoices(): void {
+    this.lisConnectionChoice = null;
   }
 
   toggleSidebar(): void {

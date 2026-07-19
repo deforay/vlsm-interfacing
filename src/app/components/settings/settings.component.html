@@ -181,19 +181,212 @@
           </div>
         </div>
 
-        <!-- LIS API Configuration -->
-        <div *ngSwitchCase="'lisapi'" formGroupName="lisApiSettings">
-          <div class="config-card">
+        <!-- LIS Connections -->
+        <div *ngSwitchCase="'lisapi'">
+          <div class="lis-choice-panel" *ngIf="!lisConnectionChoice">
+            <div class="lis-choice-heading">
+              <span class="eyebrow">LIS connection</span>
+              <h2>Which system does your laboratory use?</h2>
+              <p>Choose the option your laboratory administrator gave you. You can change this later without losing saved settings.</p>
+            </div>
+
+            <div class="lis-choice-grid">
+              <button type="button" class="lis-choice-card recommended" (click)="selectLisConnection('intelis')">
+                <span class="choice-icon"><i class="fas fa-link"></i></span>
+                <span class="choice-content">
+                  <span class="choice-title">My laboratory uses InteLIS</span>
+                  <span class="choice-description">Choose this if you received a Connection Code from your InteLIS facility page.</span>
+                  <span class="choice-requirement"><i class="fas fa-key"></i> You only need a Connection Code</span>
+                </span>
+                <i class="fas fa-chevron-right choice-arrow"></i>
+              </button>
+
+              <button type="button" class="lis-choice-card" (click)="selectLisConnection('other')">
+                <span class="choice-icon"><i class="fas fa-server"></i></span>
+                <span class="choice-content">
+                  <span class="choice-title">My laboratory uses another LIS</span>
+                  <span class="choice-description">Choose this only if your LIS administrator gave you API connection details.</span>
+                  <span class="choice-requirement"><i class="fas fa-tools"></i> Requires technical API settings</span>
+                </span>
+                <i class="fas fa-chevron-right choice-arrow"></i>
+              </button>
+            </div>
+
+            <div class="choice-help">
+              <i class="fas fa-info-circle"></i>
+              <span>Not sure? Ask your LIS administrator whether you should use an InteLIS Connection Code or API settings.</span>
+            </div>
+          </div>
+
+          <div class="config-card managed-connection-card" formGroupName="intelisConnection"
+            *ngIf="lisConnectionChoice === 'intelis'">
             <div class="card-header">
               <div class="header-content">
                 <i class="fas fa-plug"></i>
-                <h2>LIS API Configuration</h2>
+                <div>
+                  <h2>Connect to InteLIS</h2>
+                  <span class="header-subtitle">Automatic setup using a Connection Code</span>
+                </div>
               </div>
-              <span class="optional-badge">Optional</span>
+              <button type="button" class="change-connection-button" (click)="showLisConnectionChoices()">
+                <i class="fas fa-exchange-alt"></i> Change connection type
+              </button>
             </div>
             <div class="card-body">
               <p class="section-description">
-                Connect to a LIS (Laboratory Information System) API to fetch instrument names and more.
+                Enter the facility-level Connection Code generated in InteLIS. The lab, instruments, and physical
+                machines are discovered automatically.
+              </p>
+
+              <div *ngIf="intelisConnectionState.configured" class="connection-summary"
+                [ngClass]="intelisConnectionState.health || 'attention'">
+                <div class="connection-heading">
+                  <div>
+                    <span class="connection-status">
+                      <i class="fas"
+                        [ngClass]="intelisConnectionState.health === 'connected' ? 'fa-check-circle' : 'fa-exclamation-circle'"></i>
+                      {{ intelisConnectionState.health === 'connected' ? 'Connected' :
+                         intelisConnectionState.health === 'revoked' ? 'Access revoked' : 'Needs attention' }}
+                    </span>
+                    <h3>{{ intelisConnectionState.connection?.facility?.name || intelisConnectionState.installation?.displayName }}</h3>
+                  </div>
+                  <span class="facility-code" *ngIf="intelisConnectionState.connection?.facility?.code">
+                    {{ intelisConnectionState.connection.facility.code }}
+                  </span>
+                </div>
+
+                <div class="connection-details">
+                  <div>
+                    <span class="detail-label">InteLIS URL</span>
+                    <span>{{ intelisConnectionState.baseUrl }}</span>
+                  </div>
+                  <div>
+                    <span class="detail-label">Computer</span>
+                    <span>{{ intelisConnectionState.installation?.displayName }}</span>
+                  </div>
+                  <div *ngIf="intelisConnectionState.connection?.facility">
+                    <span class="detail-label">Facility ID</span>
+                    <span>{{ intelisConnectionState.connection.facility.id }}</span>
+                  </div>
+                  <div>
+                    <span class="detail-label">Credential version</span>
+                    <span>{{ intelisConnectionState.installation?.credentialVersion }}</span>
+                  </div>
+                  <div>
+                    <span class="detail-label">Instruments</span>
+                    <span>{{ intelisConnectionState.connection?.instruments?.length || 0 }}</span>
+                  </div>
+                  <div>
+                    <span class="detail-label">Physical machines</span>
+                    <span>{{ intelisMachineCount }}</span>
+                  </div>
+                </div>
+
+                <div class="scope-list" *ngIf="intelisConnectionState.installation?.scopes?.length">
+                  <span class="detail-label">Permissions</span>
+                  <span class="scope-pill" *ngFor="let scope of intelisConnectionState.installation.scopes">{{ scope }}</span>
+                </div>
+
+                <div class="connected-instruments" *ngIf="intelisConnectionState.connection?.instruments?.length">
+                  <div class="connected-instrument" *ngFor="let instrument of intelisConnectionState.connection.instruments">
+                    <div>
+                      <strong>{{ instrument.name }}</strong>
+                      <span class="instrument-tests" *ngIf="instrument.supportedTests?.length">
+                        {{ instrument.supportedTests.join(', ') }}
+                      </span>
+                    </div>
+                    <div class="machine-list">
+                      <span *ngFor="let machine of instrument.machines">{{ machine.name }}</span>
+                      <span class="empty-machine" *ngIf="!instrument.machines?.length">No physical machines configured</span>
+                    </div>
+                  </div>
+                </div>
+
+                <div class="form-actions connection-actions">
+                  <button type="button" class="btn btn-secondary" (click)="refreshIntelisConnection()"
+                    [disabled]="intelisBusy">
+                    <i class="fas" [ngClass]="intelisBusy ? 'fa-spinner fa-spin' : 'fa-sync-alt'"></i>
+                    <span>Refresh</span>
+                  </button>
+                  <button type="button" class="btn btn-outline-danger" (click)="forgetIntelisConnection()"
+                    [disabled]="intelisBusy">
+                    <i class="fas fa-unlink"></i>
+                    <span>Forget on this computer</span>
+                  </button>
+                </div>
+              </div>
+
+              <div class="connection-alert" *ngIf="intelisError">
+                <i class="fas fa-exclamation-circle"></i>
+                <span>{{ intelisError }}</span>
+              </div>
+
+              <div class="connection-form" *ngIf="!intelisConnectionState.configured">
+                <div class="form-row">
+                  <div class="form-group half-width">
+                    <label>InteLIS URL</label>
+                    <input type="url" formControlName="baseUrl" class="form-control"
+                      placeholder="https://vlsm.example.org" autocomplete="url" aria-label="InteLIS URL">
+                  </div>
+                  <div class="form-group half-width">
+                    <label>Computer Name</label>
+                    <input type="text" formControlName="displayName" class="form-control"
+                      placeholder="Laboratory computer" maxlength="150" autocomplete="off">
+                  </div>
+                </div>
+
+                <div class="form-group">
+                  <label>Connection Code</label>
+                  <input type="text" formControlName="connectionCode" class="form-control connection-code-input"
+                    placeholder="ABCD-EFGH-JKMP-QRST" maxlength="128" autocomplete="one-time-code"
+                    autocapitalize="characters" spellcheck="false" aria-label="Connection Code">
+                  <small>Connection Codes are one-time and expire automatically.</small>
+                </div>
+
+                <div class="form-actions">
+                  <button type="button" class="btn btn-primary" (click)="connectToIntelis()"
+                    [disabled]="intelisBusy || !settingsForm.get('intelisConnection.baseUrl').value || !settingsForm.get('intelisConnection.connectionCode').value">
+                    <i class="fas" [ngClass]="intelisBusy ? 'fa-spinner fa-spin' : 'fa-link'"></i>
+                    <span>{{ intelisBusy ? 'Connecting...' : 'Connect to InteLIS' }}</span>
+                  </button>
+                </div>
+              </div>
+
+              <details class="reconnect-panel" *ngIf="intelisConnectionState.configured">
+                <summary>Reconnect or reinstall this connection</summary>
+                <p>Generate a Reconnect Code from the InteLIS facility page, then enter it below. The previous credential will stop working.</p>
+                <div class="form-group">
+                  <label>Reconnect Code</label>
+                  <input type="text" formControlName="connectionCode" class="form-control connection-code-input"
+                    maxlength="128" autocomplete="one-time-code" autocapitalize="characters" spellcheck="false">
+                </div>
+                <button type="button" class="btn btn-secondary" (click)="connectToIntelis()"
+                  [disabled]="intelisBusy || !settingsForm.get('intelisConnection.connectionCode').value">
+                  <i class="fas" [ngClass]="intelisBusy ? 'fa-spinner fa-spin' : 'fa-rotate'"></i>
+                  <span>{{ intelisBusy ? 'Reconnecting...' : 'Reconnect' }}</span>
+                </button>
+              </details>
+            </div>
+          </div>
+
+          <div class="config-card custom-lis-card" formGroupName="lisApiSettings"
+            *ngIf="lisConnectionChoice === 'other'">
+            <div class="card-header">
+              <div class="header-content">
+                <i class="fas fa-code-branch"></i>
+                <div>
+                  <h2>Connect to another LIS</h2>
+                  <span class="header-subtitle">Advanced setup using API details</span>
+                </div>
+              </div>
+              <button type="button" class="change-connection-button" (click)="showLisConnectionChoices()">
+                <i class="fas fa-exchange-alt"></i> Change connection type
+              </button>
+            </div>
+            <div class="card-body">
+              <p class="section-description">
+                Use the details supplied by your LIS administrator or vendor. If you were given an InteLIS Connection Code,
+                go back and choose InteLIS instead.
               </p>
 
               <div class="form-group">
@@ -214,7 +407,6 @@
                 </div>
               </div>
 
-              <!-- Conditional credential fields -->
               <div formGroupName="credentials">
                 <div *ngIf="settingsForm.get('lisApiSettings.authType').value === 'bearer'" class="form-group">
                   <label>Bearer Token</label>
@@ -240,7 +432,6 @@
                 </div>
               </div>
 
-              <!-- Fetch Instruments Feature -->
               <div class="feature-section" formGroupName="fetchInstruments">
                 <div class="feature-header">
                   <h4>Fetch Instruments</h4>
@@ -263,7 +454,6 @@
                     </button>
                   </div>
 
-                  <!-- Fetch result preview -->
                   <div *ngIf="lisApiFetchStatus === 'success'" class="fetch-preview success">
                     <p><i class="fas fa-check-circle"></i> Fetched {{ lisInstrumentNames.length }} instrument(s):</p>
                     <ul>
@@ -276,7 +466,6 @@
                 </div>
               </div>
 
-              <!-- Send Results Feature (Future) -->
               <div class="feature-section" formGroupName="sendResults">
                 <div class="feature-header">
                   <h4>Send Results</h4>

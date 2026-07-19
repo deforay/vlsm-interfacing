@@ -714,11 +714,373 @@ select.form-control {
 }
 
 // LIS API section
+.lis-choice-panel {
+  padding: 2rem;
+  border: 1px solid $border-color;
+  border-radius: 0.75rem;
+  background: white;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+}
+
+.lis-choice-heading {
+  max-width: 720px;
+  margin-bottom: 1.5rem;
+
+  .eyebrow {
+    color: $primary-color;
+    font-size: 0.75rem;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+  }
+
+  h2 {
+    margin: 0.35rem 0 0.5rem;
+    color: $dark-color;
+    font-size: 1.5rem;
+  }
+
+  p {
+    margin: 0;
+    color: $text-light;
+    line-height: 1.5;
+  }
+}
+
+.lis-choice-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1rem;
+}
+
+.lis-choice-card {
+  display: flex;
+  align-items: flex-start;
+  gap: 1rem;
+  min-height: 170px;
+  padding: 1.25rem;
+  border: 2px solid $border-color;
+  border-radius: 0.65rem;
+  background: white;
+  color: $text-color;
+  cursor: pointer;
+  text-align: left;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease;
+
+  &:hover,
+  &:focus-visible {
+    border-color: $primary-color;
+    box-shadow: 0 6px 18px rgba($primary-color, 0.12);
+    outline: none;
+    transform: translateY(-2px);
+  }
+
+  &.recommended {
+    border-color: rgba($primary-color, 0.45);
+    background: linear-gradient(145deg, rgba($primary-color, 0.055), white 65%);
+  }
+
+  .choice-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 42px;
+    height: 42px;
+    flex: 0 0 42px;
+    border-radius: 50%;
+    background: rgba($primary-color, 0.1);
+    color: $primary-color;
+  }
+
+  .choice-content {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    gap: 0.55rem;
+  }
+
+  .choice-title {
+    color: $dark-color;
+    font-size: 1rem;
+    font-weight: 700;
+  }
+
+  .choice-description {
+    color: $text-light;
+    font-size: 0.85rem;
+    line-height: 1.5;
+  }
+
+  .choice-requirement {
+    margin-top: auto;
+    color: $primary-color;
+    font-size: 0.78rem;
+    font-weight: 600;
+  }
+
+  .choice-arrow {
+    align-self: center;
+    color: $text-light;
+  }
+}
+
+.choice-help {
+  display: flex;
+  gap: 0.6rem;
+  align-items: flex-start;
+  margin-top: 1.25rem;
+  padding: 0.9rem 1rem;
+  border-radius: 0.4rem;
+  background: $light-color;
+  color: $text-light;
+  font-size: 0.82rem;
+  line-height: 1.45;
+
+  i {
+    margin-top: 0.15rem;
+    color: $primary-color;
+  }
+}
+
+.header-subtitle {
+  display: block;
+  margin-top: 0.2rem;
+  color: $text-light;
+  font-size: 0.75rem;
+  font-weight: 400;
+}
+
+.change-connection-button {
+  padding: 0.4rem 0.6rem;
+  border: 0;
+  background: transparent;
+  color: $primary-color;
+  cursor: pointer;
+  font-size: 0.78rem;
+  font-weight: 600;
+
+  &:hover,
+  &:focus-visible {
+    text-decoration: underline;
+    outline: none;
+  }
+}
+
 .section-description {
   margin: 0 0 1.25rem;
   font-size: 0.875rem;
   color: $text-light;
   line-height: 1.5;
+}
+
+.managed-connection-card {
+  margin-bottom: 1.5rem;
+}
+
+.custom-lis-card {
+  margin-top: 1.5rem;
+}
+
+.connection-summary {
+  padding: 1rem;
+  border: 1px solid $border-color;
+  border-left-width: 4px;
+  border-radius: 0.5rem;
+  background: #fff;
+
+  &.connected {
+    border-left-color: $success-color;
+  }
+
+  &.attention,
+  &.revoked {
+    border-left-color: $danger-color;
+  }
+}
+
+.connection-heading {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  align-items: flex-start;
+  padding-bottom: 1rem;
+  border-bottom: 1px solid $border-color;
+
+  h3 {
+    margin: 0.35rem 0 0;
+    font-size: 1.1rem;
+    color: $text-color;
+  }
+}
+
+.connection-status {
+  display: inline-flex;
+  gap: 0.4rem;
+  align-items: center;
+  font-size: 0.8rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.connected .connection-status {
+  color: $success-color;
+}
+
+.attention .connection-status,
+.revoked .connection-status {
+  color: $danger-color;
+}
+
+.facility-code,
+.scope-pill,
+.machine-list span {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.25rem 0.55rem;
+  border-radius: 999px;
+  background: rgba($primary-color, 0.08);
+  color: $primary-color;
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+.connection-details {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 1rem;
+  padding: 1rem 0;
+
+  > div {
+    display: flex;
+    flex-direction: column;
+    gap: 0.2rem;
+    min-width: 0;
+
+    span:last-child {
+      overflow-wrap: anywhere;
+      color: $text-color;
+      font-size: 0.875rem;
+    }
+  }
+}
+
+.detail-label {
+  color: $text-light;
+  font-size: 0.7rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.scope-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+  align-items: center;
+  padding-bottom: 1rem;
+}
+
+.connected-instruments {
+  max-height: 260px;
+  overflow-y: auto;
+  border-top: 1px solid $border-color;
+}
+
+.connected-instrument {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1rem;
+  padding: 0.75rem 0;
+  border-bottom: 1px solid $border-color;
+
+  > div:first-child {
+    display: flex;
+    flex-direction: column;
+    gap: 0.2rem;
+  }
+}
+
+.instrument-tests,
+.empty-machine {
+  color: $text-light;
+  font-size: 0.75rem;
+}
+
+.machine-list {
+  display: flex;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+
+  .empty-machine {
+    padding: 0;
+    background: transparent;
+    color: $text-light;
+    font-weight: 400;
+  }
+}
+
+.connection-actions {
+  margin-top: 1rem;
+}
+
+.connection-alert {
+  display: flex;
+  gap: 0.6rem;
+  align-items: flex-start;
+  margin-top: 1rem;
+  padding: 0.8rem 1rem;
+  border: 1px solid rgba($danger-color, 0.25);
+  border-radius: 0.4rem;
+  background: rgba($danger-color, 0.06);
+  color: $danger-color;
+  font-size: 0.875rem;
+}
+
+.connection-code-input {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.reconnect-panel {
+  margin-top: 1rem;
+  padding-top: 1rem;
+  border-top: 1px solid $border-color;
+
+  summary {
+    cursor: pointer;
+    color: $primary-color;
+    font-size: 0.875rem;
+    font-weight: 600;
+  }
+
+  p {
+    color: $text-light;
+    font-size: 0.8rem;
+    line-height: 1.5;
+  }
+}
+
+@media (max-width: 900px) {
+  .lis-choice-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .connection-details {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .connected-instrument {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .machine-list {
+    justify-content: flex-start;
+  }
 }
 
 .feature-section {

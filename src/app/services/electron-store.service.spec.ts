@@ -14,7 +14,9 @@ describe('ElectronStoreService settings export', () => {
       lisApiConfig: {
         url: 'https://lis.example.test',
         credentials: { token: 'token' }
-      }
+      },
+      intelisConnection: { encryptedCredential: 'ciphertext' },
+      sourceInstallationId: 'source-id'
     };
 
     service.removeSensitiveFields(settings);
@@ -24,5 +26,7 @@ describe('ElectronStoreService settings export', () => {
       mysqlHost: '127.0.0.1'
     });
     expect(settings.lisApiConfig.credentials).toBeUndefined();
+    expect(settings.intelisConnection).toBeUndefined();
+    expect(settings.sourceInstallationId).toBeUndefined();
   });
 });
