@@ -441,6 +441,7 @@ describe('DatabaseService log display', () => {
     const preview = await service.previewApplicationLogCleanup();
 
     expect(service.execSqlite.mock.calls[0][0]).toContain('LIMIT 1 OFFSET 6');
+    expect(service.execSqlite.mock.calls[0][0]).toContain("datetime(added_on / 1000, 'unixepoch')");
     expect(preview).toMatchObject({
       retainedActiveDays: 7,
       local: {

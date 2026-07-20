@@ -1635,21 +1635,21 @@ export class DatabaseService {
 
     try {
       const automaticCutoff = this.buildActiveLogDateCutoff(
-        'date',
+        this.sqliteLogDateExpression(),
         DatabaseService.LOCAL_LOG_RETENTION_ACTIVE_DAYS
       );
       await this.execSqlite(
-        `DELETE FROM app_log WHERE date(added_on) < ${automaticCutoff}`,
+        `DELETE FROM app_log WHERE ${this.sqliteLogDateExpression()} < ${automaticCutoff}`,
         []
       );
       const protectedCutoff = this.buildActiveLogDateCutoff(
-        'date',
+        this.sqliteLogDateExpression(),
         DatabaseService.MINIMUM_LOG_RETENTION_ACTIVE_DAYS
       );
       await this.execSqlite(
         `DELETE FROM app_log
          WHERE id NOT IN (SELECT id FROM app_log ORDER BY id DESC LIMIT ?)
-           AND date(added_on) < ${protectedCutoff}`,
+           AND ${this.sqliteLogDateExpression()} < ${protectedCutoff}`,
         [DatabaseService.LOCAL_LOG_MAX_ROWS]
       );
     } catch (error) {
@@ -1662,7 +1662,7 @@ export class DatabaseService {
     const retainedActiveDays = DatabaseService.MINIMUM_LOG_RETENTION_ACTIVE_DAYS;
     const local = await this.getApplicationLogStoreCleanupPreview(
       query => this.execSqlite(query, []),
-      'date',
+      this.sqliteLogDateExpression(),
       retainedActiveDays
     );
 
@@ -1671,7 +1671,7 @@ export class DatabaseService {
       try {
         mysql = await this.getApplicationLogStoreCleanupPreview(
           query => this.execQueryPromise(query, []),
-          'DATE',
+          'DATE(added_on)',
           retainedActiveDays
         );
       } catch {
@@ -1684,9 +1684,10 @@ export class DatabaseService {
 
   public async cleanupOldApplicationLogs(): Promise<ApplicationLogCleanupResult> {
     const retainedActiveDays = DatabaseService.MINIMUM_LOG_RETENTION_ACTIVE_DAYS;
-    const localCutoff = this.buildActiveLogDateCutoff('date', retainedActiveDays);
+    const localDate = this.sqliteLogDateExpression();
+    const localCutoff = this.buildActiveLogDateCutoff(localDate, retainedActiveDays);
     const localResult = await this.execSqlite(
-      `DELETE FROM app_log WHERE date(added_on) < ${localCutoff}`,
+      `DELETE FROM app_log WHERE ${localDate} < ${localCutoff}`,
       []
     );
 
@@ -1694,7 +1695,7 @@ export class DatabaseService {
     let mysqlAvailable = false;
     if (this.mysqlPool) {
       try {
-        const mysqlCutoff = this.buildActiveLogDateCutoff('DATE', retainedActiveDays);
+        const mysqlCutoff = this.buildActiveLogDateCutoff('DATE(added_on)', retainedActiveDays);
         const mysqlResult = await this.execQueryPromise(
           `DELETE FROM app_log WHERE DATE(added_on) < ${mysqlCutoff}`,
           []
@@ -1715,17 +1716,17 @@ export class DatabaseService {
 
   private async getApplicationLogStoreCleanupPreview(
     execute: (query: string) => Promise<any>,
-    dateFunction: 'date' | 'DATE',
+    dateExpression: string,
     retainedActiveDays: number
   ): Promise<ApplicationLogStoreCleanupPreview> {
-    const cutoff = this.buildActiveLogDateCutoff(dateFunction, retainedActiveDays);
+    const cutoff = this.buildActiveLogDateCutoff(dateExpression, retainedActiveDays);
     const rows = await execute(
       `SELECT COUNT(*) AS total_rows,
-              COUNT(DISTINCT ${dateFunction}(added_on)) AS active_days,
-              COALESCE(SUM(CASE WHEN ${dateFunction}(added_on) < ${cutoff} THEN 1 ELSE 0 END), 0) AS deletable_rows,
+              COUNT(DISTINCT ${dateExpression}) AS active_days,
+              COALESCE(SUM(CASE WHEN ${dateExpression} < ${cutoff} THEN 1 ELSE 0 END), 0) AS deletable_rows,
               ${cutoff} AS cutoff_date,
-              MIN(${dateFunction}(added_on)) AS oldest_date,
-              MAX(${dateFunction}(added_on)) AS newest_date
+              MIN(${dateExpression}) AS oldest_date,
+              MAX(${dateExpression}) AS newest_date
        FROM app_log`
     );
     const row = rows?.[0] ?? {};
@@ -1740,16 +1741,25 @@ export class DatabaseService {
     };
   }
 
-  private buildActiveLogDateCutoff(dateFunction: 'date' | 'DATE', retainedActiveDays: number): string {
+  private buildActiveLogDateCutoff(dateExpression: string, retainedActiveDays: number): string {
     const offset = Math.max(0, Math.trunc(retainedActiveDays) - 1);
     return `(SELECT active_date FROM (
-      SELECT ${dateFunction}(added_on) AS active_date
+      SELECT ${dateExpression} AS active_date
       FROM app_log
       WHERE added_on IS NOT NULL
-      GROUP BY ${dateFunction}(added_on)
+      GROUP BY ${dateExpression}
       ORDER BY active_date DESC
       LIMIT 1 OFFSET ${offset}
     ) AS retained_log_dates)`;
+  }
+
+  private sqliteLogDateExpression(): string {
+    // Existing SQLite rows store JavaScript Date values as Unix milliseconds,
+    // while imports or older builds may contain formatted timestamps.
+    return `date(CASE
+      WHEN typeof(added_on) IN ('integer', 'real') THEN datetime(added_on / 1000, 'unixepoch')
+      ELSE added_on
+    END)`;
   }
 
   private unavailableApplicationLogStorePreview(): ApplicationLogStoreCleanupPreview {
