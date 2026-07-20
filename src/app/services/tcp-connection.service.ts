@@ -29,6 +29,7 @@ export class TcpConnectionService implements OnDestroy {
 
   public connectionStack: Map<string, InstrumentConnectionStack> = new Map();
   private readonly connectionHealth: Map<string, ConnectionHealth> = new Map();
+  private readonly activeConnectionOutages = new Set<string>();
 
   public connectionTimeout = 300000; // 5 minutes in milliseconds
 
@@ -51,6 +52,7 @@ export class TcpConnectionService implements OnDestroy {
 
     // Clear all maps
     this.connectionHealth.clear();
+    this.activeConnectionOutages.clear();
   }
 
   // Helper method to parse connection key back to connection params
@@ -114,7 +116,7 @@ export class TcpConnectionService implements OnDestroy {
     }
 
     instrumentConnectionData.connectionAttemptStatusSubject.next(true);
-    this.recordConnectionEvent('instrument.connection_attempted', connectionParams, 'started');
+    this.recordConnectionAttempt(connectionParams);
 
     if (connectionParams.connectionMode === 'tcpserver') {
       that.utilitiesService.logger('info', `Listening for connection on ${connectionParams.host}:${connectionParams.port}`, instrumentConnectionData.instrumentId);
@@ -147,7 +149,7 @@ export class TcpConnectionService implements OnDestroy {
 
         // Reset retry attempts once a client has successfully connected
         instrumentConnectionData.reconnectAttempts = 0;
-        that.recordConnectionEvent('instrument.connected', connectionParams, 'success');
+        that.recordConnectionSuccess(connectionParams);
 
         // confirm socket connection from client
         sockets.push(socket);
@@ -256,7 +258,7 @@ export class TcpConnectionService implements OnDestroy {
         instrumentConnectionData.statusSubject.next(true);
         instrumentConnectionData.reconnectAttempts = 0; // Reset retry attempts
         that.utilitiesService.logger('success', 'Connected as client successfully', instrumentConnectionData.instrumentId);
-        that.recordConnectionEvent('instrument.connected', connectionParams, 'success');
+        that.recordConnectionSuccess(connectionParams);
       });
 
       instrumentConnectionData.connectionSocket.on('data', function (data) {
@@ -308,12 +310,7 @@ export class TcpConnectionService implements OnDestroy {
 
     if (isError) {
       that.utilitiesService.logger('error', message, instrumentConnectionData.instrumentId);
-      that.recordConnectionEvent(
-        'instrument.connection_failed',
-        connectionParams,
-        'failed',
-        errorCode || 'connection_error'
-      );
+      that.recordConnectionFailure(connectionParams, errorCode || 'connection_error');
     }
 
     // ✅ Always restart the TCP server after an error — the server must keep listening
@@ -387,6 +384,31 @@ export class TcpConnectionService implements OnDestroy {
       outcome,
       failureCode
     });
+  }
+
+  private recordConnectionAttempt(connectionParams: ConnectionParams): void {
+    const key = this._generateConnectionOutageKey(connectionParams);
+    if (this.activeConnectionOutages.has(key)) return;
+    this.recordConnectionEvent('instrument.connection_attempted', connectionParams, 'started');
+  }
+
+  private recordConnectionFailure(connectionParams: ConnectionParams, failureCode: string): void {
+    const key = this._generateConnectionOutageKey(connectionParams);
+    if (this.activeConnectionOutages.has(key)) return;
+
+    // A retry is part of the existing outage, not a new failure. Recording only
+    // this state transition keeps aggregate reporting meaningful and bounded.
+    this.activeConnectionOutages.add(key);
+    this.recordConnectionEvent('instrument.connection_failed', connectionParams, 'failed', failureCode);
+  }
+
+  private recordConnectionSuccess(connectionParams: ConnectionParams): void {
+    this.clearConnectionOutage(connectionParams);
+    this.recordConnectionEvent('instrument.connected', connectionParams, 'success');
+  }
+
+  private clearConnectionOutage(connectionParams: ConnectionParams): void {
+    this.activeConnectionOutages.delete(this._generateConnectionOutageKey(connectionParams));
   }
 
 
@@ -542,6 +564,10 @@ export class TcpConnectionService implements OnDestroy {
 
   private _generateConnectionIdentifierKey(connectionParams: ConnectionParams): string {
     return `${connectionParams.host}:${connectionParams.port}:${connectionParams.connectionMode}:${connectionParams.connectionProtocol}`;
+  }
+
+  private _generateConnectionOutageKey(connectionParams: ConnectionParams): string {
+    return `${connectionParams.instrumentId}:${this._generateConnectionIdentifierKey(connectionParams)}`;
   }
 
   getStatusObservable(connectionParams: ConnectionParams): Observable<boolean> {
