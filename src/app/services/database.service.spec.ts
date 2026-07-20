@@ -7,6 +7,7 @@ describe('DatabaseService result durability', () => {
     // The constructor starts configuration subscriptions. These focused tests
     // exercise the persistence decision without starting the application runtime.
     const service = Object.create(DatabaseService.prototype) as DatabaseService;
+    (service as any).recordTelemetryEvent = vi.fn().mockResolvedValue(true);
     return service as any;
   };
 
@@ -104,6 +105,34 @@ describe('DatabaseService result durability', () => {
       .toBeLessThan(service.execQuery.mock.invocationCallOrder[0]);
   });
 
+  it('records a failed test outcome without changing the order contract', async () => {
+    const service = createService();
+    service.checkMysqlConnection = vi.fn((_params, _success, failure) => failure(new Error('offline')));
+    service.execSqlite = vi.fn().mockResolvedValue({ lastID: 1 });
+
+    await new Promise<void>((resolve, reject) => {
+      service.recordTestResults({
+        ...sampleResult,
+        results: 'Failed',
+        telemetry_machine_type: 'roche-cobas-5800',
+        telemetry_protocol: 'hl7',
+        telemetry_connection_mode: 'tcpserver'
+      }, resolve, reject);
+    });
+
+    expect(service.recordTelemetryEvent).toHaveBeenCalledWith({
+      eventType: 'test.processed',
+      category: 'test',
+      instrumentId: 'ANALYZER-1',
+      machineType: 'roche-cobas-5800',
+      protocol: 'hl7',
+      connectionMode: 'tcpserver',
+      testType: 'HIVVL',
+      outcome: 'failed'
+    });
+    expect(service.execSqlite.mock.calls[0][0]).not.toContain('telemetry_machine_type');
+  });
+
   it('retries a pending row with the same idempotency identity', async () => {
     const service = createService();
     const pendingRecord = {
@@ -133,6 +162,100 @@ describe('DatabaseService result durability', () => {
     expect(service.execQuery).toHaveBeenCalledTimes(2);
     expect(service.execQuery.mock.calls[0][0]).toContain('ON DUPLICATE KEY UPDATE');
     expect(remotelyStoredIds).toEqual(new Set(['stable-ingestion-id']));
+  });
+});
+
+describe('DatabaseService telemetry durability', () => {
+  const createService = () => {
+    const service = Object.create(DatabaseService.prototype) as any;
+    service.commonSettings = { labID: 'LAB-001' };
+    service.store = { get: vi.fn().mockReturnValue('4.2.0') };
+    service.mysqlPool = null;
+    return service;
+  };
+
+  it('stores a PII-free event in SQLite when MySQL is unavailable', async () => {
+    const service = createService();
+    service.execSqlite = vi.fn().mockResolvedValue({ lastID: 7 });
+
+    const stored = await service.recordTelemetryEvent({
+      eventType: 'test.processed',
+      category: 'test',
+      instrumentId: 'ANALYZER-1',
+      testType: 'HIVVL',
+      outcome: 'success',
+      orderId: 'MUST-NOT-BE-STORED',
+      result: 'MUST-NOT-BE-STORED'
+    } as any);
+
+    expect(stored).toBe(true);
+    const [query, values] = service.execSqlite.mock.calls[0];
+    expect(query).toContain('INSERT INTO `telemetry_events`');
+    expect(query).toContain('`event_id`');
+    expect(query).toContain('`mysql_inserted`');
+    expect(values).toContain('LAB-001');
+    expect(values).toContain('ANALYZER-1');
+    expect(values).not.toContain('MUST-NOT-BE-STORED');
+  });
+
+  it('replicates by stable event ID and marks the local row only after success', async () => {
+    const service = createService();
+    service.mysqlPool = {};
+    service.execSqlite = vi.fn().mockResolvedValue({ lastID: 9 });
+    service.execQuery = vi.fn((_query, _values, success) => success({ affectedRows: 1 }));
+
+    await service.recordTelemetryEvent({
+      eventType: 'instrument.connected',
+      category: 'instrument',
+      instrumentId: 'ANALYZER-1'
+    });
+
+    expect(service.execQuery).toHaveBeenCalledOnce();
+    expect(service.execQuery.mock.calls[0][0]).toContain('ON DUPLICATE KEY UPDATE event_id');
+    expect(service.execSqlite.mock.calls[1]).toEqual([
+      'UPDATE telemetry_events SET mysql_inserted = 1 WHERE id IN (?)',
+      [9]
+    ]);
+  });
+
+  it('retries queued telemetry without changing its event identity', async () => {
+    const service = createService();
+    service.mysqlPool = {};
+    const pending = {
+      id: 11,
+      event_id: '11111111-2222-4333-8444-555555555555',
+      event_type: 'application.started',
+      event_category: 'usage',
+      occurred_at: '2026-07-20 10:00:00',
+      outcome: 'started',
+      event_count: 1,
+      mysql_inserted: 0
+    };
+    service.execSqlite = vi.fn((query: string) => {
+      if (query.startsWith('SELECT')) return Promise.resolve([pending]);
+      return Promise.resolve({ changes: 1 });
+    });
+    service.execQuery = vi.fn((_query, values, success) => success({ affectedRows: 1 }));
+
+    await new Promise<void>((resolve, reject) => {
+      service.resyncTelemetryToMySQL(() => resolve(), reject);
+    });
+
+    expect(service.execQuery.mock.calls[0][1][0][0]).toContain(pending.event_id);
+    expect(service.execSqlite).toHaveBeenLastCalledWith(
+      'UPDATE telemetry_events SET mysql_inserted = 1 WHERE id IN (?)',
+      [11]
+    );
+  });
+
+  it('does not fail application work when telemetry cannot be stored', async () => {
+    const service = createService();
+    service.execSqlite = vi.fn().mockRejectedValue(new Error('disk unavailable'));
+
+    await expect(service.recordTelemetryEvent({
+      eventType: 'application.started',
+      category: 'usage'
+    })).resolves.toBe(false);
   });
 });
 

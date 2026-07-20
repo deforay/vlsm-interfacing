@@ -464,6 +464,7 @@ export class InstrumentInterfaceService {
     if (processedInfo.isNAK) {
       that.astmHelper.sendACK(instrumentConnectionData, 'Sending ACK');
       that.utilitiesService.logger('error', 'NAK Received', instrumentConnectionData.instrumentId);
+      that.recordProcessingFailure('instrument_nak', instrumentConnectionData);
       return;
     }
 
@@ -501,6 +502,7 @@ export class InstrumentInterfaceService {
       const sampleResults = parsingResult.sampleResults ?? [];
       if (sampleResults.length === 0) {
         that.utilitiesService.logger('warn', 'No ASTM results extracted from transmission', instrumentConnectionData.instrumentId);
+        that.recordProcessingFailure('no_results_extracted', instrumentConnectionData);
         return;
       }
 
@@ -531,6 +533,7 @@ export class InstrumentInterfaceService {
         `Discarded incomplete HL7 transmission after ${bufferedBytes} bytes`,
         instrumentConnectionData.instrumentId
       );
+      that.recordProcessingFailure('incomplete_transmission_too_large', instrumentConnectionData);
       return;
     }
 
@@ -615,6 +618,7 @@ export class InstrumentInterfaceService {
         `Discarded inactive HL7 transmission after ${Buffer.byteLength(bufferedData, 'utf8')} bytes`,
         instrumentId
       );
+      this.recordProcessingFailure('incomplete_transmission_timeout', instrumentConnectionData);
     }, InstrumentInterfaceService.HL7_BUFFER_INACTIVITY_TIMEOUT_MS);
 
     this.hl7BufferExpiryTimers.set(instrumentId, expiryTimer);
@@ -645,10 +649,19 @@ export class InstrumentInterfaceService {
     const that = this;
     if (!sampleResult) {
       that.utilitiesService.logger('error', 'Failed to save result into the database : ' + JSON.stringify(sampleResult), instrumentConnectionData.instrumentId);
+      that.recordProcessingFailure('result_missing', instrumentConnectionData);
       return Promise.resolve(false);
     }
 
-    const data = { ...sampleResult, instrument_id: instrumentConnectionData.instrumentId };
+    const data = {
+      ...sampleResult,
+      instrument_id: instrumentConnectionData.instrumentId,
+      // These fields are filtered out of the result tables and used only to
+      // describe the corresponding PII-free telemetry event.
+      telemetry_machine_type: instrumentConnectionData.machineType,
+      telemetry_protocol: instrumentConnectionData.connectionProtocol,
+      telemetry_connection_mode: instrumentConnectionData.connectionMode
+    };
     return new Promise<boolean>((resolve) => {
       try {
         that.dbService.recordTestResults(
@@ -660,11 +673,13 @@ export class InstrumentInterfaceService {
           },
           (err) => {
             that.utilitiesService.logger('error', 'Failed to save result : ' + sampleResult.test_id + '|' + sampleResult.order_id + ' | ' + JSON.stringify(err), instrumentConnectionData.instrumentId);
+            that.recordProcessingFailure('result_persistence_failed', instrumentConnectionData, sampleResult.test_type);
             resolve(false);
           }
         );
       } catch (error) {
         that.utilitiesService.logger('error', 'Failed to start result persistence : ' + JSON.stringify(error), instrumentConnectionData.instrumentId);
+        that.recordProcessingFailure('result_persistence_failed', instrumentConnectionData, sampleResult.test_type);
         resolve(false);
       }
     });
@@ -689,8 +704,29 @@ export class InstrumentInterfaceService {
     } else {
       that.utilitiesService.logger('error', 'Order record not found in the following ASTM data block', instrumentConnectionData.instrumentId);
       that.utilitiesService.logger('error', JSON.stringify(dataArray), instrumentConnectionData.instrumentId);
+      that.recordProcessingFailure('result_parsing_failed', instrumentConnectionData);
       return Promise.resolve(false);
     }
+  }
+
+  private recordProcessingFailure(
+    failureCode: string,
+    instrument: InstrumentConnectionStack,
+    testType?: string
+  ): void {
+    // Do not include raw payloads, sample identifiers, result values, or error
+    // messages. Telemetry is aggregate operational data, not diagnostic storage.
+    void this.dbService.recordTelemetryEvent?.({
+      eventType: 'test.processing_failed',
+      category: 'failure',
+      instrumentId: instrument.instrumentId,
+      machineType: instrument.machineType,
+      protocol: instrument.connectionProtocol,
+      connectionMode: instrument.connectionMode,
+      testType,
+      outcome: 'failed',
+      failureCode
+    });
   }
 
   processStoredASTMDataBlock(dataArray: {}, partData: string, instrumentConnectionData: InstrumentConnectionStack): Promise<boolean> {

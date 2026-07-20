@@ -38,10 +38,12 @@ function testFreshInstallation(migrations, temporaryDirectory) {
     assert(tableNames.includes('orders'));
     assert(tableNames.includes('raw_data'));
     assert(tableNames.includes('app_log'));
+    assert(tableNames.includes('telemetry_events'));
 
     const orderColumns = all(database, 'PRAGMA table_info(orders)');
     const rawDataColumns = all(database, 'PRAGMA table_info(raw_data)');
     const appLogColumns = all(database, 'PRAGMA table_info(app_log)');
+    const telemetryColumns = all(database, 'PRAGMA table_info(telemetry_events)');
     assert(orderColumns.some(column => column.name === 'instrument_id'));
     assert(orderColumns.some(column => column.name === 'mysql_inserted'));
     assert(orderColumns.some(column => column.name === 'notes'));
@@ -55,6 +57,12 @@ function testFreshInstallation(migrations, temporaryDirectory) {
     assert(appLogColumns.some(column => column.name === 'category'));
     const appLogIndexes = all(database, 'PRAGMA index_list(app_log)');
     assert(appLogIndexes.some(index => index.name === 'idx_app_log_added_on'));
+    assert(telemetryColumns.some(column => column.name === 'event_id' && column.notnull === 1));
+    assert(telemetryColumns.some(column => column.name === 'mysql_inserted'));
+    assert(telemetryColumns.some(column => column.name === 'remote_uploaded_at'));
+    const telemetryIndexes = all(database, 'PRAGMA index_list(telemetry_events)');
+    assert(telemetryIndexes.some(index => index.name === 'idx_telemetry_events_event_id' && index.unique === 1));
+    assert(telemetryIndexes.some(index => index.name === 'idx_telemetry_events_mysql_pending'));
   } finally {
     database.close();
   }
@@ -80,6 +88,8 @@ function testLegacyUpgrade(migrations, temporaryDirectory) {
     assert.match(orders[0].ingestion_id, /^[a-f0-9]{32}$/);
     assert.deepEqual(rawData, [{ machine: 'ANALYZER-OLD', instrument_id: 'ANALYZER-OLD', mysql_inserted: 0 }]);
     assert.deepEqual(appLogs, [{ log: 'legacy log', category: 'operational' }]);
+    const telemetryTables = all(database, "SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'telemetry_events'");
+    assert.deepEqual(telemetryTables, [{ name: 'telemetry_events' }]);
   } finally {
     database.close();
   }
