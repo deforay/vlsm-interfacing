@@ -48,7 +48,7 @@ export class TcpConnectionService implements OnDestroy {
     this.connectionStack.forEach((connection, key) => {
       const connectionParams = this.parseConnectionKey(key);
       if (connectionParams) {
-        this.disconnect(connectionParams);
+        this.disconnect(connectionParams, { logStopped: false });
       }
     });
 
@@ -305,7 +305,7 @@ export class TcpConnectionService implements OnDestroy {
   private _handleClientConnectionIssue(instrumentConnectionData, connectionParams, message, isError, errorCode?: string) {
     const that = this;
     instrumentConnectionData.statusSubject.next(false);
-    that.disconnect(connectionParams);
+    that.disconnect(connectionParams, { logStopped: false });
     let isNewOutage = false;
 
     if (isError) {
@@ -444,7 +444,7 @@ export class TcpConnectionService implements OnDestroy {
   }
 
   // Simplified disconnect method - back to original approach
-  disconnect(connectionParams: ConnectionParams) {
+  disconnect(connectionParams: ConnectionParams, options: { logStopped?: boolean } = {}) {
     const that = this;
     const connectionIdentifierKey = that._generateConnectionIdentifierKey(connectionParams);
 
@@ -486,7 +486,9 @@ export class TcpConnectionService implements OnDestroy {
           instrumentConnectionData.connectionServer.removeAllListeners();
 
           instrumentConnectionData.connectionServer.close(() => {
-            that.utilitiesService.logger('info', 'Server Stopped', instrumentConnectionData.instrumentId);
+            if (options.logStopped !== false) {
+              that.utilitiesService.logger('info', 'Server Stopped', instrumentConnectionData.instrumentId);
+            }
           });
 
           // Handle errors during close
