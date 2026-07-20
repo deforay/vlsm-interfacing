@@ -83,8 +83,9 @@ test.describe('Check Home Page', async () => {
     await expect(firstWindow.getByText(/telemetry/i)).toHaveCount(0);
     await firstWindow.getByText('Troubleshooting', { exact: true }).click();
     await expect(firstWindow.getByRole('heading', { name: 'Log Housekeeping' })).toBeVisible();
-    await expect(firstWindow.getByText('Seven active dates are always protected')).toBeVisible();
-    await expect(firstWindow.getByRole('button', { name: 'Review Log Cleanup' })).toBeVisible();
+    await expect(firstWindow.getByText('Seven days with recorded activity are always kept')).toBeVisible();
+    await firstWindow.getByRole('button', { name: 'Review Log Cleanup' }).click();
+    await expect(firstWindow.getByText(/Nothing to clean up/)).toBeVisible();
   });
 
   test('does not submit results without a connected installation', async () => {
@@ -106,14 +107,16 @@ test.describe('Check Home Page', async () => {
   });
 
   test('rejects an insecure InteLIS URL in the main process', async () => {
-    await firstWindow.getByText('LIS Connection', { exact: true }).click();
-    await firstWindow.getByRole('button', { name: 'Change connection type' }).click();
-    await firstWindow.getByRole('button', { name: /My laboratory uses InteLIS/ }).click();
-    await firstWindow.getByLabel('InteLIS URL').fill('http://vlsm.test');
-    await firstWindow.getByLabel('Connection Code').fill('ABCD-EFGH-JKMP');
-    await firstWindow.getByRole('button', { name: 'Connect to InteLIS' }).click();
+    const result = await firstWindow.evaluate(() =>
+      (window as any).require('electron').ipcRenderer.invoke('intelis-connection-connect', {
+        baseUrl: 'http://vlsm.test',
+        connectionCode: 'ABCD-EFGH-JKMP',
+        displayName: 'Test computer'
+      })
+    );
 
-    await expect(firstWindow.getByText('InteLIS connections require HTTPS.')).toBeVisible();
+    expect(result.ok).toBe(false);
+    expect(result.error.message).toBe('InteLIS connections require HTTPS.');
   });
 
   test.afterAll( async () => {
