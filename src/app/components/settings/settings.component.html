@@ -338,14 +338,15 @@
                 <div class="form-group">
                   <label>Connection Code</label>
                   <input type="text" formControlName="connectionCode" class="form-control connection-code-input"
-                    placeholder="ABCD-EFGH-JKMP-QRST" maxlength="128" autocomplete="one-time-code"
+                    placeholder="ABCD-EFGH-JKMP" maxlength="14" autocomplete="one-time-code"
+                    inputmode="text" (input)="formatConnectionCode($event)"
                     autocapitalize="characters" spellcheck="false" aria-label="Connection Code">
-                  <small>Connection Codes are one-time and expire automatically.</small>
+                  <small>Enter the three groups shown in InteLIS. Connection Codes are one-time and expire automatically.</small>
                 </div>
 
                 <div class="form-actions">
                   <button type="button" class="btn btn-primary" (click)="connectToIntelis()"
-                    [disabled]="intelisBusy || !settingsForm.get('intelisConnection.baseUrl').value || !settingsForm.get('intelisConnection.connectionCode').value">
+                    [disabled]="intelisBusy || !settingsForm.get('intelisConnection.baseUrl').value || !intelisConnectionCodeValid">
                     <i class="fas" [ngClass]="intelisBusy ? 'fa-spinner fa-spin' : 'fa-link'"></i>
                     <span>{{ intelisBusy ? 'Connecting...' : 'Connect to InteLIS' }}</span>
                   </button>
@@ -358,10 +359,11 @@
                 <div class="form-group">
                   <label>Reconnect Code</label>
                   <input type="text" formControlName="connectionCode" class="form-control connection-code-input"
-                    maxlength="128" autocomplete="one-time-code" autocapitalize="characters" spellcheck="false">
+                    placeholder="ABCD-EFGH-JKMP" maxlength="14" autocomplete="one-time-code" inputmode="text"
+                    (input)="formatConnectionCode($event)" autocapitalize="characters" spellcheck="false">
                 </div>
                 <button type="button" class="btn btn-secondary" (click)="connectToIntelis()"
-                  [disabled]="intelisBusy || !settingsForm.get('intelisConnection.connectionCode').value">
+                  [disabled]="intelisBusy || !intelisConnectionCodeValid">
                   <i class="fas" [ngClass]="intelisBusy ? 'fa-spinner fa-spin' : 'fa-rotate'"></i>
                   <span>{{ intelisBusy ? 'Reconnecting...' : 'Reconnect' }}</span>
                 </button>

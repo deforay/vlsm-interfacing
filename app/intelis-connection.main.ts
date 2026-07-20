@@ -9,6 +9,8 @@ import {
   IntelisConnectionState,
   IntelisInstallationProfile,
   IntelisIpcResult,
+  isValidIntelisConnectionCode,
+  normalizeIntelisConnectionCode,
   normalizeIntelisBaseUrl
 } from '../shared/intelis-connection';
 
@@ -230,10 +232,13 @@ export function registerIntelisConnectionIpc(store: StoreLike): void {
           urlError instanceof Error ? urlError.message : 'Enter a valid InteLIS URL.'
         );
       }
-      const connectionCode = (request?.connectionCode || '').trim();
+      const connectionCode = normalizeIntelisConnectionCode(request?.connectionCode || '');
       const displayName = (request?.displayName || os.hostname() || 'Laboratory computer').trim();
-      if (!connectionCode || connectionCode.length > 128) {
-        throw new IntelisApiRequestError('invalid_connection_code', 'Enter a valid InteLIS Connection Code.');
+      if (!isValidIntelisConnectionCode(connectionCode)) {
+        throw new IntelisApiRequestError(
+          'invalid_connection_code',
+          'Enter the complete 12-character InteLIS Connection Code.'
+        );
       }
       if (!displayName || displayName.length > 150) {
         throw new IntelisApiRequestError('invalid_display_name', 'Enter a computer name of 150 characters or fewer.');

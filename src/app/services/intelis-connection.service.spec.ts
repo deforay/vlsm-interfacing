@@ -1,6 +1,12 @@
 import { describe, expect, it, vi } from 'vitest';
 import { IntelisConnectionService } from './intelis-connection.service';
-import { buildIntelisApiUrl, normalizeIntelisBaseUrl } from '../../../shared/intelis-connection';
+import {
+  buildIntelisApiUrl,
+  formatIntelisConnectionCode,
+  isValidIntelisConnectionCode,
+  normalizeIntelisBaseUrl,
+  normalizeIntelisConnectionCode
+} from '../../../shared/intelis-connection';
 
 describe('InteLIS URL contract', () => {
   it('normalizes a secure base URL and builds the versioned endpoint', () => {
@@ -13,6 +19,22 @@ describe('InteLIS URL contract', () => {
     expect(() => normalizeIntelisBaseUrl('http://vlsm.test')).toThrow(/HTTPS/);
     expect(() => normalizeIntelisBaseUrl('https://user:secret@vlsm.test')).toThrow(/cannot contain credentials/);
     expect(() => normalizeIntelisBaseUrl('https://vlsm.test?facility=1')).toThrow(/query parameters/);
+  });
+});
+
+describe('InteLIS Connection Code contract', () => {
+  it('formats a manually entered code into three readable groups', () => {
+    expect(formatIntelisConnectionCode('abcd efgh-jkmp')).toBe('ABCD-EFGH-JKMP');
+  });
+
+  it('normalizes common look-alike characters', () => {
+    expect(normalizeIntelisConnectionCode('oilU-2345-6789')).toBe('011V23456789');
+  });
+
+  it('accepts exactly 12 normalized characters', () => {
+    expect(isValidIntelisConnectionCode('ABCD-EFGH-JKMP')).toBe(true);
+    expect(isValidIntelisConnectionCode('ABCD-EFGH')).toBe(false);
+    expect(isValidIntelisConnectionCode('ABCD-EFGH-JKMP-Q')).toBe(false);
   });
 });
 
@@ -41,7 +63,7 @@ describe('IntelisConnectionService', () => {
 
     const result = await service.connect({
       baseUrl: 'https://vlsm.test',
-      connectionCode: 'ABCD-EFGH',
+      connectionCode: 'ABCD-EFGH-JKMP',
       displayName: 'Lab computer'
     });
 
@@ -51,7 +73,7 @@ describe('IntelisConnectionService', () => {
     expect((result.data as any).installation.credential).toBeUndefined();
     expect(electron.ipcRenderer.invoke).toHaveBeenCalledWith('intelis-connection-connect', {
       baseUrl: 'https://vlsm.test',
-      connectionCode: 'ABCD-EFGH',
+      connectionCode: 'ABCD-EFGH-JKMP',
       displayName: 'Lab computer'
     });
   });
@@ -71,7 +93,7 @@ describe('IntelisConnectionService', () => {
       }
     });
 
-    await service.connect({ baseUrl: 'https://vlsm.test', connectionCode: 'RECONNECT', displayName: '' });
+    await service.connect({ baseUrl: 'https://vlsm.test', connectionCode: 'ABCD-EFGH-JKMP', displayName: '' });
 
     expect(service.currentState().installation).toMatchObject({
       installationId: 'existing-server-id',

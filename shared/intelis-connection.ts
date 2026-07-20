@@ -64,6 +64,23 @@ export interface IntelisIpcResult<T> {
   error?: IntelisConnectionError;
 }
 
+export const INTELIS_CONNECTION_CODE_LENGTH = 12;
+
+export function normalizeIntelisConnectionCode(value: string): string {
+  const normalized = (value || '').toUpperCase().replace(/[^0-9A-Z]/g, '');
+  return normalized.replace(/[IL]/g, '1').replace(/O/g, '0').replace(/U/g, 'V');
+}
+
+export function formatIntelisConnectionCode(value: string): string {
+  return normalizeIntelisConnectionCode(value)
+    .slice(0, INTELIS_CONNECTION_CODE_LENGTH)
+    .match(/.{1,4}/g)?.join('-') || '';
+}
+
+export function isValidIntelisConnectionCode(value: string): boolean {
+  return normalizeIntelisConnectionCode(value).length === INTELIS_CONNECTION_CODE_LENGTH;
+}
+
 export function normalizeIntelisBaseUrl(value: string): string {
   const trimmed = (value || '').trim();
   let parsed: URL;
