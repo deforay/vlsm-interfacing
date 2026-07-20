@@ -119,4 +119,56 @@ describe('TcpConnectionService usage statistics', () => {
       eventType: 'instrument.connection_failed'
     }));
   });
+
+  it('suppresses server stopped logs during automatic retry cleanup', () => {
+    const { service, utilitiesService } = createService();
+    const server = {
+      removeAllListeners: vi.fn(),
+      close: vi.fn(callback => callback()),
+      on: vi.fn()
+    };
+    const connectionState = {
+      instrumentId: connectionParams.instrumentId,
+      statusSubject: { next: vi.fn() },
+      connectionAttemptStatusSubject: { next: vi.fn() },
+      connectionSocket: null,
+      connectionServer: server,
+      pendingReconnectTimer: null
+    };
+    service.connectionStack.set(service._generateConnectionIdentifierKey(connectionParams), connectionState);
+
+    service.disconnect(connectionParams, { logStopped: false });
+
+    expect(server.close).toHaveBeenCalledOnce();
+    expect(utilitiesService.logger).not.toHaveBeenCalledWith(
+      'info',
+      'Server Stopped',
+      connectionParams.instrumentId
+    );
+  });
+
+  it('keeps one server stopped log for an explicit stop', () => {
+    const { service, utilitiesService } = createService();
+    const server = {
+      removeAllListeners: vi.fn(),
+      close: vi.fn(callback => callback()),
+      on: vi.fn()
+    };
+    service.connectionStack.set(service._generateConnectionIdentifierKey(connectionParams), {
+      instrumentId: connectionParams.instrumentId,
+      statusSubject: { next: vi.fn() },
+      connectionAttemptStatusSubject: { next: vi.fn() },
+      connectionSocket: null,
+      connectionServer: server,
+      pendingReconnectTimer: null
+    });
+
+    service.disconnect(connectionParams);
+
+    expect(utilitiesService.logger).toHaveBeenCalledWith(
+      'info',
+      'Server Stopped',
+      connectionParams.instrumentId
+    );
+  });
 });
