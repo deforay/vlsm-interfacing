@@ -9,9 +9,14 @@ import {
   IntelisConnectionState,
   IntelisInstallationProfile,
   IntelisIpcResult,
+  IntelisResultAcknowledgement,
+  IntelisResultRow,
+  IntelisResultSubmissionResponse,
+  getIntelisResultDeliveryLimits,
   isValidIntelisConnectionCode,
   normalizeIntelisConnectionCode,
-  normalizeIntelisBaseUrl
+  normalizeIntelisBaseUrl,
+  resultRequestBytes
 } from '../shared/intelis-connection';
 
 interface StoreLike {
@@ -189,7 +194,7 @@ function validateConnection(response: ConnectionResponse): IntelisConnectionProf
 function errorResult(error: unknown): IntelisIpcResult<never> {
   const normalized = error instanceof IntelisApiRequestError
     ? error
-    : new IntelisApiRequestError('unexpected_error', 'The InteLIS connection could not be completed.');
+    : new IntelisApiRequestError('unexpected_error', 'The InteLIS request could not be completed.');
   return {
     ok: false,
     error: {
@@ -206,6 +211,87 @@ async function fetchConnection(baseUrl: string, credential: string): Promise<Int
     headers: { Authorization: `Bearer ${credential}` }
   });
   return validateConnection(response);
+}
+
+function validateResultResponse(
+  response: IntelisResultSubmissionResponse,
+  submittedRows: IntelisResultRow[]
+): IntelisResultSubmissionResponse {
+  const submittedIds = new Set(submittedRows.map(row => row.id));
+  const acknowledgedIds = new Set<number>();
+  const validOutcomes = new Set(['accepted', 'unchanged', 'rejected', 'retry']);
+  const expectedStatuses: Record<string, number> = {
+    accepted: 1,
+    unchanged: 1,
+    rejected: 2,
+    retry: 0
+  };
+
+  if (
+    response?.status !== 'success'
+    || !Number.isInteger(response.imported)
+    || response.imported < 0
+    || !Array.isArray(response.results)
+  ) {
+    throw new IntelisApiRequestError('invalid_response', 'InteLIS returned an incomplete result response.');
+  }
+
+  for (const acknowledgement of response.results as IntelisResultAcknowledgement[]) {
+    if (
+      !Number.isInteger(acknowledgement?.id)
+      || !submittedIds.has(acknowledgement.id)
+      || acknowledgedIds.has(acknowledgement.id)
+      || !validOutcomes.has(acknowledgement?.outcome)
+      || acknowledgement?.limsSyncStatus !== expectedStatuses[acknowledgement?.outcome]
+      || typeof acknowledgement?.reason !== 'string'
+    ) {
+      throw new IntelisApiRequestError('invalid_response', 'InteLIS returned an invalid result acknowledgement.');
+    }
+    acknowledgedIds.add(acknowledgement.id);
+  }
+
+  if (acknowledgedIds.size !== submittedIds.size) {
+    throw new IntelisApiRequestError('invalid_response', 'InteLIS did not acknowledge every submitted result.');
+  }
+
+  return response;
+}
+
+function validateResultRows(rows: unknown): asserts rows is IntelisResultRow[] {
+  const requiredStringFields = ['order_id', 'test_id', 'machine_used'];
+  const requiredNullableStringFields = ['results', 'test_unit'];
+  const optionalNullableStringFields = [
+    'instrument_id',
+    'tested_by',
+    'authorised_date_time',
+    'result_accepted_date_time',
+    'raw_text'
+  ];
+  const nullableStringFields = [...requiredNullableStringFields, ...optionalNullableStringFields];
+  const allowedFields = new Set(['id', ...requiredStringFields, ...nullableStringFields]);
+  const seenIds = new Set<number>();
+
+  if (!Array.isArray(rows) || rows.length === 0) {
+    throw new IntelisApiRequestError('invalid_result_batch', 'A non-empty result batch is required.');
+  }
+
+  for (const row of rows) {
+    if (!row || typeof row !== 'object' || Array.isArray(row)) {
+      throw new IntelisApiRequestError('invalid_result_batch', 'Every submitted result must be an object.');
+    }
+    const record = row as Record<string, unknown>;
+    if (
+      Object.keys(record).some(field => !allowedFields.has(field))
+      || !Number.isInteger(record['id'])
+      || seenIds.has(Number(record['id']))
+      || requiredStringFields.some(field => typeof record[field] !== 'string')
+      || requiredNullableStringFields.some(field => !Object.hasOwn(record, field))
+      || nullableStringFields.some(field => record[field] !== undefined && record[field] !== null && typeof record[field] !== 'string')
+    ) {
+      throw new IntelisApiRequestError('invalid_result_batch', 'The result batch contains an invalid row.');
+    }
+    seenIds.add(Number(record['id']));
+  }
 }
 
 export function registerIntelisConnectionIpc(store: StoreLike): void {
@@ -311,6 +397,68 @@ export function registerIntelisConnectionIpc(store: StoreLike): void {
       stored.lastCheckedAt = new Date().toISOString();
       store.set(CONNECTION_KEY, stored);
       return { ok: false, data: publicState(stored), error: failure } satisfies IntelisIpcResult<IntelisConnectionState>;
+    }
+  });
+
+  ipcMain.handle('intelis-results-submit', async (_event, request: { results?: IntelisResultRow[] }) => {
+    const stored = getStoredConnection(store);
+    if (!stored) {
+      return errorResult(new IntelisApiRequestError('not_connected', 'This Interface Tool is not connected to InteLIS.'));
+    }
+
+    try {
+      const credential = decryptCredential(stored.encryptedCredential);
+      let limits = getIntelisResultDeliveryLimits(stored.connection);
+
+      // Installations connected before result submission was enabled retain an
+      // older cached profile. Refresh once so they gain the capability without
+      // requiring a new connection code.
+      if (!limits) {
+        stored.connection = await fetchConnection(stored.baseUrl, credential);
+        limits = getIntelisResultDeliveryLimits(stored.connection);
+        store.set(CONNECTION_KEY, stored);
+      }
+
+      if (!limits) {
+        throw new IntelisApiRequestError(
+          'results_not_supported',
+          'This InteLIS server does not currently accept Interface Tool results.'
+        );
+      }
+
+      const rows = request?.results;
+      validateResultRows(rows);
+      if (rows.length > limits.maxItems || resultRequestBytes(rows) > limits.maxBodyBytes) {
+        throw new IntelisApiRequestError('result_batch_too_large', 'The result batch exceeds the server limits.');
+      }
+
+      const response = await requestJson<IntelisResultSubmissionResponse>(
+        buildIntelisApiUrl(stored.baseUrl, 'results'),
+        {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${credential}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({ results: rows })
+        }
+      );
+      const validated = validateResultResponse(response, rows);
+      stored.health = 'connected';
+      stored.lastCheckedAt = new Date().toISOString();
+      delete stored.lastError;
+      store.set(CONNECTION_KEY, stored);
+      return { ok: true, data: validated } satisfies IntelisIpcResult<IntelisResultSubmissionResponse>;
+    } catch (error) {
+      const failure = errorResult(error).error;
+      stored.health = failure?.httpStatus === 401 ? 'revoked' : 'attention';
+      stored.lastError = failure;
+      stored.lastCheckedAt = new Date().toISOString();
+      store.set(CONNECTION_KEY, stored);
+      return {
+        ok: false,
+        error: failure
+      } satisfies IntelisIpcResult<IntelisResultSubmissionResponse>;
     }
   });
 

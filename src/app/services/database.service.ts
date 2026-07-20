@@ -6,6 +6,7 @@ import { LoggingService } from './logging.service';
 import { Observable, Subject } from 'rxjs';
 import { v4 as uuidv4 } from 'uuid';
 import { TelemetryEventInput } from '../interfaces/telemetry-event.interface';
+import { IntelisResultAcknowledgement, IntelisResultRow } from '../../../shared/intelis-connection';
 
 @Injectable({
   providedIn: 'root'
@@ -137,6 +138,8 @@ export class DatabaseService {
   ];
   private readonly path: any = (window as any).require('path');
   private lastLocalLogPruneAt = 0;
+  private readonly resultRecordedSubject = new Subject<void>();
+  public readonly resultRecorded$ = this.resultRecordedSubject.asObservable();
 
   constructor(private readonly electronService: ElectronService,
     private readonly store: ElectronStoreService,
@@ -850,6 +853,8 @@ export class DatabaseService {
     const sqliteRecord = this.filterRecordColumns({
       ...orderData,
       ingestion_id: orderData.ingestion_id || uuidv4(),
+      lims_sync_status: orderData.lims_sync_status ?? 0,
+      lims_sync_date_time: orderData.lims_sync_date_time ?? null,
       mysql_inserted: 0,
     }, DatabaseService.SQLITE_ORDER_COLUMNS);
     const sqliteInsert = this.buildInsertQuery('orders', sqliteRecord);
@@ -859,6 +864,7 @@ export class DatabaseService {
     this.execSqlite(sqliteInsert.query, sqliteInsert.values)
       .then((sqliteResult) => {
         this.replicateOrderToMySQL({ ...sqliteRecord, id: sqliteResult.lastID });
+        this.resultRecordedSubject.next();
         void this.recordTelemetryEvent({
           eventType: 'test.processed',
           category: 'test',
@@ -877,7 +883,7 @@ export class DatabaseService {
   public async recordTelemetryEvent(input: TelemetryEventInput): Promise<boolean> {
     const eventType = this.sanitizeTelemetryValue(input?.eventType, 64);
     if (!eventType) {
-      console.warn('Skipped telemetry event without a valid event type');
+      console.warn('Skipped usage statistics event without a valid event type');
       return false;
     }
 
@@ -909,8 +915,8 @@ export class DatabaseService {
       this.replicateTelemetryToMySQL({ ...record, id: sqliteResult.lastID });
       return true;
     } catch (error) {
-      // Telemetry is observational. It must never interrupt instrument data.
-      console.warn('Unable to persist telemetry event:', error);
+      // Usage reporting is observational. It must never interrupt instrument data.
+      console.warn('Unable to save usage statistics:', error);
       return false;
     }
   }
@@ -925,7 +931,7 @@ export class DatabaseService {
     this.execSqlite(selectSql, [DatabaseService.MYSQL_TELEMETRY_RESYNC_LIMIT])
       .then((records: any[]) => {
         if (records.length === 0) {
-          success('No telemetry events to resync.');
+          success('No usage statistics to synchronize.');
           return;
         }
 
@@ -937,7 +943,7 @@ export class DatabaseService {
         this.execQuery(mysqlSql, [values],
           () => {
             this.markTelemetryAsResynced(records.map(record => record.id))
-              .then(() => success(`Replicated ${records.length} telemetry event(s).`))
+              .then(() => success(`Synchronized ${records.length} usage statistics event(s).`))
               .catch(errorf);
           },
           errorf
@@ -955,11 +961,11 @@ export class DatabaseService {
     this.execQuery(idempotentInsert, insert.values,
       () => {
         this.markTelemetryAsResynced([record.id]).catch(error => {
-          console.warn('Telemetry replicated but local status update failed:', error);
+          console.warn('Usage statistics synchronized but the local status update failed:', error);
         });
       },
       error => {
-        console.warn('Telemetry remains queued for MySQL replication:', error?.message ?? error);
+        console.warn('Usage statistics remain queued for MySQL synchronization:', error?.message ?? error);
       }
     );
   }
@@ -997,14 +1003,16 @@ export class DatabaseService {
 
       this.execQuery(idempotentInsert, mysqlInsert.values,
         () => {
-          this.markOrdersAsResynced([record.id]).catch((error: any) => {
-            // A retry is safe because ingestion_id is stable and unique remotely.
-            this.logCriticalDatabaseIssue(
-              `Result replicated but local status update failed: ${error?.message ?? error}`,
-              'database',
-              record.instrument_id
-            );
-          });
+          this.markOrdersAsResynced([record])
+            .catch((error: any) => {
+              // A retry is safe because ingestion_id is stable and unique remotely.
+              this.logCriticalDatabaseIssue(
+                `Result replicated but local status update failed: ${error?.message ?? error}`,
+                'database',
+                record.instrument_id
+              );
+            })
+            .finally(() => this.resyncIntelisStatusesToMySQL(() => {}, () => {}));
         },
         (mysqlError) => {
           this.logCriticalDatabaseIssue(
@@ -1091,7 +1099,7 @@ export class DatabaseService {
 
         this.execQuery(mysqlQuery, [mysqlValues],
           () => {
-            this.markOrdersAsResynced(batch.map(r => r.id))
+            this.markOrdersAsResynced(batch)
               .catch((error: any) => {
                 const firstInstrumentId = batch.find(r => !!r.instrument_id)?.instrument_id ?? null;
                 this.logCriticalDatabaseIssue(
@@ -1100,7 +1108,10 @@ export class DatabaseService {
                   firstInstrumentId
                 );
               })
-              .finally(processNextBatch);
+              .finally(() => {
+                this.resyncIntelisStatusesToMySQL(() => {}, () => {});
+                processNextBatch();
+              });
           },
           (batchError) => {
             // Whole batch failed (one bad row poisons the bulk INSERT). Log
@@ -1124,16 +1135,160 @@ export class DatabaseService {
     });
   }
 
-  private markOrdersAsResynced(recordIds: any[]): Promise<void> {
-    if (!recordIds || recordIds.length === 0) {
+  private markOrdersAsResynced(records: any[]): Promise<void> {
+    if (!records || records.length === 0) {
       return Promise.resolve();
     }
-    const placeholders = recordIds.map(() => '?').join(',');
-    const updateQuery = `UPDATE orders SET mysql_inserted = 1 WHERE id IN (${placeholders})`;
-    return this.execSqlite(updateQuery, recordIds)
-      .then(() => {
-        console.log('Order records successfully resynced and updated in SQLite:', recordIds.length);
-      });
+
+    // Only acknowledge the exact status snapshot that was sent. A cloud API
+    // acknowledgement may change the row while MySQL is still writing; marking
+    // that newer state as replicated would otherwise lose the status update.
+    return Promise.all(records.map(record => this.execSqlite(
+      `UPDATE orders
+       SET mysql_inserted = 1
+       WHERE id = ?
+         AND lims_sync_status IS ?
+         AND lims_sync_date_time IS ?`,
+      [record.id, record.lims_sync_status ?? null, record.lims_sync_date_time ?? null]
+    ))).then(() => {
+      console.log('Order records successfully resynced and updated in SQLite:', records.length);
+    });
+  }
+
+  public async fetchPendingIntelisResults(maxItems: number): Promise<{
+    rows: IntelisResultRow[];
+    hasMore: boolean;
+    oversizedResultCount: number;
+  }> {
+    const records = await this.execSqlite(
+      `SELECT id, order_id, test_id, results, test_unit, machine_used,
+              instrument_id, tested_by, authorised_date_time,
+              result_accepted_date_time, raw_text
+       FROM orders
+       WHERE lims_sync_status = 0
+       ORDER BY id
+       LIMIT ?`,
+      [maxItems + 1]
+    );
+
+    const hasMore = records.length > maxItems;
+    let selectedRecords = records;
+    let oversizedResultCount = 0;
+    if (hasMore) {
+      const boundary = records[maxItems];
+      const boundaryKey = JSON.stringify([boundary.order_id ?? '', boundary.test_id ?? '']);
+      const firstPage = records.slice(0, maxItems);
+
+      // The extra row tells us whether the item boundary cuts through the
+      // server's duplicate-unit comparison group. Defer that whole group so
+      // copies and log values can never be separated across requests.
+      selectedRecords = firstPage.filter(record =>
+        JSON.stringify([record.order_id ?? '', record.test_id ?? '']) !== boundaryKey
+      );
+      if (selectedRecords.length === 0) {
+        oversizedResultCount = records.filter(record =>
+          JSON.stringify([record.order_id ?? '', record.test_id ?? '']) === boundaryKey
+        ).length;
+      }
+    }
+
+    const rows = selectedRecords.map((record: any) => ({
+      id: Number(record.id),
+      order_id: String(record.order_id ?? ''),
+      test_id: String(record.test_id ?? ''),
+      results: record.results === null || record.results === undefined ? null : String(record.results),
+      test_unit: record.test_unit === null || record.test_unit === undefined ? null : String(record.test_unit),
+      machine_used: String(record.machine_used ?? record.instrument_id ?? ''),
+      instrument_id: record.instrument_id === null || record.instrument_id === undefined
+        ? null
+        : String(record.instrument_id),
+      tested_by: record.tested_by === null || record.tested_by === undefined ? null : String(record.tested_by),
+      authorised_date_time: record.authorised_date_time ?? null,
+      result_accepted_date_time: record.result_accepted_date_time ?? null,
+      raw_text: record.raw_text ?? null
+    }));
+    return { rows, hasMore, oversizedResultCount };
+  }
+
+  public async applyIntelisResultAcknowledgements(
+    acknowledgements: IntelisResultAcknowledgement[]
+  ): Promise<void> {
+    for (const batch of this.chunkArray(acknowledgements, 200)) {
+      const statusCases = batch.map(() => 'WHEN ? THEN ?').join(' ');
+      const ids = batch.map(item => item.id);
+      const statusValues = batch.flatMap(item => [item.id, item.limsSyncStatus]);
+      const placeholders = ids.map(() => '?').join(',');
+
+      // The status comes directly from the server. Mark the MySQL projection
+      // pending so legacy readers see the same final state after the next sync.
+      await this.execSqlite(
+        `UPDATE orders
+         SET lims_sync_status = CASE id ${statusCases} ELSE lims_sync_status END,
+             lims_sync_date_time = CURRENT_TIMESTAMP,
+             mysql_status_synced = 0
+         WHERE lims_sync_status = 0 AND id IN (${placeholders})`,
+        [...statusValues, ...ids]
+      );
+    }
+  }
+
+  public resyncIntelisStatusesToMySQL(success: any, errorf: any): void {
+    if (!this.mysqlPool) {
+      errorf('MySQL not available');
+      return;
+    }
+
+    this.execSqlite(
+      `SELECT id, ingestion_id, lims_sync_status, lims_sync_date_time
+       FROM orders
+       WHERE mysql_status_synced = 0 AND mysql_inserted = 1
+       ORDER BY id
+       LIMIT 500`,
+      []
+    ).then((records: any[]) => {
+      const identifiedRecords = records.filter(record => !!record.ingestion_id);
+      if (identifiedRecords.length === 0) {
+        success('No result statuses to project.');
+        return;
+      }
+
+      const batches = this.chunkArray(identifiedRecords, 100);
+      let batchIndex = 0;
+      const processNext = () => {
+        const batch = batches[batchIndex++];
+        if (!batch) {
+          success(`Projected ${identifiedRecords.length} result status update(s).`);
+          return;
+        }
+
+        const statusCases = batch.map(() => 'WHEN ? THEN ?').join(' ');
+        const dateCases = batch.map(() => 'WHEN ? THEN ?').join(' ');
+        const ingestionIds = batch.map(record => record.ingestion_id);
+        const placeholders = ingestionIds.map(() => '?').join(',');
+        const values = [
+          ...batch.flatMap(record => [record.ingestion_id, record.lims_sync_status]),
+          ...batch.flatMap(record => [record.ingestion_id, record.lims_sync_date_time]),
+          ...ingestionIds
+        ];
+        const query = `UPDATE orders
+          SET lims_sync_status = CASE ingestion_id ${statusCases} ELSE lims_sync_status END,
+              lims_sync_date_time = CASE ingestion_id ${dateCases} ELSE lims_sync_date_time END
+          WHERE ingestion_id IN (${placeholders})`;
+
+        this.execQuery(query, values, () => {
+          Promise.all(batch.map(record => this.execSqlite(
+            `UPDATE orders
+             SET mysql_status_synced = 1
+             WHERE id = ?
+               AND lims_sync_status IS ?
+               AND lims_sync_date_time IS ?`,
+            [record.id, record.lims_sync_status, record.lims_sync_date_time]
+          ))).then(processNext).catch(errorf);
+        }, errorf);
+      };
+
+      processNext();
+    }).catch(errorf);
   }
 
   fetchrawData(success: any, errorf: any, searchParam = '') {

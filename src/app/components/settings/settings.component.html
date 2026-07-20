@@ -280,11 +280,15 @@
                     <span class="detail-label">Physical machines</span>
                     <span>{{ intelisMachineCount }}</span>
                   </div>
+                  <div>
+                    <span class="detail-label">Result delivery</span>
+                    <span>{{ intelisResultsEnabled ? 'Automatic' : 'Not available on this server' }}</span>
+                  </div>
                 </div>
 
                 <div class="scope-list" *ngIf="intelisConnectionState.installation?.scopes?.length">
                   <span class="detail-label">Permissions</span>
-                  <span class="scope-pill" *ngFor="let scope of intelisConnectionState.installation.scopes">{{ scope }}</span>
+                  <span class="scope-pill" *ngFor="let scope of intelisConnectionState.installation.scopes">{{ scopeLabel(scope) }}</span>
                 </div>
 
                 <div class="connected-instruments" *ngIf="intelisConnectionState.connection?.instruments?.length">

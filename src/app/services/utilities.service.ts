@@ -265,6 +265,10 @@ export class UtilitiesService {
     return of(this.dbService.reSyncRecord(orderId));
   }
 
+  resyncIntelisStatusesToMySQL(success: any, errorf: any): void {
+    this.dbService.resyncIntelisStatusesToMySQL(success, errorf);
+  }
+
   fetchLastSyncTimes(): Observable<any> {
     return this.dbService.fetchLastSyncTimes();
   }

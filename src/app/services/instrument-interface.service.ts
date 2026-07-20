@@ -657,7 +657,7 @@ export class InstrumentInterfaceService {
       ...sampleResult,
       instrument_id: instrumentConnectionData.instrumentId,
       // These fields are filtered out of the result tables and used only to
-      // describe the corresponding PII-free telemetry event.
+      // describe the corresponding PII-free usage event.
       telemetry_machine_type: instrumentConnectionData.machineType,
       telemetry_protocol: instrumentConnectionData.connectionProtocol,
       telemetry_connection_mode: instrumentConnectionData.connectionMode
@@ -715,7 +715,7 @@ export class InstrumentInterfaceService {
     testType?: string
   ): void {
     // Do not include raw payloads, sample identifiers, result values, or error
-    // messages. Telemetry is aggregate operational data, not diagnostic storage.
+    // messages. Usage statistics are aggregate operational data, not diagnostic storage.
     void this.dbService.recordTelemetryEvent?.({
       eventType: 'test.processing_failed',
       category: 'failure',

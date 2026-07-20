@@ -650,7 +650,7 @@ try {
         const data = fs.readFileSync(filePath, 'utf-8');
         const importedSettings = JSON.parse(data);
         // Installation identity and credentials are machine-bound. Importing
-        // them would clone an installation and can invalidate telemetry and
+        // them would clone an installation and can invalidate usage reporting and
         // result idempotency, so they are never accepted from settings files.
         delete importedSettings.intelisConnection;
         delete importedSettings.sourceInstallationId;

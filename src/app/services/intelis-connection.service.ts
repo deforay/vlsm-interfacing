@@ -4,7 +4,9 @@ import { ElectronService } from '../core/services';
 import {
   IntelisConnectRequest,
   IntelisConnectionState,
-  IntelisIpcResult
+  IntelisIpcResult,
+  IntelisResultRow,
+  IntelisResultSubmissionResponse
 } from '../../../shared/intelis-connection';
 
 @Injectable({ providedIn: 'root' })
@@ -35,6 +37,30 @@ export class IntelisConnectionService {
 
   async forget(): Promise<IntelisIpcResult<IntelisConnectionState>> {
     return this.invoke('intelis-connection-forget');
+  }
+
+  async submitResults(results: IntelisResultRow[]): Promise<IntelisIpcResult<IntelisResultSubmissionResponse>> {
+    if (!this.electron.isElectron || !this.electron.ipcRenderer) {
+      return {
+        ok: false,
+        error: {
+          code: 'desktop_required',
+          message: 'Result submission is available in the desktop application.'
+        }
+      };
+    }
+
+    try {
+      return await this.electron.ipcRenderer.invoke('intelis-results-submit', { results });
+    } catch {
+      return {
+        ok: false,
+        error: {
+          code: 'connection_unavailable',
+          message: 'The result submission service is unavailable.'
+        }
+      };
+    }
   }
 
   private async invoke(channel: string, payload?: unknown): Promise<IntelisIpcResult<IntelisConnectionState>> {
