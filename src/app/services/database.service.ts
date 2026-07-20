@@ -8,6 +8,28 @@ import { v4 as uuidv4 } from 'uuid';
 import { TelemetryEventInput } from '../interfaces/telemetry-event.interface';
 import { IntelisResultAcknowledgement, IntelisResultRow } from '../../../shared/intelis-connection';
 
+export interface ApplicationLogStoreCleanupPreview {
+  available: boolean;
+  totalRows: number;
+  deletableRows: number;
+  activeDays: number;
+  cutoffDate: string | null;
+  oldestDate: string | null;
+  newestDate: string | null;
+}
+
+export interface ApplicationLogCleanupPreview {
+  retainedActiveDays: number;
+  local: ApplicationLogStoreCleanupPreview;
+  mysql: ApplicationLogStoreCleanupPreview;
+}
+
+export interface ApplicationLogCleanupResult {
+  localDeletedRows: number;
+  mysqlDeletedRows: number;
+  mysqlAvailable: boolean;
+}
+
 @Injectable({
   providedIn: 'root'
 })
@@ -68,7 +90,8 @@ export class DatabaseService {
   private static readonly MYSQL_ORDER_RESYNC_BATCH_SIZE = 25;
   private static readonly MYSQL_TELEMETRY_RESYNC_LIMIT = 500;
   private static readonly SQLITE_LOG_INSERT_BATCH_SIZE = 100;
-  private static readonly LOCAL_LOG_RETENTION_DAYS = 30;
+  private static readonly LOCAL_LOG_RETENTION_ACTIVE_DAYS = 30;
+  public static readonly MINIMUM_LOG_RETENTION_ACTIVE_DAYS = 7;
   private static readonly LOCAL_LOG_MAX_ROWS = 50000;
   private static readonly LOCAL_LOG_PRUNE_INTERVAL_MS = 24 * 60 * 60 * 1000;
   private static readonly MYSQL_ORDER_COLUMNS = [
@@ -1611,18 +1634,134 @@ export class DatabaseService {
     this.lastLocalLogPruneAt = now;
 
     try {
-      await this.execSqlite(
-        `DELETE FROM app_log WHERE added_on < datetime('now', '-${DatabaseService.LOCAL_LOG_RETENTION_DAYS} days')`,
-        []
+      const automaticCutoff = this.buildActiveLogDateCutoff(
+        'date',
+        DatabaseService.LOCAL_LOG_RETENTION_ACTIVE_DAYS
       );
       await this.execSqlite(
-        'DELETE FROM app_log WHERE id NOT IN (SELECT id FROM app_log ORDER BY id DESC LIMIT ?)',
+        `DELETE FROM app_log WHERE date(added_on) < ${automaticCutoff}`,
+        []
+      );
+      const protectedCutoff = this.buildActiveLogDateCutoff(
+        'date',
+        DatabaseService.MINIMUM_LOG_RETENTION_ACTIVE_DAYS
+      );
+      await this.execSqlite(
+        `DELETE FROM app_log
+         WHERE id NOT IN (SELECT id FROM app_log ORDER BY id DESC LIMIT ?)
+           AND date(added_on) < ${protectedCutoff}`,
         [DatabaseService.LOCAL_LOG_MAX_ROWS]
       );
     } catch (error) {
       // Do not send retention failures back through the same log pipeline.
       console.error('Failed to prune local application logs:', error);
     }
+  }
+
+  public async previewApplicationLogCleanup(): Promise<ApplicationLogCleanupPreview> {
+    const retainedActiveDays = DatabaseService.MINIMUM_LOG_RETENTION_ACTIVE_DAYS;
+    const local = await this.getApplicationLogStoreCleanupPreview(
+      query => this.execSqlite(query, []),
+      'date',
+      retainedActiveDays
+    );
+
+    let mysql = this.unavailableApplicationLogStorePreview();
+    if (this.mysqlPool) {
+      try {
+        mysql = await this.getApplicationLogStoreCleanupPreview(
+          query => this.execQueryPromise(query, []),
+          'DATE',
+          retainedActiveDays
+        );
+      } catch {
+        // Cleanup remains useful when the optional MySQL projection is offline.
+      }
+    }
+
+    return { retainedActiveDays, local, mysql };
+  }
+
+  public async cleanupOldApplicationLogs(): Promise<ApplicationLogCleanupResult> {
+    const retainedActiveDays = DatabaseService.MINIMUM_LOG_RETENTION_ACTIVE_DAYS;
+    const localCutoff = this.buildActiveLogDateCutoff('date', retainedActiveDays);
+    const localResult = await this.execSqlite(
+      `DELETE FROM app_log WHERE date(added_on) < ${localCutoff}`,
+      []
+    );
+
+    let mysqlDeletedRows = 0;
+    let mysqlAvailable = false;
+    if (this.mysqlPool) {
+      try {
+        const mysqlCutoff = this.buildActiveLogDateCutoff('DATE', retainedActiveDays);
+        const mysqlResult = await this.execQueryPromise(
+          `DELETE FROM app_log WHERE DATE(added_on) < ${mysqlCutoff}`,
+          []
+        );
+        mysqlAvailable = true;
+        mysqlDeletedRows = Number(mysqlResult?.affectedRows ?? 0);
+      } catch {
+        // Local housekeeping must still complete if optional MySQL is offline.
+      }
+    }
+
+    return {
+      localDeletedRows: Number(localResult?.changes ?? 0),
+      mysqlDeletedRows,
+      mysqlAvailable
+    };
+  }
+
+  private async getApplicationLogStoreCleanupPreview(
+    execute: (query: string) => Promise<any>,
+    dateFunction: 'date' | 'DATE',
+    retainedActiveDays: number
+  ): Promise<ApplicationLogStoreCleanupPreview> {
+    const cutoff = this.buildActiveLogDateCutoff(dateFunction, retainedActiveDays);
+    const rows = await execute(
+      `SELECT COUNT(*) AS total_rows,
+              COUNT(DISTINCT ${dateFunction}(added_on)) AS active_days,
+              COALESCE(SUM(CASE WHEN ${dateFunction}(added_on) < ${cutoff} THEN 1 ELSE 0 END), 0) AS deletable_rows,
+              ${cutoff} AS cutoff_date,
+              MIN(${dateFunction}(added_on)) AS oldest_date,
+              MAX(${dateFunction}(added_on)) AS newest_date
+       FROM app_log`
+    );
+    const row = rows?.[0] ?? {};
+    return {
+      available: true,
+      totalRows: Number(row.total_rows ?? 0),
+      deletableRows: Number(row.deletable_rows ?? 0),
+      activeDays: Number(row.active_days ?? 0),
+      cutoffDate: row.cutoff_date ?? null,
+      oldestDate: row.oldest_date ?? null,
+      newestDate: row.newest_date ?? null
+    };
+  }
+
+  private buildActiveLogDateCutoff(dateFunction: 'date' | 'DATE', retainedActiveDays: number): string {
+    const offset = Math.max(0, Math.trunc(retainedActiveDays) - 1);
+    return `(SELECT active_date FROM (
+      SELECT ${dateFunction}(added_on) AS active_date
+      FROM app_log
+      WHERE added_on IS NOT NULL
+      GROUP BY ${dateFunction}(added_on)
+      ORDER BY active_date DESC
+      LIMIT 1 OFFSET ${offset}
+    ) AS retained_log_dates)`;
+  }
+
+  private unavailableApplicationLogStorePreview(): ApplicationLogStoreCleanupPreview {
+    return {
+      available: false,
+      totalRows: 0,
+      deletableRows: 0,
+      activeDays: 0,
+      cutoffDate: null,
+      oldestDate: null,
+      newestDate: null
+    };
   }
 
   resyncAppLogToMySQL(success: any, errorf: any) {

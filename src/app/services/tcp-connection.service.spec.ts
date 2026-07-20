@@ -46,12 +46,18 @@ describe('TcpConnectionService usage statistics', () => {
   });
 
   it('reports whether an outage should produce an operational log', () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-07-20T00:00:00Z'));
     const { service } = createService();
 
     expect(service.recordConnectionFailure(connectionParams, 'ETIMEDOUT')).toBe(true);
     expect(service.recordConnectionFailure(connectionParams, 'ETIMEDOUT')).toBe(false);
+    vi.setSystemTime(new Date('2026-07-20T00:15:00Z'));
+    expect(service.recordConnectionFailure(connectionParams, 'ETIMEDOUT')).toBe(true);
+    expect(service.recordConnectionFailure(connectionParams, 'ETIMEDOUT')).toBe(false);
     service.recordConnectionSuccess(connectionParams);
     expect(service.recordConnectionFailure(connectionParams, 'ETIMEDOUT')).toBe(true);
+    vi.useRealTimers();
   });
 
   it('logs only the first error and retry schedule during an outage', () => {

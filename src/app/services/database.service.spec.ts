@@ -421,7 +421,53 @@ describe('DatabaseService log display', () => {
     await service.pruneLocalAppLogsIfDue();
 
     expect(service.execSqlite).toHaveBeenCalledTimes(2);
-    expect(service.execSqlite.mock.calls[0][0]).toContain("datetime('now', '-30 days')");
+    expect(service.execSqlite.mock.calls[0][0]).toContain('LIMIT 1 OFFSET 29');
+    expect(service.execSqlite.mock.calls[1][0]).toContain('LIMIT 1 OFFSET 6');
     expect(service.execSqlite.mock.calls[1][1]).toEqual([50000]);
+  });
+
+  it('previews cleanup using the seven most recent active log dates', async () => {
+    const service = Object.create(DatabaseService.prototype) as any;
+    service.mysqlPool = null;
+    service.execSqlite = vi.fn().mockResolvedValue([{
+      total_rows: 120,
+      active_days: 10,
+      deletable_rows: 30,
+      cutoff_date: '2026-06-01',
+      oldest_date: '2026-01-10',
+      newest_date: '2026-07-20'
+    }]);
+
+    const preview = await service.previewApplicationLogCleanup();
+
+    expect(service.execSqlite.mock.calls[0][0]).toContain('LIMIT 1 OFFSET 6');
+    expect(preview).toMatchObject({
+      retainedActiveDays: 7,
+      local: {
+        available: true,
+        totalRows: 120,
+        deletableRows: 30,
+        activeDays: 10,
+        cutoffDate: '2026-06-01'
+      },
+      mysql: { available: false }
+    });
+  });
+
+  it('cleans only dates older than the protected seven active dates', async () => {
+    const service = Object.create(DatabaseService.prototype) as any;
+    service.mysqlPool = {};
+    service.execSqlite = vi.fn().mockResolvedValue({ changes: 30 });
+    service.execQueryPromise = vi.fn().mockResolvedValue({ affectedRows: 25 });
+
+    const result = await service.cleanupOldApplicationLogs();
+
+    expect(service.execSqlite.mock.calls[0][0]).toContain('LIMIT 1 OFFSET 6');
+    expect(service.execQueryPromise.mock.calls[0][0]).toContain('LIMIT 1 OFFSET 6');
+    expect(result).toEqual({
+      localDeletedRows: 30,
+      mysqlDeletedRows: 25,
+      mysqlAvailable: true
+    });
   });
 });

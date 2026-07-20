@@ -18,6 +18,7 @@ interface ConnectionHealth {
   providedIn: 'root'
 })
 export class TcpConnectionService implements OnDestroy {
+  private static readonly OUTAGE_LOG_REMINDER_INTERVAL_MS = 15 * 60 * 1000;
 
   public connectionParams: ConnectionParams = null;
   protected handleTCPCallback: (connectionIdentifierKey: string, data: any) => void;
@@ -30,6 +31,7 @@ export class TcpConnectionService implements OnDestroy {
   public connectionStack: Map<string, InstrumentConnectionStack> = new Map();
   private readonly connectionHealth: Map<string, ConnectionHealth> = new Map();
   private readonly activeConnectionOutages = new Set<string>();
+  private readonly lastConnectionOutageLogAt = new Map<string, number>();
 
   public connectionTimeout = 300000; // 5 minutes in milliseconds
 
@@ -53,6 +55,7 @@ export class TcpConnectionService implements OnDestroy {
     // Clear all maps
     this.connectionHealth.clear();
     this.activeConnectionOutages.clear();
+    this.lastConnectionOutageLogAt.clear();
   }
 
   // Helper method to parse connection key back to connection params
@@ -392,11 +395,19 @@ export class TcpConnectionService implements OnDestroy {
 
   private recordConnectionFailure(connectionParams: ConnectionParams, failureCode: string): boolean {
     const key = this._generateConnectionOutageKey(connectionParams);
-    if (this.activeConnectionOutages.has(key)) return false;
+    const now = Date.now();
+    if (this.activeConnectionOutages.has(key)) {
+      const lastLoggedAt = this.lastConnectionOutageLogAt.get(key) ?? 0;
+      if (now - lastLoggedAt < TcpConnectionService.OUTAGE_LOG_REMINDER_INTERVAL_MS) return false;
+
+      this.lastConnectionOutageLogAt.set(key, now);
+      return true;
+    }
 
     // A retry is part of the existing outage, not a new failure. Recording only
     // this state transition keeps aggregate reporting meaningful and bounded.
     this.activeConnectionOutages.add(key);
+    this.lastConnectionOutageLogAt.set(key, now);
     this.recordConnectionEvent('instrument.connection_failed', connectionParams, 'failed', failureCode);
     return true;
   }
@@ -407,7 +418,9 @@ export class TcpConnectionService implements OnDestroy {
   }
 
   private clearConnectionOutage(connectionParams: ConnectionParams): void {
-    this.activeConnectionOutages.delete(this._generateConnectionOutageKey(connectionParams));
+    const key = this._generateConnectionOutageKey(connectionParams);
+    this.activeConnectionOutages.delete(key);
+    this.lastConnectionOutageLogAt.delete(key);
   }
 
   private getRetryDelay(attempt: number): number {

@@ -662,6 +662,34 @@
 
         <!-- Troubleshooting -->
         <div *ngSwitchCase="'troubleshoot'">
+          <div class="config-card housekeeping-card">
+            <div class="card-header">
+              <div class="header-content">
+                <i class="fas fa-broom"></i>
+                <h2>Log Housekeeping</h2>
+              </div>
+            </div>
+            <div class="card-body">
+              <div class="retention-notice">
+                <i class="fas fa-shield-alt"></i>
+                <div>
+                  <strong>Seven active dates are always protected</strong>
+                  <p>The cleanup keeps every log from the seven most recent dates on which the Interface Tool recorded activity. If the tool was unused for a while, older operating dates are still retained.</p>
+                </div>
+              </div>
+              <p class="help-text">
+                Review and remove older application logs from the local database and, when available, its MySQL copy. Test results, raw analyzer data, and usage statistics are never removed.
+              </p>
+              <button type="button" class="btn btn-outline-primary"
+                [disabled]="logCleanupBusy"
+                (click)="reviewApplicationLogCleanup()">
+                <i class="fas" [ngClass]="logCleanupBusy ? 'fa-spinner fa-spin' : 'fa-search'"></i>
+                <span>{{ logCleanupBusy ? 'Checking Logs…' : 'Review Log Cleanup' }}</span>
+              </button>
+              <p class="housekeeping-status" *ngIf="logCleanupMessage">{{ logCleanupMessage }}</p>
+            </div>
+          </div>
+
           <div class="config-card troubleshooting-card">
             <div class="card-header">
               <div class="header-content">
