@@ -8,7 +8,7 @@ import { CryptoService } from '../../services/crypto.service';
 import { v4 as uuidv4 } from 'uuid';
 import { ConnectionManagerService } from '../../services/connection-manager.service';
 import { Subscription } from 'rxjs';
-import { DatabaseService } from '../../services/database.service';
+import { ApplicationLogCleanupPreview, DatabaseService } from '../../services/database.service';
 import { LisApiService } from '../../services/lis-api.service';
 import { LisApiConfig } from '../../interfaces/lis-api-config.interface';
 import { IntelisConnectionService } from '../../services/intelis-connection.service';
@@ -54,6 +54,8 @@ export class SettingsComponent implements OnInit, OnDestroy {
   public intelisBusy: boolean = false;
   public intelisError: string = '';
   public lisConnectionChoice: 'intelis' | 'other' | null = null;
+  public logCleanupBusy: boolean = false;
+  public logCleanupMessage: string = '';
 
   get intelisResultsEnabled(): boolean {
     return !!getIntelisResultDeliveryLimits(this.intelisConnectionState.connection);
@@ -452,6 +454,77 @@ export class SettingsComponent implements OnInit, OnDestroy {
     } catch (error) {
       console.error('Error showing confirmation dialog:', error);
     }
+  }
+
+  public async reviewApplicationLogCleanup(): Promise<void> {
+    if (this.logCleanupBusy) return;
+    this.logCleanupBusy = true;
+    this.logCleanupMessage = '';
+
+    try {
+      const preview = await this.databaseService.previewApplicationLogCleanup();
+      const deletableRows = preview.local.deletableRows
+        + (preview.mysql.available ? preview.mysql.deletableRows : 0);
+
+      if (deletableRows === 0) {
+        await this.showLogCleanupInformation(preview);
+        return;
+      }
+
+      const mysqlDetail = preview.mysql.available
+        ? `${preview.mysql.deletableRows.toLocaleString()} MySQL log entries can be removed.`
+        : 'The optional MySQL log copy is unavailable and will not be changed.';
+      const confirmation = await this.electronService.ipcRenderer.invoke('show-confirm-dialog', {
+        type: 'warning',
+        buttons: ['Cancel', 'Delete Old Logs'],
+        defaultId: 0,
+        cancelId: 0,
+        title: 'Confirm Log Cleanup',
+        message: `Delete ${preview.local.deletableRows.toLocaleString()} old local log entries?`,
+        detail: `The seven most recent dates with log activity will always be retained. These dates may span more than seven calendar days.\n\n${mysqlDetail}\n\nTest results, raw analyzer data, and usage statistics are not affected. This action cannot be undone.`
+      });
+      if (confirmation?.response !== 1) return;
+
+      const result = await this.databaseService.cleanupOldApplicationLogs();
+      const mysqlResult = result.mysqlAvailable
+        ? ` ${result.mysqlDeletedRows.toLocaleString()} MySQL log entries were also removed.`
+        : ' The optional MySQL log copy was unavailable and was not changed.';
+      this.logCleanupMessage = `${result.localDeletedRows.toLocaleString()} local log entries removed.${mysqlResult}`;
+      await this.electronService.ipcRenderer.invoke('show-confirm-dialog', {
+        type: 'info',
+        buttons: ['OK'],
+        defaultId: 0,
+        title: 'Log Cleanup Complete',
+        message: 'Old application logs were cleaned safely.',
+        detail: this.logCleanupMessage
+      });
+    } catch (error) {
+      this.logCleanupMessage = 'Log cleanup could not be completed.';
+      await this.electronService.ipcRenderer.invoke('show-confirm-dialog', {
+        type: 'error',
+        buttons: ['OK'],
+        defaultId: 0,
+        title: 'Log Cleanup Failed',
+        message: this.logCleanupMessage,
+        detail: `No result or raw analyzer data was changed. Error: ${error?.message ?? error}`
+      });
+    } finally {
+      this.logCleanupBusy = false;
+    }
+  }
+
+  private async showLogCleanupInformation(preview: ApplicationLogCleanupPreview): Promise<void> {
+    const mysqlDetail = preview.mysql.available
+      ? `MySQL contains ${preview.mysql.totalRows.toLocaleString()} log entries; none are outside the protected dates.`
+      : 'The optional MySQL log copy is unavailable and was not checked.';
+    await this.electronService.ipcRenderer.invoke('show-confirm-dialog', {
+      type: 'info',
+      buttons: ['OK'],
+      defaultId: 0,
+      title: 'No Old Logs to Delete',
+      message: 'All application logs are within the protected activity dates.',
+      detail: `The local database contains ${preview.local.totalRows.toLocaleString()} log entries across ${preview.local.activeDays.toLocaleString()} active date(s).\n\n${mysqlDetail}`
+    });
   }
 
 
