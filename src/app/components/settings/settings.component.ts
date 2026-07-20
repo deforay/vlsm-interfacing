@@ -12,7 +12,11 @@ import { DatabaseService } from '../../services/database.service';
 import { LisApiService } from '../../services/lis-api.service';
 import { LisApiConfig } from '../../interfaces/lis-api-config.interface';
 import { IntelisConnectionService } from '../../services/intelis-connection.service';
-import { IntelisConnectionState } from '../../../../shared/intelis-connection';
+import {
+  formatIntelisConnectionCode,
+  IntelisConnectionState,
+  isValidIntelisConnectionCode
+} from '../../../../shared/intelis-connection';
 
 @Component({
   standalone: false,
@@ -259,6 +263,19 @@ export class SettingsComponent implements OnInit, OnDestroy {
   get intelisMachineCount(): number {
     return (this.intelisConnectionState.connection?.instruments || [])
       .reduce((count, instrument) => count + (instrument.machines?.length || 0), 0);
+  }
+
+  get intelisConnectionCodeValid(): boolean {
+    return isValidIntelisConnectionCode(
+      this.settingsForm.get('intelisConnection.connectionCode')?.value || ''
+    );
+  }
+
+  formatConnectionCode(event: Event): void {
+    const input = event.target as HTMLInputElement;
+    const formatted = formatIntelisConnectionCode(input.value);
+    input.value = formatted;
+    this.settingsForm.get('intelisConnection.connectionCode')?.setValue(formatted, { emitEvent: false });
   }
 
   private syncIntelisForm(state: IntelisConnectionState): void {

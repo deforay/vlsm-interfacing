@@ -86,7 +86,7 @@ test.describe('Check Home Page', async () => {
     await firstWindow.getByRole('button', { name: 'Change connection type' }).click();
     await firstWindow.getByRole('button', { name: /My laboratory uses InteLIS/ }).click();
     await firstWindow.getByLabel('InteLIS URL').fill('http://vlsm.test');
-    await firstWindow.getByLabel('Connection Code').fill('ABCD-EFGH-JKMP-QRST');
+    await firstWindow.getByLabel('Connection Code').fill('ABCD-EFGH-JKMP');
     await firstWindow.getByRole('button', { name: 'Connect to InteLIS' }).click();
 
     await expect(firstWindow.getByText('InteLIS connections require HTTPS.')).toBeVisible();
