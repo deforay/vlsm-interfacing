@@ -838,7 +838,14 @@ try {
         trayIconPath = path.join(__dirname, '../dist/browser/assets/icons/favicon.png');
       }
       try {
-        const icon = nativeImage.createFromPath(trayIconPath);
+        // Desktop shells do not consistently constrain oversized tray images.
+        // Keep the high-resolution asset for packaging, but use a native-sized
+        // copy here so it cannot expand the menu bar or system tray.
+        const icon = nativeImage.createFromPath(trayIconPath).resize({
+          width: 16,
+          height: 16,
+          quality: 'best'
+        });
         tray = new Tray(icon);
         const contextMenu = Menu.buildFromTemplate([
           { label: 'Show', click: () => { win.show(); } },
