@@ -55,7 +55,8 @@ describe('InstrumentInterfaceService HL7 streams', () => {
       recordTestResults: vi.fn((_data, success, failure) => {
         if (persistenceSucceeds) success({ lastID: 1 });
         else failure(new Error('database write failed'));
-      })
+      }),
+      recordTelemetryEvent: vi.fn().mockResolvedValue(true)
     };
     const hl7Helper = new HL7HelperService(utilities);
     const astmHelper = new ASTMHelperService(utilities);
@@ -182,7 +183,7 @@ describe('InstrumentInterfaceService HL7 streams', () => {
   });
 
   it('reports persistence failure after parsing a stored HL7 result', async () => {
-    const { service } = createParsingService(false);
+    const { service, dbService } = createParsingService(false);
     const rawMessage = [
       'MSH|^~\\&|ANALYZER|LAB001|LIS|LAB001|20260714113000||OUL^R22|MSG-002|P|2.5.1',
       'SPM|1|SAMPLE-002',
@@ -193,5 +194,14 @@ describe('InstrumentInterfaceService HL7 streams', () => {
     const outcomes = await service.processHL7Data(createConnection('ANALYZER-A') as any, rawMessage);
 
     expect(outcomes).toEqual([false]);
+    expect(dbService.recordTelemetryEvent).toHaveBeenCalledWith(expect.objectContaining({
+      eventType: 'test.processing_failed',
+      instrumentId: 'ANALYZER-A',
+      testType: 'HIV Viral Load',
+      outcome: 'failed',
+      failureCode: 'result_persistence_failed'
+    }));
+    expect(dbService.recordTelemetryEvent.mock.calls[0][0]).not.toHaveProperty('orderId');
+    expect(dbService.recordTelemetryEvent.mock.calls[0][0]).not.toHaveProperty('result');
   });
 });

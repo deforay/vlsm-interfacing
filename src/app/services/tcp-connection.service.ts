@@ -4,6 +4,7 @@ import { ElectronService } from '../core/services';
 import { ConnectionParams } from '../interfaces/connection-params.interface';
 import { InstrumentConnectionStack } from '../interfaces/instrument-connections.interface';
 import { UtilitiesService } from './utilities.service';
+import { DatabaseService } from './database.service';
 
 interface ConnectionHealth {
   lastDataReceived: Date;
@@ -33,7 +34,8 @@ export class TcpConnectionService implements OnDestroy {
 
   constructor(
     public electronService: ElectronService,
-    public utilitiesService: UtilitiesService
+    public utilitiesService: UtilitiesService,
+    private readonly databaseService: DatabaseService
   ) {
     this.net = this.electronService.net;
   }
@@ -112,6 +114,7 @@ export class TcpConnectionService implements OnDestroy {
     }
 
     instrumentConnectionData.connectionAttemptStatusSubject.next(true);
+    this.recordConnectionEvent('instrument.connection_attempted', connectionParams, 'started');
 
     if (connectionParams.connectionMode === 'tcpserver') {
       that.utilitiesService.logger('info', `Listening for connection on ${connectionParams.host}:${connectionParams.port}`, instrumentConnectionData.instrumentId);
@@ -144,6 +147,7 @@ export class TcpConnectionService implements OnDestroy {
 
         // Reset retry attempts once a client has successfully connected
         instrumentConnectionData.reconnectAttempts = 0;
+        that.recordConnectionEvent('instrument.connected', connectionParams, 'success');
 
         // confirm socket connection from client
         sockets.push(socket);
@@ -252,6 +256,7 @@ export class TcpConnectionService implements OnDestroy {
         instrumentConnectionData.statusSubject.next(true);
         instrumentConnectionData.reconnectAttempts = 0; // Reset retry attempts
         that.utilitiesService.logger('success', 'Connected as client successfully', instrumentConnectionData.instrumentId);
+        that.recordConnectionEvent('instrument.connected', connectionParams, 'success');
       });
 
       instrumentConnectionData.connectionSocket.on('data', function (data) {
@@ -273,7 +278,13 @@ export class TcpConnectionService implements OnDestroy {
       // Connection closed
       instrumentConnectionData.connectionSocket.on('error', (err) => {
         instrumentConnectionData.errorOccurred = true;
-        that._handleClientConnectionIssue(instrumentConnectionData, connectionParams, `Connection error: ${err.message}`, true);
+        that._handleClientConnectionIssue(
+          instrumentConnectionData,
+          connectionParams,
+          `Connection error: ${err.message}`,
+          true,
+          err.code
+        );
       });
 
       instrumentConnectionData.connectionSocket.on('close', (hadError) => {
@@ -297,6 +308,12 @@ export class TcpConnectionService implements OnDestroy {
 
     if (isError) {
       that.utilitiesService.logger('error', message, instrumentConnectionData.instrumentId);
+      that.recordConnectionEvent(
+        'instrument.connection_failed',
+        connectionParams,
+        'failed',
+        errorCode || 'connection_error'
+      );
     }
 
     // ✅ Always restart the TCP server after an error — the server must keep listening
@@ -350,6 +367,26 @@ export class TcpConnectionService implements OnDestroy {
         that.connect(connectionParams, that.handleTCPCallback);
       }, delay);
     }
+  }
+
+  private recordConnectionEvent(
+    eventType: string,
+    connectionParams: ConnectionParams,
+    outcome: 'success' | 'failed' | 'started',
+    failureCode?: string
+  ): void {
+    // Telemetry is intentionally fire-and-forget: an unavailable reporting
+    // database must never affect the analyzer connection lifecycle.
+    void this.databaseService.recordTelemetryEvent({
+      eventType,
+      category: failureCode ? 'failure' : 'instrument',
+      instrumentId: connectionParams.instrumentId,
+      machineType: connectionParams.machineType,
+      protocol: connectionParams.connectionProtocol,
+      connectionMode: connectionParams.connectionMode,
+      outcome,
+      failureCode
+    });
   }
 
 

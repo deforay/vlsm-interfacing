@@ -5,6 +5,7 @@ import { CryptoService } from './crypto.service'
 import { LoggingService } from './logging.service';
 import { Observable, Subject } from 'rxjs';
 import { v4 as uuidv4 } from 'uuid';
+import { TelemetryEventInput } from '../interfaces/telemetry-event.interface';
 
 @Injectable({
   providedIn: 'root'
@@ -64,6 +65,7 @@ export class DatabaseService {
   ];
   private static readonly MYSQL_APP_LOG_RESYNC_BATCH_SIZE = 25;
   private static readonly MYSQL_ORDER_RESYNC_BATCH_SIZE = 25;
+  private static readonly MYSQL_TELEMETRY_RESYNC_LIMIT = 500;
   private static readonly SQLITE_LOG_INSERT_BATCH_SIZE = 100;
   private static readonly LOCAL_LOG_RETENTION_DAYS = 30;
   private static readonly LOCAL_LOG_MAX_ROWS = 50000;
@@ -108,6 +110,29 @@ export class DatabaseService {
   ];
   private static readonly SQLITE_RAW_DATA_COLUMNS = [
     ...DatabaseService.MYSQL_RAW_DATA_COLUMNS,
+    'mysql_inserted',
+  ];
+  private static readonly MYSQL_TELEMETRY_COLUMNS = [
+    'event_id',
+    'event_type',
+    'event_category',
+    'occurred_at',
+    'lab_id',
+    'instrument_id',
+    'machine_type',
+    'protocol',
+    'connection_mode',
+    'test_type',
+    'outcome',
+    'failure_code',
+    'event_count',
+    'app_version',
+    'remote_uploaded_at',
+    'remote_batch_id',
+    'added_on',
+  ];
+  private static readonly SQLITE_TELEMETRY_COLUMNS = [
+    ...DatabaseService.MYSQL_TELEMETRY_COLUMNS,
     'mysql_inserted',
   ];
   private readonly path: any = (window as any).require('path');
@@ -175,6 +200,7 @@ export class DatabaseService {
     await this.execQueryPromise("SET SESSION sql_mode=(SELECT REPLACE(@@sql_mode, 'ONLY_FULL_GROUP_BY', ''))", []);
     await this.execQueryPromise("SET SESSION INTERACTIVE_TIMEOUT=600", []);
     await this.execQueryPromise("SET SESSION WAIT_TIMEOUT=600", []);
+    this.resyncTelemetryToMySQL(() => { }, () => { });
   }
 
   public sqlite3WalCheckpoint(): void {
@@ -833,9 +859,134 @@ export class DatabaseService {
     this.execSqlite(sqliteInsert.query, sqliteInsert.values)
       .then((sqliteResult) => {
         this.replicateOrderToMySQL({ ...sqliteRecord, id: sqliteResult.lastID });
+        void this.recordTelemetryEvent({
+          eventType: 'test.processed',
+          category: 'test',
+          instrumentId: orderData.instrument_id,
+          machineType: orderData.telemetry_machine_type,
+          protocol: orderData.telemetry_protocol,
+          connectionMode: orderData.telemetry_connection_mode,
+          testType: orderData.test_type,
+          outcome: this.isFailedTestResult(orderData.results) ? 'failed' : 'success'
+        });
         success(sqliteResult);
       })
       .catch(errorf);
+  }
+
+  public async recordTelemetryEvent(input: TelemetryEventInput): Promise<boolean> {
+    const eventType = this.sanitizeTelemetryValue(input?.eventType, 64);
+    if (!eventType) {
+      console.warn('Skipped telemetry event without a valid event type');
+      return false;
+    }
+
+    const now = this.toDatabaseDateTime(input.occurredAt);
+    const record = this.filterRecordColumns({
+      event_id: uuidv4(),
+      event_type: eventType,
+      event_category: this.sanitizeTelemetryValue(input.category, 32) || 'usage',
+      occurred_at: now,
+      lab_id: this.sanitizeTelemetryValue(this.commonSettings?.labID, 128),
+      instrument_id: this.sanitizeTelemetryValue(input.instrumentId, 128),
+      machine_type: this.sanitizeTelemetryValue(input.machineType, 128),
+      protocol: this.sanitizeTelemetryValue(input.protocol, 32),
+      connection_mode: this.sanitizeTelemetryValue(input.connectionMode, 32),
+      test_type: this.sanitizeTelemetryValue(input.testType, 128),
+      outcome: this.sanitizeTelemetryValue(input.outcome, 32) || 'success',
+      failure_code: this.sanitizeTelemetryValue(input.failureCode, 64),
+      event_count: Math.max(1, Math.min(Math.trunc(input.count || 1), 1_000_000)),
+      app_version: this.sanitizeTelemetryValue(this.store?.get('appVersion'), 32),
+      remote_uploaded_at: null,
+      remote_batch_id: null,
+      added_on: now,
+      mysql_inserted: 0,
+    }, DatabaseService.SQLITE_TELEMETRY_COLUMNS);
+    const insert = this.buildInsertQuery('telemetry_events', record);
+
+    try {
+      const sqliteResult = await this.execSqlite(insert.query, insert.values);
+      this.replicateTelemetryToMySQL({ ...record, id: sqliteResult.lastID });
+      return true;
+    } catch (error) {
+      // Telemetry is observational. It must never interrupt instrument data.
+      console.warn('Unable to persist telemetry event:', error);
+      return false;
+    }
+  }
+
+  public resyncTelemetryToMySQL(success: any, errorf: any): void {
+    if (!this.mysqlPool) {
+      errorf('MySQL not available');
+      return;
+    }
+
+    const selectSql = 'SELECT * FROM telemetry_events WHERE mysql_inserted = 0 ORDER BY id LIMIT ?';
+    this.execSqlite(selectSql, [DatabaseService.MYSQL_TELEMETRY_RESYNC_LIMIT])
+      .then((records: any[]) => {
+        if (records.length === 0) {
+          success('No telemetry events to resync.');
+          return;
+        }
+
+        const columns = DatabaseService.MYSQL_TELEMETRY_COLUMNS;
+        const escapedColumns = columns.map(column => `\`${column}\``).join(',');
+        const mysqlSql = `INSERT INTO \`telemetry_events\` (${escapedColumns}) VALUES ? ON DUPLICATE KEY UPDATE event_id = VALUES(event_id)`;
+        const values = records.map(record => columns.map(column => record[column] ?? null));
+
+        this.execQuery(mysqlSql, [values],
+          () => {
+            this.markTelemetryAsResynced(records.map(record => record.id))
+              .then(() => success(`Replicated ${records.length} telemetry event(s).`))
+              .catch(errorf);
+          },
+          errorf
+        );
+      })
+      .catch(errorf);
+  }
+
+  private replicateTelemetryToMySQL(record: any): void {
+    if (!this.mysqlPool) return;
+
+    const mysqlRecord = this.filterRecordColumns(record, DatabaseService.MYSQL_TELEMETRY_COLUMNS);
+    const insert = this.buildInsertQuery('telemetry_events', mysqlRecord);
+    const idempotentInsert = `${insert.query} ON DUPLICATE KEY UPDATE event_id = VALUES(event_id)`;
+    this.execQuery(idempotentInsert, insert.values,
+      () => {
+        this.markTelemetryAsResynced([record.id]).catch(error => {
+          console.warn('Telemetry replicated but local status update failed:', error);
+        });
+      },
+      error => {
+        console.warn('Telemetry remains queued for MySQL replication:', error?.message ?? error);
+      }
+    );
+  }
+
+  private markTelemetryAsResynced(recordIds: number[]): Promise<void> {
+    if (!recordIds.length) return Promise.resolve();
+    const placeholders = recordIds.map(() => '?').join(',');
+    return this.execSqlite(
+      `UPDATE telemetry_events SET mysql_inserted = 1 WHERE id IN (${placeholders})`,
+      recordIds
+    ).then(() => undefined);
+  }
+
+  private sanitizeTelemetryValue(value: unknown, maxLength: number): string | null {
+    if (value === null || value === undefined) return null;
+    const normalized = String(value).trim();
+    return normalized ? normalized.slice(0, maxLength) : null;
+  }
+
+  private toDatabaseDateTime(value?: Date | string): string {
+    const date = value instanceof Date ? value : value ? new Date(value) : new Date();
+    const safeDate = Number.isNaN(date.getTime()) ? new Date() : date;
+    return safeDate.toISOString().slice(0, 19).replace('T', ' ');
+  }
+
+  private isFailedTestResult(value: unknown): boolean {
+    return ['failed', 'error', 'invalid', 'incomplete'].includes(String(value ?? '').trim().toLowerCase());
   }
 
   private replicateOrderToMySQL(record: any): void {

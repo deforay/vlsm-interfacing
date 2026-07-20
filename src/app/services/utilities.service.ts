@@ -42,6 +42,10 @@ export class UtilitiesService {
     this.dbService.resyncTestResultsToMySQL(success, errorf);
   }
 
+  resyncTelemetryToMySQL(success, errorf) {
+    this.dbService.resyncTelemetryToMySQL(success, errorf);
+  }
+
   syncLimsStatusToSQLite(
     success: (result: { updatedCount: number; message: string }) => void,
     errorf: any
