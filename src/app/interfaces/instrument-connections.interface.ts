@@ -16,7 +16,5 @@ export interface InstrumentConnectionStack {
   connectionServer?: any;
   errorOccurred: boolean;
   reconnectAttempts: number;
-  idleHeartbeatTimer?: any;
-  listeningSince?: Date;
   pendingReconnectTimer?: any;
 }

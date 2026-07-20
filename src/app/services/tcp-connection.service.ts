@@ -116,21 +116,22 @@ export class TcpConnectionService implements OnDestroy {
     }
 
     instrumentConnectionData.connectionAttemptStatusSubject.next(true);
-    this.recordConnectionAttempt(connectionParams);
+    const shouldLogConnectionAttempt = this.recordConnectionAttempt(connectionParams);
 
     if (connectionParams.connectionMode === 'tcpserver') {
-      that.utilitiesService.logger('info', `Listening for connection on ${connectionParams.host}:${connectionParams.port}`, instrumentConnectionData.instrumentId);
+      if (shouldLogConnectionAttempt) {
+        that.utilitiesService.logger('info', `Listening for connection on ${connectionParams.host}:${connectionParams.port}`, instrumentConnectionData.instrumentId);
+      }
       instrumentConnectionData.connectionServer = that.net.createServer();
 
-      // Confirm the OS accepted our bind, then start an idle heartbeat so the
-      // user can see we are actively waiting (and that nothing is arriving).
+      // Confirm the OS accepted our bind. The persistent UI state already shows
+      // that we are waiting, so periodic messages would only grow the log.
       instrumentConnectionData.connectionServer.on('listening', function () {
         const addr = instrumentConnectionData.connectionServer.address();
         const boundAddress = addr && typeof addr === 'object'
           ? `${addr.address}:${addr.port}`
           : `${connectionParams.host}:${connectionParams.port}`;
         that.utilitiesService.logger('success', `Server bound and listening on ${boundAddress}. Waiting for a client to connect…`, instrumentConnectionData.instrumentId);
-        that._startIdleHeartbeat(instrumentConnectionData, connectionParams);
       });
 
       instrumentConnectionData.connectionServer.listen({
@@ -143,9 +144,6 @@ export class TcpConnectionService implements OnDestroy {
       instrumentConnectionData.connectionServer.on('connection', function (socket) {
         const clientAddress = socket.remoteAddress;
         that.utilitiesService.logger('info', `Client ${clientAddress} has connected to the Interfacing Server ${connectionParams.host}:${connectionParams.port}`, instrumentConnectionData.instrumentId);
-
-        // A client has arrived — stop the "still waiting" heartbeat
-        that._stopIdleHeartbeat(instrumentConnectionData);
 
         // Reset retry attempts once a client has successfully connected
         instrumentConnectionData.reconnectAttempts = 0;
@@ -206,10 +204,6 @@ export class TcpConnectionService implements OnDestroy {
           const logType = hadError ? 'error' : 'info';
           that.utilitiesService.logger(logType, msg, instrumentConnectionData.instrumentId);
 
-          // Client gone — we are idle again; resume heartbeat if the server is still up
-          if (instrumentConnectionData.connectionServer && instrumentConnectionData.connectionServer.listening) {
-            that._startIdleHeartbeat(instrumentConnectionData, connectionParams);
-          }
         });
 
       });
@@ -237,7 +231,9 @@ export class TcpConnectionService implements OnDestroy {
       // since this is a CLIENT connection, we don't need a server object, so we set it to null
       instrumentConnectionData.connectionServer = null;
 
-      that.utilitiesService.logger('info', 'Trying to connect as client', instrumentConnectionData.instrumentId);
+      if (shouldLogConnectionAttempt) {
+        that.utilitiesService.logger('info', 'Trying to connect as client', instrumentConnectionData.instrumentId);
+      }
 
       // Attempt to connect
       instrumentConnectionData.connectionSocket.connect(that.clientConnectionOptions);
@@ -307,10 +303,13 @@ export class TcpConnectionService implements OnDestroy {
     const that = this;
     instrumentConnectionData.statusSubject.next(false);
     that.disconnect(connectionParams);
+    let isNewOutage = false;
 
     if (isError) {
-      that.utilitiesService.logger('error', message, instrumentConnectionData.instrumentId);
-      that.recordConnectionFailure(connectionParams, errorCode || 'connection_error');
+      isNewOutage = that.recordConnectionFailure(connectionParams, errorCode || 'connection_error');
+      if (isNewOutage) {
+        that.utilitiesService.logger('error', message, instrumentConnectionData.instrumentId);
+      }
     }
 
     // ✅ Always restart the TCP server after an error — the server must keep listening
@@ -325,11 +324,13 @@ export class TcpConnectionService implements OnDestroy {
       const attempt = instrumentConnectionData.reconnectAttempts ?? 0;
       const delay = isAddressUnavailable ? 30000 : that.getRetryDelay(attempt);
 
-      that.utilitiesService.logger(
-        'info',
-        `Will restart listening on ${connectionParams.host}:${connectionParams.port} in ${delay / 1000} seconds`,
-        instrumentConnectionData.instrumentId
-      );
+      if (!isError || isNewOutage) {
+        that.utilitiesService.logger(
+          'info',
+          `Will restart listening on ${connectionParams.host}:${connectionParams.port} in ${delay / 1000} seconds`,
+          instrumentConnectionData.instrumentId
+        );
+      }
 
       if (!isAddressUnavailable) {
         instrumentConnectionData.reconnectAttempts = attempt + 1;
@@ -342,21 +343,17 @@ export class TcpConnectionService implements OnDestroy {
 
     // ✅ Only reconnect (and log) for TCP client if autoconnect is enabled
     if (connectionParams.connectionMode === 'tcpclient' && connectionParams.interfaceAutoConnect === 'yes') {
-      that.utilitiesService.logger(
-        'info',
-        `Attempting to connect to ${connectionParams.host}:${connectionParams.port} as client`,
-        instrumentConnectionData.instrumentId
-      );
-
       instrumentConnectionData.connectionAttemptStatusSubject.next(true);
       const attempt = instrumentConnectionData.reconnectAttempts ?? 0;
       const delay = that.getRetryDelay(attempt);
 
-      that.utilitiesService.logger(
-        'info',
-        `Interface AutoConnect is enabled: Will re-attempt connection in ${delay / 1000} seconds`,
-        instrumentConnectionData.instrumentId
-      );
+      if (!isError || isNewOutage) {
+        that.utilitiesService.logger(
+          'info',
+          `Will retry connection to ${connectionParams.host}:${connectionParams.port} in ${delay / 1000} seconds`,
+          instrumentConnectionData.instrumentId
+        );
+      }
 
       instrumentConnectionData.reconnectAttempts = attempt + 1;
       instrumentConnectionData.pendingReconnectTimer = setTimeout(() => {
@@ -386,20 +383,22 @@ export class TcpConnectionService implements OnDestroy {
     });
   }
 
-  private recordConnectionAttempt(connectionParams: ConnectionParams): void {
+  private recordConnectionAttempt(connectionParams: ConnectionParams): boolean {
     const key = this._generateConnectionOutageKey(connectionParams);
-    if (this.activeConnectionOutages.has(key)) return;
+    if (this.activeConnectionOutages.has(key)) return false;
     this.recordConnectionEvent('instrument.connection_attempted', connectionParams, 'started');
+    return true;
   }
 
-  private recordConnectionFailure(connectionParams: ConnectionParams, failureCode: string): void {
+  private recordConnectionFailure(connectionParams: ConnectionParams, failureCode: string): boolean {
     const key = this._generateConnectionOutageKey(connectionParams);
-    if (this.activeConnectionOutages.has(key)) return;
+    if (this.activeConnectionOutages.has(key)) return false;
 
     // A retry is part of the existing outage, not a new failure. Recording only
     // this state transition keeps aggregate reporting meaningful and bounded.
     this.activeConnectionOutages.add(key);
     this.recordConnectionEvent('instrument.connection_failed', connectionParams, 'failed', failureCode);
+    return true;
   }
 
   private recordConnectionSuccess(connectionParams: ConnectionParams): void {
@@ -409,47 +408,6 @@ export class TcpConnectionService implements OnDestroy {
 
   private clearConnectionOutage(connectionParams: ConnectionParams): void {
     this.activeConnectionOutages.delete(this._generateConnectionOutageKey(connectionParams));
-  }
-
-
-  private _startIdleHeartbeat(instrumentConnectionData: InstrumentConnectionStack, connectionParams: ConnectionParams) {
-    const that = this;
-    that._stopIdleHeartbeat(instrumentConnectionData);
-    instrumentConnectionData.listeningSince = new Date();
-
-    const heartbeatIntervalMs = 60000; // 60s
-    instrumentConnectionData.idleHeartbeatTimer = setInterval(() => {
-      // Guard: only log while we are still listening with no connected client
-      const server = instrumentConnectionData.connectionServer;
-      if (!server || !server.listening || instrumentConnectionData.statusSubject.value) {
-        return;
-      }
-      const waitedMs = Date.now() - (instrumentConnectionData.listeningSince?.getTime() ?? Date.now());
-      const waited = that._formatDuration(waitedMs);
-      that.utilitiesService.logger(
-        'info',
-        `Still listening on ${connectionParams.host}:${connectionParams.port} — no client has connected yet (waiting ${waited})`,
-        instrumentConnectionData.instrumentId
-      );
-    }, heartbeatIntervalMs);
-  }
-
-  private _stopIdleHeartbeat(instrumentConnectionData: InstrumentConnectionStack) {
-    if (instrumentConnectionData.idleHeartbeatTimer) {
-      clearInterval(instrumentConnectionData.idleHeartbeatTimer);
-      instrumentConnectionData.idleHeartbeatTimer = null;
-    }
-    instrumentConnectionData.listeningSince = null;
-  }
-
-  private _formatDuration(ms: number): string {
-    const totalSeconds = Math.floor(ms / 1000);
-    const hours = Math.floor(totalSeconds / 3600);
-    const minutes = Math.floor((totalSeconds % 3600) / 60);
-    const seconds = totalSeconds % 60;
-    if (hours > 0) return `${hours}h ${minutes}m ${seconds}s`;
-    if (minutes > 0) return `${minutes}m ${seconds}s`;
-    return `${seconds}s`;
   }
 
   private getRetryDelay(attempt: number): number {
@@ -486,7 +444,6 @@ export class TcpConnectionService implements OnDestroy {
           clearTimeout(instrumentConnectionData.pendingReconnectTimer);
           instrumentConnectionData.pendingReconnectTimer = null;
         }
-        that._stopIdleHeartbeat(instrumentConnectionData);
         instrumentConnectionData.statusSubject.next(false);
         instrumentConnectionData.connectionAttemptStatusSubject.next(false);
 
