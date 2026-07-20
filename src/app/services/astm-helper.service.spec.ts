@@ -86,10 +86,43 @@ describe('ASTMHelperService', () => {
     expect(result.sampleResults).toHaveLength(1);
     expect(result.sampleResults?.[0]).toMatchObject({
       order_id: 'SAMPLE-001',
+      test_id: 'SAMPLE-001',
       test_type: 'HIVVL',
       results: '1250',
       test_unit: 'copies/mL'
     });
+  });
+
+  it('uses ASTM specimen fields instead of the O-record sequence number', () => {
+    const service = createService();
+    const data = service.getASTMDataBlock([
+      'O|7|PRIMARY-001|ANALYZER-001|^^^HIVVL',
+      'R|1|^^^HIVVL|1250|copies/mL'
+    ]);
+
+    const result = service.extractSampleResultFromASTM(data, '');
+
+    expect(result).toMatchObject({
+      order_id: 'PRIMARY-001',
+      test_id: 'ANALYZER-001'
+    });
+    expect(result.test_id).not.toBe('7');
+  });
+
+  it('falls back to the primary specimen ID when the instrument ID is absent', () => {
+    const service = createService();
+    const data = service.getASTMDataBlock([
+      'O|1|PRIMARY-002||^^^HIVVL',
+      'R|1|^^^HIVVL|1250|copies/mL'
+    ]);
+
+    const result = service.extractSampleResultFromASTM(data, '');
+
+    expect(result).toMatchObject({
+      order_id: 'PRIMARY-002',
+      test_id: 'PRIMARY-002'
+    });
+    expect(result.test_id).not.toBe('1');
   });
 
   it('does not emit a result before an incomplete transmission receives EOT', () => {
