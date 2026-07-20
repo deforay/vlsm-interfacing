@@ -353,8 +353,13 @@ export class ASTMHelperService {
       if (dataArray['O'] && dataArray['O'].length > 0) {
         const oSegmentFields = dataArray['O'][0]; // dataArray['O'] is an array of arrays (each sub-array is a segment's fields)
 
-        sampleResult.order_id = oSegmentFields[2];
-        sampleResult.test_id = oSegmentFields[1];
+        const primarySpecimenId = oSegmentFields[2]?.trim();
+        const instrumentSpecimenId = oSegmentFields[3]?.trim();
+
+        sampleResult.order_id = primarySpecimenId;
+        // ASTM O.1 is only the record sequence number. Use the analyzer's
+        // specimen identifier when supplied, otherwise retain the primary ID.
+        sampleResult.test_id = instrumentSpecimenId || primarySpecimenId;
 
         const resultStatus = oSegmentFields[25]; // X = Failed, F = Final, P = Preliminary
 
