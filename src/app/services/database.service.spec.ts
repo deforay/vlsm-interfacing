@@ -8,6 +8,7 @@ describe('DatabaseService result durability', () => {
     // exercise the persistence decision without starting the application runtime.
     const service = Object.create(DatabaseService.prototype) as DatabaseService;
     (service as any).recordTelemetryEvent = vi.fn().mockResolvedValue(true);
+    (service as any).resultRecordedSubject = { next: vi.fn() };
     return service as any;
   };
 
@@ -54,10 +55,8 @@ describe('DatabaseService result durability', () => {
     expect(ingestionId).toBeTruthy();
     expect(service.execQuery.mock.calls[0][1]).toContain(ingestionId);
     expect(localInsertValues.at(-1)).toBe(0);
-    expect(service.execSqlite.mock.calls[1]).toEqual([
-      'UPDATE orders SET mysql_inserted = 1 WHERE id IN (?)',
-      [1]
-    ]);
+    expect(service.execSqlite.mock.calls[1][0]).toContain('SET mysql_inserted = 1');
+    expect(service.execSqlite.mock.calls[1][1]).toEqual([1, 0, null]);
   });
 
   it('falls back to a pending local copy when the MySQL insert fails', async () => {
@@ -143,6 +142,7 @@ describe('DatabaseService result durability', () => {
       mysql_inserted: 0
     };
     const remotelyStoredIds = new Set<string>();
+    service.logCriticalDatabaseIssue = vi.fn();
     service.checkMysqlConnection = vi.fn((_params, success) => success());
     service.execQuery = vi.fn((_query, values, success) => {
       remotelyStoredIds.add(values[0][0].find(value => value === 'stable-ingestion-id'));
@@ -162,6 +162,111 @@ describe('DatabaseService result durability', () => {
     expect(service.execQuery).toHaveBeenCalledTimes(2);
     expect(service.execQuery.mock.calls[0][0]).toContain('ON DUPLICATE KEY UPDATE');
     expect(remotelyStoredIds).toEqual(new Set(['stable-ingestion-id']));
+  });
+
+  it('reads only the API result contract from pending SQLite rows', async () => {
+    const service = createService();
+    service.execSqlite = vi.fn().mockResolvedValue([{
+      id: 19,
+      order_id: 'SAMPLE-019',
+      test_id: 'SAMPLE-019',
+      results: 1250,
+      test_unit: 'cp/mL',
+      machine_used: null,
+      instrument_id: 'ANALYZER-1',
+      tested_by: null,
+      authorised_date_time: null,
+      result_accepted_date_time: null,
+      raw_text: null,
+      facility_id: 999
+    }]);
+
+    const page = await service.fetchPendingIntelisResults(500);
+    const rows = page.rows;
+
+    expect(service.execSqlite.mock.calls[0][0]).toContain('WHERE lims_sync_status = 0');
+    expect(service.execSqlite.mock.calls[0][1]).toEqual([501]);
+    expect(page.hasMore).toBe(false);
+    expect(rows).toEqual([{
+      id: 19,
+      order_id: 'SAMPLE-019',
+      test_id: 'SAMPLE-019',
+      results: '1250',
+      test_unit: 'cp/mL',
+      machine_used: 'ANALYZER-1',
+      instrument_id: 'ANALYZER-1',
+      tested_by: null,
+      authorised_date_time: null,
+      result_accepted_date_time: null,
+      raw_text: null
+    }]);
+    expect(rows[0]).not.toHaveProperty('facility_id');
+  });
+
+  it('defers an identifier group that crosses the server item boundary', async () => {
+    const service = createService();
+    const row = (id: number, orderId: string) => ({
+      id,
+      order_id: orderId,
+      test_id: orderId,
+      results: '1250',
+      test_unit: 'cp/mL',
+      machine_used: 'ANALYZER-1'
+    });
+    service.execSqlite = vi.fn().mockResolvedValue([
+      row(1, 'SAMPLE-1'),
+      row(2, 'SAMPLE-2'),
+      row(3, 'SAMPLE-2')
+    ]);
+
+    const page = await service.fetchPendingIntelisResults(2);
+
+    expect(page.rows.map(result => result.id)).toEqual([1]);
+    expect(page.hasMore).toBe(true);
+    expect(page.oversizedResultCount).toBe(0);
+  });
+
+  it('writes the server-provided status and queues its MySQL projection', async () => {
+    const service = createService();
+    service.execSqlite = vi.fn().mockResolvedValue({ changes: 2 });
+
+    await service.applyIntelisResultAcknowledgements([
+      { id: 7, outcome: 'accepted', limsSyncStatus: 1, reason: 'updated' },
+      { id: 8, outcome: 'rejected', limsSyncStatus: 2, reason: 'no_matching_sample' }
+    ]);
+
+    const [query, values] = service.execSqlite.mock.calls[0];
+    expect(query).toContain('lims_sync_status = CASE id');
+    expect(query).toContain('mysql_status_synced = 0');
+    expect(query).toContain('WHERE lims_sync_status = 0');
+    expect(values).toEqual([7, 1, 8, 2, 7, 8]);
+  });
+
+  it('projects acknowledged statuses to MySQL by stable ingestion identity', async () => {
+    const service = createService();
+    service.mysqlPool = {};
+    const pendingStatus = {
+      id: 7,
+      ingestion_id: 'stable-ingestion-id',
+      lims_sync_status: 1,
+      lims_sync_date_time: '2026-07-20 16:30:00'
+    };
+    service.execSqlite = vi.fn((query: string) => {
+      if (query.includes('WHERE mysql_status_synced = 0')) return Promise.resolve([pendingStatus]);
+      return Promise.resolve({ changes: 1 });
+    });
+    service.execQuery = vi.fn((_query, _values, success) => success({ affectedRows: 1 }));
+
+    await new Promise<void>((resolve, reject) => {
+      service.resyncIntelisStatusesToMySQL(() => resolve(), reject);
+    });
+
+    expect(service.execQuery.mock.calls[0][0]).toContain('CASE ingestion_id');
+    expect(service.execQuery.mock.calls[0][1]).toContain('stable-ingestion-id');
+    expect(service.execSqlite).toHaveBeenLastCalledWith(
+      expect.stringContaining('SET mysql_status_synced = 1'),
+      [7, 1, '2026-07-20 16:30:00']
+    );
   });
 });
 

@@ -14,6 +14,7 @@ import { LisApiConfig } from '../../interfaces/lis-api-config.interface';
 import { IntelisConnectionService } from '../../services/intelis-connection.service';
 import {
   formatIntelisConnectionCode,
+  getIntelisResultDeliveryLimits,
   IntelisConnectionState,
   isValidIntelisConnectionCode
 } from '../../../../shared/intelis-connection';
@@ -53,6 +54,19 @@ export class SettingsComponent implements OnInit, OnDestroy {
   public intelisBusy: boolean = false;
   public intelisError: string = '';
   public lisConnectionChoice: 'intelis' | 'other' | null = null;
+
+  get intelisResultsEnabled(): boolean {
+    return !!getIntelisResultDeliveryLimits(this.intelisConnectionState.connection);
+  }
+
+  scopeLabel(scope: string): string {
+    const labels: Record<string, string> = {
+      'connection:read': 'Read connection details',
+      'results:write': 'Send results',
+      'telemetry:write': 'Send usage statistics'
+    };
+    return labels[scope] || scope.replace(/[:_-]+/g, ' ');
+  }
 
   get sectionSetupStatus(): Record<string, boolean> {
     const common = this.settingsForm?.get('commonSettings');

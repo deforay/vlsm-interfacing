@@ -1,6 +1,6 @@
-# Local Telemetry Storage
+# Local Usage Statistics Storage
 
-Telemetry is an additive, PII-free operational event journal. It does not replace
+Usage statistics are stored as an additive, PII-free operational event journal. They do not replace
 the existing `orders`, `raw_data`, or `app_log` contracts.
 
 ## Persistence flow
@@ -11,7 +11,7 @@ the existing `orders`, `raw_data`, or `app_log` contracts.
 4. Rows with `mysql_inserted = 0` remain queued in SQLite and are retried.
 5. `event_id` is stable across both databases and makes retries idempotent.
 
-The future remote telemetry uploader will use `remote_uploaded_at` and
+The future remote reporting uploader will use `remote_uploaded_at` and
 `remote_batch_id` independently of MySQL replication.
 
 ## Data contract

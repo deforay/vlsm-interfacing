@@ -244,6 +244,7 @@ export class ConsoleComponent implements OnInit, AfterViewInit, OnDestroy {
       that.fetchRecentResults();
       that.resyncTestResultsToMySQL();
       that.resyncTelemetryToMySQL();
+      that.resyncIntelisStatusesToMySQL();
     }, BACKGROUND_INTERVAL_MS.RESULT_REFRESH);
 
     // Pull LIMS sync status from MySQL into SQLite every 30s. Any external
@@ -839,12 +840,16 @@ export class ConsoleComponent implements OnInit, AfterViewInit, OnDestroy {
     }
   }
 
+  resyncIntelisStatusesToMySQL() {
+    this.utilitiesService.resyncIntelisStatusesToMySQL(() => {}, () => {});
+  }
+
   resyncTelemetryToMySQL() {
     if (!this.mysqlConnected) return;
 
     this.utilitiesService.resyncTelemetryToMySQL(
       (message: string) => console.log(message),
-      (error: any) => console.error('Telemetry MySQL resync failed:', error)
+      (error: any) => console.error('Usage statistics MySQL synchronization failed:', error)
     );
   }
 

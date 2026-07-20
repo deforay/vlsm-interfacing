@@ -48,8 +48,10 @@ function testFreshInstallation(migrations, temporaryDirectory) {
     assert(orderColumns.some(column => column.name === 'mysql_inserted'));
     assert(orderColumns.some(column => column.name === 'notes'));
     assert(orderColumns.some(column => column.name === 'ingestion_id'));
+    assert(orderColumns.some(column => column.name === 'mysql_status_synced'));
     const orderIndexes = all(database, 'PRAGMA index_list(orders)');
     assert(orderIndexes.some(index => index.name === 'idx_orders_ingestion_id' && index.unique === 1));
+    assert(orderIndexes.some(index => index.name === 'idx_orders_mysql_status_pending'));
     assert(rawDataColumns.some(column => column.name === 'instrument_id'));
     assert(rawDataColumns.some(column => column.name === 'mysql_inserted'));
     assert(appLogColumns.some(column => column.name === 'log_type'));
@@ -78,12 +80,13 @@ function testLegacyUpgrade(migrations, temporaryDirectory) {
 
     applyMigrations(database, migrations.slice(1));
 
-    const orders = all(database, "SELECT order_id, mysql_inserted, notes, ingestion_id FROM orders WHERE order_id = 'LEGACY-001'");
+    const orders = all(database, "SELECT order_id, mysql_inserted, mysql_status_synced, notes, ingestion_id FROM orders WHERE order_id = 'LEGACY-001'");
     const rawData = all(database, "SELECT machine, instrument_id, mysql_inserted FROM raw_data WHERE machine = 'ANALYZER-OLD'");
     const appLogs = all(database, "SELECT log, category FROM app_log WHERE log = 'legacy log'");
     assert.equal(orders.length, 1);
     assert.equal(orders[0].order_id, 'LEGACY-001');
     assert.equal(orders[0].mysql_inserted, 1);
+    assert.equal(orders[0].mysql_status_synced, 1);
     assert.equal(orders[0].notes, null);
     assert.match(orders[0].ingestion_id, /^[a-f0-9]{32}$/);
     assert.deepEqual(rawData, [{ machine: 'ANALYZER-OLD', instrument_id: 'ANALYZER-OLD', mysql_inserted: 0 }]);

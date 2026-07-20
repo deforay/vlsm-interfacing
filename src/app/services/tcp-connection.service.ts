@@ -375,7 +375,7 @@ export class TcpConnectionService implements OnDestroy {
     outcome: 'success' | 'failed' | 'started',
     failureCode?: string
   ): void {
-    // Telemetry is intentionally fire-and-forget: an unavailable reporting
+    // Usage reporting is intentionally fire-and-forget: an unavailable reporting
     // database must never affect the analyzer connection lifecycle.
     void this.databaseService.recordTelemetryEvent({
       eventType,

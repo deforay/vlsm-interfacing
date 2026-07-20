@@ -3,9 +3,11 @@ import { IntelisConnectionService } from './intelis-connection.service';
 import {
   buildIntelisApiUrl,
   formatIntelisConnectionCode,
+  getIntelisResultDeliveryLimits,
   isValidIntelisConnectionCode,
   normalizeIntelisBaseUrl,
-  normalizeIntelisConnectionCode
+  normalizeIntelisConnectionCode,
+  planIntelisResultBatches
 } from '../../../shared/intelis-connection';
 
 describe('InteLIS URL contract', () => {
@@ -13,12 +15,61 @@ describe('InteLIS URL contract', () => {
     expect(normalizeIntelisBaseUrl(' https://vlsm.test/ ')).toBe('https://vlsm.test');
     expect(buildIntelisApiUrl('https://vlsm.test/', 'connection'))
       .toBe('https://vlsm.test/api/v1/interface/connection');
+    expect(buildIntelisApiUrl('https://vlsm.test/', 'results'))
+      .toBe('https://vlsm.test/api/v1/interface/results');
   });
 
   it('rejects insecure or credential-bearing URLs', () => {
     expect(() => normalizeIntelisBaseUrl('http://vlsm.test')).toThrow(/HTTPS/);
     expect(() => normalizeIntelisBaseUrl('https://user:secret@vlsm.test')).toThrow(/cannot contain credentials/);
     expect(() => normalizeIntelisBaseUrl('https://vlsm.test?facility=1')).toThrow(/query parameters/);
+  });
+});
+
+describe('InteLIS result delivery contract', () => {
+  const row = (id: number, orderId: string, testId = orderId) => ({
+    id,
+    order_id: orderId,
+    test_id: testId,
+    results: '1250',
+    test_unit: 'cp/mL',
+    machine_used: 'ANALYZER-1'
+  });
+
+  it('uses only server-advertised result limits', () => {
+    const profile = {
+      capabilities: { operations: { resultsWrite: true } },
+      limits: { results: { maxItems: 250, maxBodyBytes: 1_000_000 } }
+    } as any;
+
+    expect(getIntelisResultDeliveryLimits(profile)).toEqual({
+      maxItems: 250,
+      maxBodyBytes: 1_000_000
+    });
+    expect(getIntelisResultDeliveryLimits({
+      ...profile,
+      capabilities: { operations: { resultsWrite: false } }
+    })).toBeNull();
+  });
+
+  it('never splits a duplicate-unit comparison group', () => {
+    const plan = planIntelisResultBatches(
+      [row(1, 'SAMPLE-1'), row(2, 'SAMPLE-1'), row(3, 'SAMPLE-2')],
+      { maxItems: 1, maxBodyBytes: 1_000_000 }
+    );
+
+    expect(plan.oversizedResultIds).toEqual([1, 2]);
+    expect(plan.batches).toEqual([[row(3, 'SAMPLE-2')]]);
+  });
+
+  it('packs complete identifier groups within the advertised item limit', () => {
+    const plan = planIntelisResultBatches(
+      [row(1, 'SAMPLE-1'), row(2, 'SAMPLE-1'), row(3, 'SAMPLE-2')],
+      { maxItems: 2, maxBodyBytes: 1_000_000 }
+    );
+
+    expect(plan.batches.map(batch => batch.map(result => result.id))).toEqual([[1, 2], [3]]);
+    expect(plan.oversizedResultIds).toEqual([]);
   });
 });
 
@@ -114,5 +165,29 @@ describe('IntelisConnectionService', () => {
 
     expect(result.ok).toBe(false);
     expect(service.currentState()).toEqual(revoked);
+  });
+
+  it('submits result rows through the credential-owning main process', async () => {
+    const response = {
+      ok: true,
+      data: {
+        status: 'success',
+        imported: 1,
+        results: [{ id: 7, outcome: 'accepted', limsSyncStatus: 1, reason: 'updated' }]
+      }
+    };
+    const { service, electron } = createService(response);
+    const rows = [{
+      id: 7,
+      order_id: 'SAMPLE-7',
+      test_id: 'SAMPLE-7',
+      results: '1250',
+      test_unit: 'cp/mL',
+      machine_used: 'ANALYZER-1'
+    }];
+
+    await service.submitResults(rows);
+
+    expect(electron.ipcRenderer.invoke).toHaveBeenCalledWith('intelis-results-submit', { results: rows });
   });
 });

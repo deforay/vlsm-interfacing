@@ -80,6 +80,25 @@ test.describe('Check Home Page', async () => {
     await firstWindow.getByRole('button', { name: 'Change connection type' }).click();
     await firstWindow.getByRole('button', { name: /My laboratory uses another LIS/ }).click();
     await expect(firstWindow.getByRole('heading', { name: 'Connect to another LIS' })).toBeVisible();
+    await expect(firstWindow.getByText(/telemetry/i)).toHaveCount(0);
+  });
+
+  test('does not submit results without a connected installation', async () => {
+    const result = await firstWindow.evaluate(() =>
+      (window as any).require('electron').ipcRenderer.invoke('intelis-results-submit', {
+        results: [{
+          id: 1,
+          order_id: 'SAMPLE-1',
+          test_id: 'SAMPLE-1',
+          results: '1250',
+          test_unit: 'cp/mL',
+          machine_used: 'ANALYZER-1'
+        }]
+      })
+    );
+
+    expect(result.ok).toBe(false);
+    expect(result.error.code).toBe('not_connected');
   });
 
   test('rejects an insecure InteLIS URL in the main process', async () => {

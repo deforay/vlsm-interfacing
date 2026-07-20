@@ -4,6 +4,7 @@ import { TranslateService } from '@ngx-translate/core';
 import { APP_CONFIG } from '../environments/environment';
 import { v4 as uuidv4 } from 'uuid';
 import { DatabaseService } from './services/database.service';
+import { IntelisResultSyncService } from './services/intelis-result-sync.service';
 
 @Component({
   standalone: false,
@@ -17,7 +18,8 @@ export class AppComponent {
   constructor(
     private electronService: ElectronService,
     private translate: TranslateService,
-    private databaseService: DatabaseService
+    private databaseService: DatabaseService,
+    private intelisResultSync: IntelisResultSyncService
   ) {
     this.translate.setDefaultLang('en');
 
@@ -28,6 +30,7 @@ export class AppComponent {
         category: 'usage',
         outcome: 'started'
       });
+      this.intelisResultSync.start();
       console.log(process.env);
       console.log('Run in electron');
       console.log('Electron ipcRenderer', this.electronService.ipcRenderer);
