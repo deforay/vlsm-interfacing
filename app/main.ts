@@ -80,7 +80,7 @@ function isExpectedSqliteReplayError(err: Error | null): boolean {
 // The core tables every healthy install must have. If any are missing while the
 // versions table claims migrations have been applied, the bookkeeping is stale and
 // we purge it so the runner re-applies the migrations from scratch.
-const SQLITE_CORE_TABLES = ['orders', 'raw_data', 'app_log'];
+const SQLITE_CORE_TABLES = ['orders', 'raw_data', 'app_log', 'telemetry_events', 'usage_statistics_daily'];
 
 function sqliteRun(db: sqlite3.Database, sql: string, params: any[] = []): Promise<{ ok: boolean; err: Error | null }> {
   return new Promise((resolve) => {
@@ -96,6 +96,39 @@ function sqliteAll<T = any>(db: sqlite3.Database, sql: string, params: any[] = [
       resolve(err || !Array.isArray(rows) ? [] : rows);
     });
   });
+}
+
+function splitSqliteMigrationStatements(sql: string): string[] {
+  const statements: string[] = [];
+  let buffer = '';
+  let insideTrigger = false;
+
+  for (const line of sql.split('\n')) {
+    const trimmed = line.trim();
+    if (trimmed.startsWith('--')) continue;
+
+    if (!buffer.trim() && /^CREATE\s+TRIGGER\b/i.test(trimmed)) {
+      insideTrigger = true;
+    }
+    buffer += `${line}\n`;
+
+    // WHY: semicolons inside BEGIN...END belong to one CREATE TRIGGER statement.
+    if (insideTrigger) {
+      if (/^END\s*;\s*$/i.test(trimmed)) {
+        statements.push(buffer.trim().replace(/;\s*$/, ''));
+        buffer = '';
+        insideTrigger = false;
+      }
+      continue;
+    }
+
+    const parts = buffer.split(';');
+    buffer = parts.pop() ?? '';
+    statements.push(...parts.map(statement => statement.trim()).filter(Boolean));
+  }
+
+  if (buffer.trim()) statements.push(buffer.trim());
+  return statements;
 }
 
 async function runSqliteMigrations(db, migrationsPath, forceReplay = false) {
@@ -164,12 +197,7 @@ async function runSqliteMigrations(db, migrationsPath, forceReplay = false) {
     const filePath = path.join(migrationsPath, file);
     const sql = fs.readFileSync(filePath, 'utf8');
 
-    const statements = sql.split('\n')
-      .filter(line => !line.trim().startsWith('--'))
-      .join('\n')
-      .split(';')
-      .map(s => s.trim())
-      .filter(s => s.length > 0);
+    const statements = splitSqliteMigrationStatements(sql);
 
     let migrationFailed = false;
     for (const statement of statements) {

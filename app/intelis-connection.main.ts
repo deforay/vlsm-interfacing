@@ -4,6 +4,8 @@ import * as os from 'os';
 import {
   buildIntelisApiUrl,
   IntelisConnectRequest,
+  IntelisActivityEvent,
+  IntelisActivitySubmissionResponse,
   IntelisConnectionError,
   IntelisConnectionProfile,
   IntelisConnectionState,
@@ -12,10 +14,15 @@ import {
   IntelisResultAcknowledgement,
   IntelisResultRow,
   IntelisResultSubmissionResponse,
+  IntelisUsageSubmissionResponse,
+  IntelisUsageSummary,
+  getIntelisActivityDeliveryLimits,
   getIntelisResultDeliveryLimits,
+  getIntelisUsageDeliveryLimits,
   isValidIntelisConnectionCode,
   normalizeIntelisConnectionCode,
   normalizeIntelisBaseUrl,
+  requestBytes,
   resultRequestBytes
 } from '../shared/intelis-connection';
 
@@ -294,6 +301,122 @@ function validateResultRows(rows: unknown): asserts rows is IntelisResultRow[] {
   }
 }
 
+function validateActivityEvents(events: unknown): asserts events is IntelisActivityEvent[] {
+  const required = ['event_id', 'event_type', 'event_category', 'occurred_at'];
+  const optional = [
+    'instrument_id', 'machine_type', 'protocol', 'connection_mode', 'test_type',
+    'outcome', 'failure_code', 'event_count', 'app_version'
+  ];
+  const allowed = new Set([...required, ...optional]);
+  if (!Array.isArray(events) || events.length === 0) {
+    throw new IntelisApiRequestError('invalid_activity_batch', 'A non-empty activity batch is required.');
+  }
+  for (const event of events) {
+    if (!event || typeof event !== 'object' || Array.isArray(event)) {
+      throw new IntelisApiRequestError('invalid_activity_batch', 'Every activity item must be an object.');
+    }
+    const row = event as Record<string, unknown>;
+    if (
+      Object.keys(row).some(field => !allowed.has(field))
+      || required.some(field => typeof row[field] !== 'string' || row[field] === '')
+      || !/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/.test(String(row['occurred_at']))
+      || optional.filter(field => field !== 'event_count').some(field =>
+        row[field] !== undefined && row[field] !== null && typeof row[field] !== 'string'
+      )
+      || (row['event_count'] !== undefined && (!Number.isInteger(row['event_count']) || Number(row['event_count']) < 1))
+    ) {
+      throw new IntelisApiRequestError('invalid_activity_batch', 'The activity batch contains an invalid item.');
+    }
+  }
+}
+
+function validateUsageSummaries(summaries: unknown): asserts summaries is IntelisUsageSummary[] {
+  const required = [
+    'aggregate_id', 'activity_date', 'total_tests', 'successful_tests', 'failed_tests', 'revision'
+  ];
+  const optional = ['instrument_id', 'machine_type', 'test_type', 'first_test_at', 'last_test_at'];
+  const allowed = new Set([...required, ...optional]);
+  if (!Array.isArray(summaries) || summaries.length === 0) {
+    throw new IntelisApiRequestError('invalid_usage_batch', 'A non-empty usage statistics batch is required.');
+  }
+  for (const summary of summaries) {
+    if (!summary || typeof summary !== 'object' || Array.isArray(summary)) {
+      throw new IntelisApiRequestError('invalid_usage_batch', 'Every usage summary must be an object.');
+    }
+    const row = summary as Record<string, unknown>;
+    const counts = ['total_tests', 'successful_tests', 'failed_tests'].map(field => Number(row[field]));
+    const timestampFields = ['first_test_at', 'last_test_at'];
+    if (
+      Object.keys(row).some(field => !allowed.has(field))
+      || typeof row['aggregate_id'] !== 'string'
+      || !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(row['aggregate_id'])
+      || typeof row['activity_date'] !== 'string'
+      || !/^\d{4}-\d{2}-\d{2}$/.test(row['activity_date'])
+      || ['total_tests', 'successful_tests', 'failed_tests', 'revision'].some(field => !Number.isInteger(row[field]))
+      || counts.some(value => value < 0 || value > 1_000_000)
+      || counts[0] !== counts[1] + counts[2]
+      || Number(row['revision']) < 1
+      || Number(row['revision']) > 4_294_967_295
+      || optional.some(field => row[field] !== undefined && row[field] !== null && typeof row[field] !== 'string')
+      || timestampFields.some(field =>
+        row[field] !== undefined
+        && row[field] !== null
+        && !/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/.test(String(row[field]))
+      )
+      || (typeof row['first_test_at'] === 'string'
+        && typeof row['last_test_at'] === 'string'
+        && row['first_test_at'] > row['last_test_at'])
+    ) {
+      throw new IntelisApiRequestError('invalid_usage_batch', 'The usage statistics batch contains an invalid summary.');
+    }
+  }
+}
+
+function validateActivityResponse(
+  response: IntelisActivitySubmissionResponse,
+  submittedCount: number
+): IntelisActivitySubmissionResponse {
+  if (
+    response?.status !== 'success'
+    || ![response.stored, response.duplicates, response.skipped].every(Number.isInteger)
+    || [response.stored, response.duplicates, response.skipped].some(count => count < 0)
+    || response.stored + response.duplicates + response.skipped !== submittedCount
+  ) {
+    throw new IntelisApiRequestError('invalid_response', 'InteLIS returned an invalid activity acknowledgement.');
+  }
+  return response;
+}
+
+function validateUsageResponse(
+  response: IntelisUsageSubmissionResponse,
+  submitted: IntelisUsageSummary[]
+): IntelisUsageSubmissionResponse {
+  const expected = new Set(submitted.map(row => `${row.aggregate_id}:${row.revision}`));
+  const acknowledged = new Set<string>();
+  const outcomes = new Set(['stored', 'updated', 'duplicate', 'stale', 'rejected']);
+  const reportedCounts = [response?.stored, response?.updated, response?.duplicates, response?.stale, response?.rejected];
+  if (
+    response?.status !== 'success'
+    || !Array.isArray(response.summaries)
+    || !reportedCounts.every(Number.isInteger)
+    || reportedCounts.some(count => Number(count) < 0)
+    || reportedCounts.reduce((total, count) => total + Number(count), 0) !== submitted.length
+  ) {
+    throw new IntelisApiRequestError('invalid_response', 'InteLIS returned an invalid usage statistics response.');
+  }
+  for (const item of response.summaries) {
+    const key = `${item?.aggregate_id}:${item?.revision}`;
+    if (!expected.has(key) || acknowledged.has(key) || !outcomes.has(item?.outcome)) {
+      throw new IntelisApiRequestError('invalid_response', 'InteLIS returned an invalid usage statistics acknowledgement.');
+    }
+    acknowledged.add(key);
+  }
+  if (acknowledged.size !== expected.size) {
+    throw new IntelisApiRequestError('invalid_response', 'InteLIS did not acknowledge every usage summary.');
+  }
+  return response;
+}
+
 export function registerIntelisConnectionIpc(store: StoreLike): void {
   ipcMain.handle('intelis-connection-get', () => ({
     ok: true,
@@ -459,6 +582,101 @@ export function registerIntelisConnectionIpc(store: StoreLike): void {
         ok: false,
         error: failure
       } satisfies IntelisIpcResult<IntelisResultSubmissionResponse>;
+    }
+  });
+
+  ipcMain.handle('intelis-activity-submit', async (_event, request: { events?: IntelisActivityEvent[] }) => {
+    const stored = getStoredConnection(store);
+    if (!stored) {
+      return errorResult(new IntelisApiRequestError('not_connected', 'This Interface Tool is not connected to InteLIS.'));
+    }
+
+    try {
+      const credential = decryptCredential(stored.encryptedCredential);
+      let limits = getIntelisActivityDeliveryLimits(stored.connection);
+      if (!limits) {
+        stored.connection = await fetchConnection(stored.baseUrl, credential);
+        limits = getIntelisActivityDeliveryLimits(stored.connection);
+        store.set(CONNECTION_KEY, stored);
+      }
+      if (!limits) {
+        throw new IntelisApiRequestError('activity_not_supported', 'This InteLIS server does not accept instrument activity.');
+      }
+
+      const events = request?.events;
+      validateActivityEvents(events);
+      if (events.length > limits.maxItems || requestBytes('events', events) > limits.maxBodyBytes) {
+        throw new IntelisApiRequestError('activity_batch_too_large', 'The activity batch exceeds the server limits.');
+      }
+      const response = await requestJson<IntelisActivitySubmissionResponse>(
+        buildIntelisApiUrl(stored.baseUrl, 'activity'),
+        {
+          method: 'POST',
+          headers: { Authorization: `Bearer ${credential}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ events })
+        }
+      );
+      stored.health = 'connected';
+      stored.lastCheckedAt = new Date().toISOString();
+      delete stored.lastError;
+      store.set(CONNECTION_KEY, stored);
+      return ({ ok: true, data: validateActivityResponse(response, events.length) } satisfies IntelisIpcResult<IntelisActivitySubmissionResponse>);
+    } catch (error) {
+      const result = errorResult(error);
+      stored.health = result.error?.httpStatus === 401 ? 'revoked' : 'attention';
+      stored.lastError = result.error;
+      stored.lastCheckedAt = new Date().toISOString();
+      store.set(CONNECTION_KEY, stored);
+      return result satisfies IntelisIpcResult<IntelisActivitySubmissionResponse>;
+    }
+  });
+
+  ipcMain.handle('intelis-usage-statistics-submit', async (_event, request: { summaries?: IntelisUsageSummary[] }) => {
+    const stored = getStoredConnection(store);
+    if (!stored) {
+      return errorResult(new IntelisApiRequestError('not_connected', 'This Interface Tool is not connected to InteLIS.'));
+    }
+
+    try {
+      const credential = decryptCredential(stored.encryptedCredential);
+      let limits = getIntelisUsageDeliveryLimits(stored.connection);
+      if (!limits) {
+        stored.connection = await fetchConnection(stored.baseUrl, credential);
+        limits = getIntelisUsageDeliveryLimits(stored.connection);
+        store.set(CONNECTION_KEY, stored);
+      }
+      if (!limits) {
+        throw new IntelisApiRequestError(
+          'usage_statistics_not_supported',
+          'This InteLIS server does not accept usage statistics.'
+        );
+      }
+
+      const summaries = request?.summaries;
+      validateUsageSummaries(summaries);
+      if (summaries.length > limits.maxItems || requestBytes('summaries', summaries) > limits.maxBodyBytes) {
+        throw new IntelisApiRequestError('usage_batch_too_large', 'The usage statistics batch exceeds the server limits.');
+      }
+      const response = await requestJson<IntelisUsageSubmissionResponse>(
+        buildIntelisApiUrl(stored.baseUrl, 'usage-statistics'),
+        {
+          method: 'POST',
+          headers: { Authorization: `Bearer ${credential}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ summaries })
+        }
+      );
+      stored.health = 'connected';
+      stored.lastCheckedAt = new Date().toISOString();
+      delete stored.lastError;
+      store.set(CONNECTION_KEY, stored);
+      return ({ ok: true, data: validateUsageResponse(response, summaries) } satisfies IntelisIpcResult<IntelisUsageSubmissionResponse>);
+    } catch (error) {
+      const result = errorResult(error);
+      stored.health = result.error?.httpStatus === 401 ? 'revoked' : 'attention';
+      stored.lastError = result.error;
+      stored.lastCheckedAt = new Date().toISOString();
+      store.set(CONNECTION_KEY, stored);
+      return result satisfies IntelisIpcResult<IntelisUsageSubmissionResponse>;
     }
   });
 

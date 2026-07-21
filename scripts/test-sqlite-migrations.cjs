@@ -17,9 +17,40 @@ function readMigrations() {
     }));
 }
 
+function splitMigrationStatements(sql) {
+  const statements = [];
+  let buffer = '';
+  let insideTrigger = false;
+
+  for (const line of sql.split('\n')) {
+    const trimmed = line.trim();
+    if (trimmed.startsWith('--')) continue;
+    if (!buffer.trim() && /^CREATE\s+TRIGGER\b/i.test(trimmed)) insideTrigger = true;
+    buffer += `${line}\n`;
+
+    if (insideTrigger) {
+      if (/^END\s*;\s*$/i.test(trimmed)) {
+        statements.push(buffer.trim().replace(/;\s*$/, ''));
+        buffer = '';
+        insideTrigger = false;
+      }
+      continue;
+    }
+
+    const parts = buffer.split(';');
+    buffer = parts.pop() ?? '';
+    statements.push(...parts.map(statement => statement.trim()).filter(Boolean));
+  }
+
+  if (buffer.trim()) statements.push(buffer.trim());
+  return statements;
+}
+
 function applyMigrations(database, migrations) {
   for (const migration of migrations) {
-    database.exec(migration.sql);
+    for (const statement of splitMigrationStatements(migration.sql)) {
+      database.exec(statement);
+    }
   }
 }
 
@@ -39,11 +70,13 @@ function testFreshInstallation(migrations, temporaryDirectory) {
     assert(tableNames.includes('raw_data'));
     assert(tableNames.includes('app_log'));
     assert(tableNames.includes('telemetry_events'));
+    assert(tableNames.includes('usage_statistics_daily'));
 
     const orderColumns = all(database, 'PRAGMA table_info(orders)');
     const rawDataColumns = all(database, 'PRAGMA table_info(raw_data)');
     const appLogColumns = all(database, 'PRAGMA table_info(app_log)');
     const telemetryColumns = all(database, 'PRAGMA table_info(telemetry_events)');
+    const dailyUsageColumns = all(database, 'PRAGMA table_info(usage_statistics_daily)');
     assert(orderColumns.some(column => column.name === 'instrument_id'));
     assert(orderColumns.some(column => column.name === 'mysql_inserted'));
     assert(orderColumns.some(column => column.name === 'notes'));
@@ -62,9 +95,37 @@ function testFreshInstallation(migrations, temporaryDirectory) {
     assert(telemetryColumns.some(column => column.name === 'event_id' && column.notnull === 1));
     assert(telemetryColumns.some(column => column.name === 'mysql_inserted'));
     assert(telemetryColumns.some(column => column.name === 'remote_uploaded_at'));
+    assert(telemetryColumns.some(column => column.name === 'source_installation_id'));
     const telemetryIndexes = all(database, 'PRAGMA index_list(telemetry_events)');
     assert(telemetryIndexes.some(index => index.name === 'idx_telemetry_events_event_id' && index.unique === 1));
     assert(telemetryIndexes.some(index => index.name === 'idx_telemetry_events_mysql_pending'));
+    assert(dailyUsageColumns.some(column => column.name === 'aggregate_id' && column.notnull === 1));
+    assert(dailyUsageColumns.some(column => column.name === 'mysql_synced_revision'));
+
+    const insertEvent = database.prepare(`
+      INSERT INTO telemetry_events (
+        event_id, event_type, event_category, occurred_at, source_installation_id,
+        instrument_id, machine_type, test_type, outcome, event_count
+      ) VALUES (?, ?, 'test', ?, 'interface-test', 'ANALYZER-1', 'cobas', 'HIVVL', ?, ?)`);
+    insertEvent.run('event-1', 'test.processed', '2026-07-21 08:15:00', 'success', 1);
+    insertEvent.run('event-2', 'test.processed', '2026-07-21 17:45:00', 'failed', 1);
+    insertEvent.run('event-3', 'test.processing_failed', '2026-07-21 18:00:00', 'failed', 1);
+
+    const summaries = all(database, `
+      SELECT total_tests, successful_tests, failed_tests, first_test_at, last_test_at, revision
+      FROM usage_statistics_daily`);
+    assert.deepEqual(summaries, [{
+      total_tests: 2,
+      successful_tests: 1,
+      failed_tests: 1,
+      first_test_at: '2026-07-21 08:15:00',
+      last_test_at: '2026-07-21 17:45:00',
+      revision: 2
+    }]);
+    assert.throws(() => {
+      insertEvent.run('event-2', 'test.processed', '2026-07-21 19:00:00', 'success', 1);
+    }, /UNIQUE constraint failed/);
+    assert.equal(all(database, 'SELECT total_tests FROM usage_statistics_daily')[0].total_tests, 2);
   } finally {
     database.close();
   }
@@ -93,6 +154,38 @@ function testLegacyUpgrade(migrations, temporaryDirectory) {
     assert.deepEqual(appLogs, [{ log: 'legacy log', category: 'operational' }]);
     const telemetryTables = all(database, "SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'telemetry_events'");
     assert.deepEqual(telemetryTables, [{ name: 'telemetry_events' }]);
+    const usageTables = all(database, "SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'usage_statistics_daily'");
+    assert.deepEqual(usageTables, [{ name: 'usage_statistics_daily' }]);
+  } finally {
+    database.close();
+  }
+}
+
+function testDailyUsageBackfill(migrations, temporaryDirectory) {
+  const database = new DatabaseSync(path.join(temporaryDirectory, 'usage-backfill.db'));
+  try {
+    applyMigrations(database, migrations.slice(0, -1));
+    database.exec(`
+      INSERT INTO telemetry_events (
+        event_id, event_type, event_category, occurred_at, instrument_id,
+        machine_type, test_type, outcome, event_count
+      ) VALUES
+        ('backfill-1', 'test.processed', 'test', '2026-07-20 09:00:00', 'ANALYZER-2', 'cobas', 'HIVVL', 'success', 1),
+        ('backfill-2', 'test.processed', 'test', '2026-07-20 10:00:00', 'ANALYZER-2', 'cobas', 'HIVVL', 'failed', 1),
+        ('backfill-3', 'test.processing_failed', 'failure', '2026-07-20 11:00:00', 'ANALYZER-2', 'cobas', 'HIVVL', 'failed', 1)
+    `);
+
+    applyMigrations(database, migrations.slice(-1));
+
+    const summaries = all(database, `
+      SELECT total_tests, successful_tests, failed_tests, source_installation_id
+      FROM usage_statistics_daily`);
+    assert.deepEqual(summaries, [{
+      total_tests: 2,
+      successful_tests: 1,
+      failed_tests: 1,
+      source_installation_id: ''
+    }]);
   } finally {
     database.close();
   }
@@ -143,6 +236,7 @@ async function main() {
     assert(migrations.length > 0, 'Expected at least one SQLite migration');
     testFreshInstallation(migrations, temporaryDirectory);
     testLegacyUpgrade(migrations, temporaryDirectory);
+    testDailyUsageBackfill(migrations, temporaryDirectory);
     await testOnlineBackupIncludesWalTransactions(temporaryDirectory);
     console.log(`SQLite migration tests passed (${migrations.length} migrations).`);
   } finally {

@@ -103,6 +103,66 @@ export interface IntelisResultBatchPlan {
   oversizedResultIds: number[];
 }
 
+export interface IntelisActivityEvent {
+  event_id: string;
+  event_type: string;
+  event_category: string;
+  occurred_at: string;
+  instrument_id?: string | null;
+  machine_type?: string | null;
+  protocol?: string | null;
+  connection_mode?: string | null;
+  test_type?: string | null;
+  outcome?: string | null;
+  failure_code?: string | null;
+  event_count?: number;
+  app_version?: string | null;
+}
+
+export interface IntelisActivitySubmissionResponse {
+  status: 'success';
+  stored: number;
+  duplicates: number;
+  skipped: number;
+}
+
+export interface IntelisUsageSummary {
+  aggregate_id: string;
+  activity_date: string;
+  instrument_id?: string | null;
+  machine_type?: string | null;
+  test_type?: string | null;
+  total_tests: number;
+  successful_tests: number;
+  failed_tests: number;
+  first_test_at?: string | null;
+  last_test_at?: string | null;
+  revision: number;
+}
+
+export type IntelisUsageSummaryOutcome = 'stored' | 'updated' | 'duplicate' | 'stale' | 'rejected';
+
+export interface IntelisUsageSummaryAcknowledgement {
+  aggregate_id: string;
+  revision: number;
+  outcome: IntelisUsageSummaryOutcome;
+}
+
+export interface IntelisUsageSubmissionResponse {
+  status: 'success';
+  stored: number;
+  updated: number;
+  duplicates: number;
+  stale: number;
+  rejected: number;
+  summaries: IntelisUsageSummaryAcknowledgement[];
+}
+
+export interface IntelisDeliveryLimits {
+  maxItems: number;
+  maxBodyBytes: number;
+}
+
 export const INTELIS_CONNECTION_CODE_LENGTH = 12;
 
 export function normalizeIntelisConnectionCode(value: string): string {
@@ -141,37 +201,54 @@ export function normalizeIntelisBaseUrl(value: string): string {
   return parsed.toString().replace(/\/$/, '');
 }
 
-export function buildIntelisApiUrl(baseUrl: string, endpoint: 'activate' | 'connection' | 'results'): string {
+export function buildIntelisApiUrl(
+  baseUrl: string,
+  endpoint: 'activate' | 'connection' | 'results' | 'activity' | 'usage-statistics'
+): string {
   return `${normalizeIntelisBaseUrl(baseUrl)}/api/v1/interface/${endpoint}`;
+}
+
+function getIntelisDeliveryLimits(
+  profile: IntelisConnectionProfile | undefined,
+  operation: string,
+  limitName: string
+): IntelisDeliveryLimits | null {
+  const operations = profile?.capabilities?.['operations'];
+  const limits = profile?.limits?.[limitName];
+  if (
+    !operations
+    || typeof operations !== 'object'
+    || (operations as Record<string, unknown>)[operation] !== true
+    || !limits
+    || typeof limits !== 'object'
+  ) {
+    return null;
+  }
+
+  const maxItems = (limits as Record<string, unknown>)['maxItems'];
+  const maxBodyBytes = (limits as Record<string, unknown>)['maxBodyBytes'];
+  if (!Number.isInteger(maxItems) || !Number.isInteger(maxBodyBytes) || Number(maxItems) <= 0 || Number(maxBodyBytes) <= 0) {
+    return null;
+  }
+  return { maxItems: Number(maxItems), maxBodyBytes: Number(maxBodyBytes) };
+}
+
+export function getIntelisActivityDeliveryLimits(profile?: IntelisConnectionProfile): IntelisDeliveryLimits | null {
+  return getIntelisDeliveryLimits(profile, 'activityWrite', 'activity');
+}
+
+export function getIntelisUsageDeliveryLimits(profile?: IntelisConnectionProfile): IntelisDeliveryLimits | null {
+  return getIntelisDeliveryLimits(profile, 'usageStatisticsWrite', 'usageStatistics');
 }
 
 export function getIntelisResultDeliveryLimits(
   profile?: IntelisConnectionProfile
 ): IntelisResultDeliveryLimits | null {
-  const operations = profile?.capabilities?.['operations'];
-  const resultLimits = profile?.limits?.['results'];
-  if (
-    !operations
-    || typeof operations !== 'object'
-    || (operations as Record<string, unknown>)['resultsWrite'] !== true
-    || !resultLimits
-    || typeof resultLimits !== 'object'
-  ) {
-    return null;
-  }
+  return getIntelisDeliveryLimits(profile, 'resultsWrite', 'results');
+}
 
-  const maxItems = (resultLimits as Record<string, unknown>)['maxItems'];
-  const maxBodyBytes = (resultLimits as Record<string, unknown>)['maxBodyBytes'];
-  if (
-    !Number.isInteger(maxItems)
-    || !Number.isInteger(maxBodyBytes)
-    || Number(maxItems) <= 0
-    || Number(maxBodyBytes) <= 0
-  ) {
-    return null;
-  }
-
-  return { maxItems: Number(maxItems), maxBodyBytes: Number(maxBodyBytes) };
+export function requestBytes(field: 'events' | 'summaries', rows: unknown[]): number {
+  return new TextEncoder().encode(JSON.stringify({ [field]: rows })).byteLength;
 }
 
 export function planIntelisResultBatches(

@@ -132,6 +132,24 @@ describe('DatabaseService result durability', () => {
     expect(service.execSqlite.mock.calls[0][0]).not.toContain('telemetry_machine_type');
   });
 
+  it('uses analyzer completion time for the usage event when available', async () => {
+    const service = createService();
+    service.checkMysqlConnection = vi.fn((_params, _success, failure) => failure(new Error('offline')));
+    service.execSqlite = vi.fn().mockResolvedValue({ lastID: 1 });
+
+    await new Promise<void>((resolve, reject) => {
+      service.recordTestResults({
+        ...sampleResult,
+        analysed_date_time: '2026-07-21 14:30:00',
+        authorised_date_time: '2026-07-21 14:35:00'
+      }, resolve, reject);
+    });
+
+    expect(service.recordTelemetryEvent).toHaveBeenCalledWith(
+      expect.objectContaining({ occurredAt: '2026-07-21 14:30:00' })
+    );
+  });
+
   it('retries a pending row with the same idempotency identity', async () => {
     const service = createService();
     const pendingRecord = {
@@ -289,6 +307,7 @@ describe('DatabaseService telemetry durability', () => {
       instrumentId: 'ANALYZER-1',
       testType: 'HIVVL',
       outcome: 'success',
+      occurredAt: '2026-07-21 14:30:00',
       orderId: 'MUST-NOT-BE-STORED',
       result: 'MUST-NOT-BE-STORED'
     } as any);
@@ -300,6 +319,8 @@ describe('DatabaseService telemetry durability', () => {
     expect(query).toContain('`mysql_inserted`');
     expect(values).toContain('LAB-001');
     expect(values).toContain('ANALYZER-1');
+    expect(values).toContain('2026-07-21 14:30:00');
+    expect(values.some(value => typeof value === 'string' && value.startsWith('interface-'))).toBe(true);
     expect(values).not.toContain('MUST-NOT-BE-STORED');
   });
 
@@ -337,7 +358,8 @@ describe('DatabaseService telemetry durability', () => {
       mysql_inserted: 0
     };
     service.execSqlite = vi.fn((query: string) => {
-      if (query.startsWith('SELECT')) return Promise.resolve([pending]);
+      if (query.includes('FROM telemetry_events')) return Promise.resolve([pending]);
+      if (query.includes('FROM usage_statistics_daily')) return Promise.resolve([]);
       return Promise.resolve({ changes: 1 });
     });
     service.execQuery = vi.fn((_query, values, success) => success({ affectedRows: 1 }));
@@ -347,7 +369,7 @@ describe('DatabaseService telemetry durability', () => {
     });
 
     expect(service.execQuery.mock.calls[0][1][0][0]).toContain(pending.event_id);
-    expect(service.execSqlite).toHaveBeenLastCalledWith(
+    expect(service.execSqlite).toHaveBeenCalledWith(
       'UPDATE telemetry_events SET mysql_inserted = 1 WHERE id IN (?)',
       [11]
     );
@@ -361,6 +383,84 @@ describe('DatabaseService telemetry durability', () => {
       eventType: 'application.started',
       category: 'usage'
     })).resolves.toBe(false);
+  });
+
+  it('copies absolute daily summaries to MySQL and marks the exact revision', async () => {
+    const service = createService();
+    service.mysqlPool = {};
+    const summary = {
+      id: 12,
+      aggregate_id: 'aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee',
+      activity_date: '2026-07-21',
+      source_installation_id: 'interface-source-1',
+      lab_id: 'LAB-001',
+      instrument_id: 'ANALYZER-1',
+      machine_type: 'cobas',
+      test_type: 'HIVVL',
+      total_tests: 25,
+      successful_tests: 23,
+      failed_tests: 2,
+      first_test_at: '2026-07-21 08:00:00',
+      last_test_at: '2026-07-21 17:00:00',
+      revision: 25,
+      updated_at: '2026-07-21 17:00:00'
+    };
+    service.execSqlite = vi.fn((query: string) => {
+      if (query.includes('SELECT * FROM usage_statistics_daily')) return Promise.resolve([summary]);
+      return Promise.resolve({ changes: 1 });
+    });
+    service.execQuery = vi.fn((_query, _values, success) => success({ affectedRows: 1 }));
+
+    await new Promise<void>((resolve, reject) => {
+      service.resyncUsageStatisticsDailyToMySQL(() => resolve(), reject);
+    });
+
+    expect(service.execQuery.mock.calls[0][0]).toContain('ON DUPLICATE KEY UPDATE');
+    expect(service.execQuery.mock.calls[0][0]).toContain('VALUES(`revision`) >= `revision`');
+    expect(service.execQuery.mock.calls[0][1][0][0]).toContain(summary.aggregate_id);
+    expect(service.execSqlite).toHaveBeenLastCalledWith(
+      'UPDATE usage_statistics_daily SET mysql_synced_revision = ? WHERE id = ? AND revision = ?',
+      [25, 12, 25]
+    );
+  });
+
+  it('exposes only allowed activity fields and acknowledges stable event IDs', async () => {
+    const service = createService();
+    service.execSqlite = vi.fn().mockResolvedValueOnce([{
+      event_id: 'event-1',
+      event_type: 'test.processed',
+      event_category: 'test',
+      occurred_at: '2026-07-21 14:30:00',
+      event_count: 1,
+      lab_id: 'MUST-NOT-LEAVE',
+      source_installation_id: 'MUST-NOT-LEAVE'
+    }]).mockResolvedValueOnce({ changes: 1 });
+
+    const events = await service.fetchPendingIntelisActivity(100);
+    expect(events[0]).not.toHaveProperty('lab_id');
+    expect(events[0]).not.toHaveProperty('source_installation_id');
+    await service.acknowledgeIntelisActivity(events);
+
+    expect(service.execSqlite).toHaveBeenLastCalledWith(
+      expect.stringContaining('event_id IN (?)'),
+      ['event-1']
+    );
+  });
+
+  it('acknowledges only the exact daily revision sent', async () => {
+    const service = createService();
+    service.execSqlite = vi.fn().mockResolvedValue({ changes: 1 });
+
+    await service.acknowledgeIntelisUsageStatistics([{
+      aggregate_id: 'aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee',
+      revision: 17,
+      outcome: 'updated'
+    }]);
+
+    expect(service.execSqlite).toHaveBeenCalledWith(
+      expect.stringContaining('WHERE aggregate_id = ? AND revision = ?'),
+      [17, 'aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee', 17]
+    );
   });
 });
 

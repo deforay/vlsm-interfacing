@@ -3,10 +3,14 @@ import { BehaviorSubject, Observable } from 'rxjs';
 import { ElectronService } from '../core/services';
 import {
   IntelisConnectRequest,
+  IntelisActivityEvent,
+  IntelisActivitySubmissionResponse,
   IntelisConnectionState,
   IntelisIpcResult,
   IntelisResultRow,
-  IntelisResultSubmissionResponse
+  IntelisResultSubmissionResponse,
+  IntelisUsageSubmissionResponse,
+  IntelisUsageSummary
 } from '../../../shared/intelis-connection';
 
 @Injectable({ providedIn: 'root' })
@@ -59,6 +63,38 @@ export class IntelisConnectionService {
           code: 'connection_unavailable',
           message: 'The result submission service is unavailable.'
         }
+      };
+    }
+  }
+
+  async submitActivity(events: IntelisActivityEvent[]): Promise<IntelisIpcResult<IntelisActivitySubmissionResponse>> {
+    return this.invokeSubmission('intelis-activity-submit', { events }, 'activity');
+  }
+
+  async submitUsageStatistics(
+    summaries: IntelisUsageSummary[]
+  ): Promise<IntelisIpcResult<IntelisUsageSubmissionResponse>> {
+    return this.invokeSubmission('intelis-usage-statistics-submit', { summaries }, 'usage statistics');
+  }
+
+  private async invokeSubmission<T>(
+    channel: string,
+    payload: unknown,
+    label: string
+  ): Promise<IntelisIpcResult<T>> {
+    if (!this.electron.isElectron || !this.electron.ipcRenderer) {
+      return {
+        ok: false,
+        error: { code: 'desktop_required', message: `${label} submission is available in the desktop application.` }
+      };
+    }
+
+    try {
+      return await this.electron.ipcRenderer.invoke(channel, payload);
+    } catch {
+      return {
+        ok: false,
+        error: { code: 'connection_unavailable', message: `The ${label} submission service is unavailable.` }
       };
     }
   }
