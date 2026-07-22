@@ -5,6 +5,7 @@ import { APP_CONFIG } from '../environments/environment';
 import { v4 as uuidv4 } from 'uuid';
 import { DatabaseService } from './services/database.service';
 import { IntelisResultSyncService } from './services/intelis-result-sync.service';
+import { IntelisUsageSyncService } from './services/intelis-usage-sync.service';
 
 @Component({
   standalone: false,
@@ -19,7 +20,8 @@ export class AppComponent {
     private electronService: ElectronService,
     private translate: TranslateService,
     private databaseService: DatabaseService,
-    private intelisResultSync: IntelisResultSyncService
+    private intelisResultSync: IntelisResultSyncService,
+    private intelisUsageSync: IntelisUsageSyncService
   ) {
     this.translate.setDefaultLang('en');
 
@@ -31,6 +33,7 @@ export class AppComponent {
         outcome: 'started'
       });
       this.intelisResultSync.start();
+      this.intelisUsageSync.start();
       console.log(process.env);
       console.log('Run in electron');
       console.log('Electron ipcRenderer', this.electronService.ipcRenderer);

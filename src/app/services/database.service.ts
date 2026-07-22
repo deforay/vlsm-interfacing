@@ -6,7 +6,13 @@ import { LoggingService } from './logging.service';
 import { Observable, Subject } from 'rxjs';
 import { v4 as uuidv4 } from 'uuid';
 import { TelemetryEventInput } from '../interfaces/telemetry-event.interface';
-import { IntelisResultAcknowledgement, IntelisResultRow } from '../../../shared/intelis-connection';
+import {
+  IntelisActivityEvent,
+  IntelisResultAcknowledgement,
+  IntelisResultRow,
+  IntelisUsageSummary,
+  IntelisUsageSummaryAcknowledgement
+} from '../../../shared/intelis-connection';
 
 export interface ApplicationLogStoreCleanupPreview {
   available: boolean;
@@ -89,6 +95,7 @@ export class DatabaseService {
   private static readonly MYSQL_APP_LOG_RESYNC_BATCH_SIZE = 25;
   private static readonly MYSQL_ORDER_RESYNC_BATCH_SIZE = 25;
   private static readonly MYSQL_TELEMETRY_RESYNC_LIMIT = 500;
+  private static readonly MYSQL_USAGE_STATISTICS_RESYNC_LIMIT = 500;
   private static readonly SQLITE_LOG_INSERT_BATCH_SIZE = 100;
   private static readonly LOCAL_LOG_RETENTION_ACTIVE_DAYS = 30;
   public static readonly MINIMUM_LOG_RETENTION_ACTIVE_DAYS = 7;
@@ -142,6 +149,7 @@ export class DatabaseService {
     'event_category',
     'occurred_at',
     'lab_id',
+    'source_installation_id',
     'instrument_id',
     'machine_type',
     'protocol',
@@ -159,10 +167,28 @@ export class DatabaseService {
     ...DatabaseService.MYSQL_TELEMETRY_COLUMNS,
     'mysql_inserted',
   ];
+  private static readonly MYSQL_USAGE_STATISTICS_COLUMNS = [
+    'aggregate_id',
+    'activity_date',
+    'source_installation_id',
+    'lab_id',
+    'instrument_id',
+    'machine_type',
+    'test_type',
+    'total_tests',
+    'successful_tests',
+    'failed_tests',
+    'first_test_at',
+    'last_test_at',
+    'revision',
+    'updated_at',
+  ];
   private readonly path: any = (window as any).require('path');
   private lastLocalLogPruneAt = 0;
   private readonly resultRecordedSubject = new Subject<void>();
   public readonly resultRecorded$ = this.resultRecordedSubject.asObservable();
+  private readonly usageRecordedSubject = new Subject<void>();
+  public readonly usageRecorded$ = this.usageRecordedSubject.asObservable();
 
   constructor(private readonly electronService: ElectronService,
     private readonly store: ElectronStoreService,
@@ -888,6 +914,9 @@ export class DatabaseService {
       .then((sqliteResult) => {
         this.replicateOrderToMySQL({ ...sqliteRecord, id: sqliteResult.lastID });
         this.resultRecordedSubject.next();
+        const testOccurredAt = orderData.analysed_date_time
+          || orderData.authorised_date_time
+          || orderData.result_accepted_date_time;
         void this.recordTelemetryEvent({
           eventType: 'test.processed',
           category: 'test',
@@ -896,7 +925,8 @@ export class DatabaseService {
           protocol: orderData.telemetry_protocol,
           connectionMode: orderData.telemetry_connection_mode,
           testType: orderData.test_type,
-          outcome: this.isFailedTestResult(orderData.results) ? 'failed' : 'success'
+          outcome: this.isFailedTestResult(orderData.results) ? 'failed' : 'success',
+          ...(testOccurredAt ? { occurredAt: testOccurredAt } : {})
         });
         success(sqliteResult);
       })
@@ -917,6 +947,7 @@ export class DatabaseService {
       event_category: this.sanitizeTelemetryValue(input.category, 32) || 'usage',
       occurred_at: now,
       lab_id: this.sanitizeTelemetryValue(this.commonSettings?.labID, 128),
+      source_installation_id: this.getOrCreateSourceInstallationId(),
       instrument_id: this.sanitizeTelemetryValue(input.instrumentId, 128),
       machine_type: this.sanitizeTelemetryValue(input.machineType, 128),
       protocol: this.sanitizeTelemetryValue(input.protocol, 32),
@@ -936,6 +967,7 @@ export class DatabaseService {
     try {
       const sqliteResult = await this.execSqlite(insert.query, insert.values);
       this.replicateTelemetryToMySQL({ ...record, id: sqliteResult.lastID });
+      this.usageRecordedSubject?.next();
       return true;
     } catch (error) {
       // Usage reporting is observational. It must never interrupt instrument data.
@@ -954,7 +986,7 @@ export class DatabaseService {
     this.execSqlite(selectSql, [DatabaseService.MYSQL_TELEMETRY_RESYNC_LIMIT])
       .then((records: any[]) => {
         if (records.length === 0) {
-          success('No usage statistics to synchronize.');
+          this.resyncUsageStatisticsDailyToMySQL(success, errorf);
           return;
         }
 
@@ -966,7 +998,7 @@ export class DatabaseService {
         this.execQuery(mysqlSql, [values],
           () => {
             this.markTelemetryAsResynced(records.map(record => record.id))
-              .then(() => success(`Synchronized ${records.length} usage statistics event(s).`))
+              .then(() => this.resyncUsageStatisticsDailyToMySQL(success, errorf))
               .catch(errorf);
           },
           errorf
@@ -986,6 +1018,7 @@ export class DatabaseService {
         this.markTelemetryAsResynced([record.id]).catch(error => {
           console.warn('Usage statistics synchronized but the local status update failed:', error);
         });
+        this.resyncUsageStatisticsDailyToMySQL(() => {}, () => {});
       },
       error => {
         console.warn('Usage statistics remain queued for MySQL synchronization:', error?.message ?? error);
@@ -1002,13 +1035,69 @@ export class DatabaseService {
     ).then(() => undefined);
   }
 
+  public resyncUsageStatisticsDailyToMySQL(success: any, errorf: any): void {
+    if (!this.mysqlPool) {
+      errorf('MySQL not available');
+      return;
+    }
+
+    const selectSql = `
+      SELECT * FROM usage_statistics_daily
+      WHERE revision > mysql_synced_revision
+      ORDER BY activity_date, id
+      LIMIT ?`;
+    this.execSqlite(selectSql, [DatabaseService.MYSQL_USAGE_STATISTICS_RESYNC_LIMIT])
+      .then((records: any[]) => {
+        if (records.length === 0) {
+          success('Usage statistics are up to date.');
+          return;
+        }
+
+        const columns = DatabaseService.MYSQL_USAGE_STATISTICS_COLUMNS;
+        const escapedColumns = columns.map(column => `\`${column}\``).join(',');
+        const assignments = columns
+          .filter(column => column !== 'aggregate_id')
+          .map(column => `\`${column}\` = IF(VALUES(\`revision\`) >= \`revision\`, VALUES(\`${column}\`), \`${column}\`)`)
+          .join(',');
+        const mysqlSql = `INSERT INTO \`usage_statistics_daily\` (${escapedColumns}) VALUES ? ON DUPLICATE KEY UPDATE ${assignments}`;
+        const values = records.map(record => columns.map(column => record[column] ?? null));
+
+        this.execQuery(mysqlSql, [values],
+          () => {
+            Promise.all(records.map(record => this.execSqlite(
+              'UPDATE usage_statistics_daily SET mysql_synced_revision = ? WHERE id = ? AND revision = ?',
+              [record.revision, record.id, record.revision]
+            )))
+              .then(() => success(`Synchronized ${records.length} daily usage summary row(s).`))
+              .catch(errorf);
+          },
+          errorf
+        );
+      })
+      .catch(errorf);
+  }
+
   private sanitizeTelemetryValue(value: unknown, maxLength: number): string | null {
     if (value === null || value === undefined) return null;
     const normalized = String(value).trim();
     return normalized ? normalized.slice(0, maxLength) : null;
   }
 
+  private getOrCreateSourceInstallationId(): string {
+    const stored = this.store?.get('sourceInstallationId');
+    if (typeof stored === 'string' && stored.length >= 8) return stored.slice(0, 128);
+
+    // WHY: the identity belongs to this installation, not its current LIS
+    // connection, so reconnecting or using two installations cannot merge totals.
+    const sourceInstallationId = `interface-${uuidv4()}`;
+    this.store?.set?.('sourceInstallationId', sourceInstallationId);
+    return sourceInstallationId;
+  }
+
   private toDatabaseDateTime(value?: Date | string): string {
+    if (typeof value === 'string' && /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/.test(value.trim())) {
+      return value.trim();
+    }
     const date = value instanceof Date ? value : value ? new Date(value) : new Date();
     const safeDate = Number.isNaN(date.getTime()) ? new Date() : date;
     return safeDate.toISOString().slice(0, 19).replace('T', ' ');
@@ -1251,6 +1340,88 @@ export class DatabaseService {
              mysql_status_synced = 0
          WHERE lims_sync_status = 0 AND id IN (${placeholders})`,
         [...statusValues, ...ids]
+      );
+    }
+  }
+
+  public async fetchPendingIntelisActivity(maxItems: number): Promise<IntelisActivityEvent[]> {
+    const records = await this.execSqlite(
+      `SELECT event_id, event_type, event_category, occurred_at, instrument_id,
+              machine_type, protocol, connection_mode, test_type, outcome,
+              failure_code, event_count, app_version
+       FROM telemetry_events
+       WHERE remote_uploaded_at IS NULL
+       ORDER BY id
+       LIMIT ?`,
+      [maxItems]
+    );
+    return records.map((record: any) => ({
+      event_id: String(record.event_id),
+      event_type: String(record.event_type),
+      event_category: String(record.event_category),
+      occurred_at: String(record.occurred_at),
+      instrument_id: record.instrument_id ?? null,
+      machine_type: record.machine_type ?? null,
+      protocol: record.protocol ?? null,
+      connection_mode: record.connection_mode ?? null,
+      test_type: record.test_type ?? null,
+      outcome: record.outcome ?? null,
+      failure_code: record.failure_code ?? null,
+      event_count: Number(record.event_count),
+      app_version: record.app_version ?? null,
+    }));
+  }
+
+  public async acknowledgeIntelisActivity(events: IntelisActivityEvent[]): Promise<void> {
+    if (events.length === 0) return;
+    for (const batch of this.chunkArray(events, 200)) {
+      const placeholders = batch.map(() => '?').join(',');
+      await this.execSqlite(
+        `UPDATE telemetry_events
+         SET remote_uploaded_at = CURRENT_TIMESTAMP
+         WHERE remote_uploaded_at IS NULL AND event_id IN (${placeholders})`,
+        batch.map(event => event.event_id)
+      );
+    }
+  }
+
+  public async fetchPendingIntelisUsageStatistics(maxItems: number): Promise<IntelisUsageSummary[]> {
+    const records = await this.execSqlite(
+      `SELECT aggregate_id, activity_date, instrument_id, machine_type, test_type,
+              total_tests, successful_tests, failed_tests, first_test_at,
+              last_test_at, revision
+       FROM usage_statistics_daily
+       WHERE revision > remote_uploaded_revision
+       ORDER BY activity_date, id
+       LIMIT ?`,
+      [maxItems]
+    );
+    return records.map((record: any) => ({
+      aggregate_id: String(record.aggregate_id),
+      activity_date: String(record.activity_date),
+      instrument_id: record.instrument_id || null,
+      machine_type: record.machine_type || null,
+      test_type: record.test_type || null,
+      total_tests: Number(record.total_tests),
+      successful_tests: Number(record.successful_tests),
+      failed_tests: Number(record.failed_tests),
+      first_test_at: record.first_test_at ?? null,
+      last_test_at: record.last_test_at ?? null,
+      revision: Number(record.revision),
+    }));
+  }
+
+  public async acknowledgeIntelisUsageStatistics(
+    acknowledgements: IntelisUsageSummaryAcknowledgement[]
+  ): Promise<void> {
+    for (const acknowledgement of acknowledgements) {
+      // WHY: a test may finish while the request is in flight. Only acknowledge
+      // the exact revision sent so the newer absolute total remains pending.
+      await this.execSqlite(
+        `UPDATE usage_statistics_daily
+         SET remote_uploaded_revision = ?
+         WHERE aggregate_id = ? AND revision = ?`,
+        [acknowledgement.revision, acknowledgement.aggregate_id, acknowledgement.revision]
       );
     }
   }
