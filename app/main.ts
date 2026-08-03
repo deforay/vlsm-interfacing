@@ -700,9 +700,21 @@ try {
     });
 
     ipcMain.on('sqlite3-query', (event, sql: string, params: any, replyChannel: string) => {
+      // WHY: this runs inside a native SQLite callback. If the renderer went
+      // away while the query was in flight, sending to its destroyed webContents
+      // throws from a context with no caller to catch it, taking down the main
+      // process. A dropped reply is recoverable; an unhandled throw here is not.
       const respond = (payload: any) => {
-        if (replyChannel) {
+        if (!replyChannel) {
+          return;
+        }
+        try {
+          if (event.sender.isDestroyed()) {
+            return;
+          }
           event.sender.send(replyChannel, payload);
+        } catch (err) {
+          log.error(`Failed to deliver SQLite reply on ${replyChannel}: ${formatUnknownError(err)}`);
         }
       };
 

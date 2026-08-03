@@ -36,6 +36,11 @@ type LogLevelFilter = LogEntry['type'] | 'all';
 })
 export class ConsoleComponent implements OnInit, AfterViewInit, OnDestroy {
   private static readonly SYSTEM_LOG_ID = '__system__';
+  // Caps live-log re-renders at ~10/s. Uses a timer rather than an animation
+  // frame so logs keep rendering while the window is hidden or minimised.
+  private static readonly LOG_RENDER_INTERVAL_MS = 100;
+  private logRenderTimer: ReturnType<typeof setTimeout> | null = null;
+  private viewDestroyed = false;
   searchTerm: string = '';
   private pickedInitialTab = false; // run-once guard
   public commonSettings = null;
@@ -345,7 +350,25 @@ export class ConsoleComponent implements OnInit, AfterViewInit, OnDestroy {
       bucket.filteredLogs = bucket.logs;
     }
 
-    this.cdRef.detectChanges();
+    this.scheduleLogRender();
+  }
+
+  // WHY: a busy analyzer emits several log lines per TCP chunk (one per ASTM
+  // frame ACK). Rendering each one synchronously ran a full change-detection
+  // pass hundreds of times a second. The entries are already in the arrays, so
+  // coalescing the render caps it without changing what is displayed.
+  private scheduleLogRender(): void {
+    if (this.logRenderTimer) {
+      return;
+    }
+
+    this.logRenderTimer = setTimeout(() => {
+      this.logRenderTimer = null;
+      if (this.viewDestroyed) {
+        return;
+      }
+      this.cdRef.detectChanges();
+    }, ConsoleComponent.LOG_RENDER_INTERVAL_MS);
   }
 
   private isSystemLog(logEntry: LogEntry): boolean {
@@ -912,9 +935,14 @@ export class ConsoleComponent implements OnInit, AfterViewInit, OnDestroy {
   }
 
   ngOnDestroy() {
+    this.viewDestroyed = true;
     document.removeEventListener('visibilitychange', this.visibilityChangeHandler);
     if (this.initialResultsTimeout) {
       clearTimeout(this.initialResultsTimeout);
+    }
+    if (this.logRenderTimer) {
+      clearTimeout(this.logRenderTimer);
+      this.logRenderTimer = null;
     }
     // Clear intervals
     [

@@ -24,6 +24,10 @@ interface MySQLClient {
   providedIn: 'root'
 })
 export class ElectronService {
+  // Generous enough for the slowest real statement here (log pruning and the
+  // resync sweeps over large tables), while still bounding a lost reply.
+  private static readonly SQLITE_QUERY_TIMEOUT_MS = 120_000;
+
   ipcRenderer: any;
   webFrame: any;
   childProcess: any;
@@ -136,14 +140,40 @@ export class ElectronService {
   execSqliteQuery(sql: any, args?: any): Promise<any> {
     return new Promise((resolve, reject) => {
       const uniqueEvent = `sqlite3-reply-${Date.now()}-${Math.random()}`;
+
+      // WHY: a reply that never arrives (main process restarted, renderer
+      // reloaded mid-query, reply send threw) would otherwise leave both this
+      // promise and its IPC listener alive forever. Callers that await this —
+      // notably the log batch writer — would then stall permanently and grow
+      // their queue without bound. Always settle, always unregister.
+      let settled = false;
+      const finish = (fn: () => void) => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timeoutHandle);
+        this.ipcRenderer.removeAllListeners(uniqueEvent);
+        fn();
+      };
+
+      const timeoutHandle = setTimeout(() => {
+        finish(() => reject(new Error(
+          `SQLite query timed out after ${ElectronService.SQLITE_QUERY_TIMEOUT_MS}ms`
+        )));
+      }, ElectronService.SQLITE_QUERY_TIMEOUT_MS);
+
       this.ipcRenderer.once(uniqueEvent, (_, arg) => {
         if (arg && arg.__sqliteError) {
-          reject(new Error(arg.message || 'Unknown SQLite error'));
+          finish(() => reject(new Error(arg.message || 'Unknown SQLite error')));
         } else {
-          resolve(arg);
+          finish(() => resolve(arg));
         }
       });
-      this.ipcRenderer.send('sqlite3-query', sql, args, uniqueEvent);
+
+      try {
+        this.ipcRenderer.send('sqlite3-query', sql, args, uniqueEvent);
+      } catch (error) {
+        finish(() => reject(error instanceof Error ? error : new Error(String(error))));
+      }
     });
   }
 
@@ -151,15 +181,29 @@ export class ElectronService {
     return this.ipcRenderer.invoke('sqlite3-wal-checkpoint');
   }
 
+  // WHY: these are fire-and-forget. Without a catch, an IPC failure (main
+  // process shutting down, window torn down mid-call) surfaces as an unhandled
+  // rejection rather than a dropped log line.
   logInfo(message: string, instrumentId: string = null) {
-    this.ipcRenderer.invoke('log-info', message, instrumentId);
+    this.invokeQuietly('log-info', message, instrumentId);
   }
 
   logError(message: string, instrumentId: string = null) {
-    this.ipcRenderer.invoke('log-error', message, instrumentId);
+    this.invokeQuietly('log-error', message, instrumentId);
   }
 
   logWarning(message: string, instrumentId: string = null) {
-    this.ipcRenderer.invoke('log-warning', message, instrumentId);
+    this.invokeQuietly('log-warning', message, instrumentId);
+  }
+
+  private invokeQuietly(channel: string, message: string, instrumentId: string | null): void {
+    try {
+      const result = this.ipcRenderer.invoke(channel, message, instrumentId);
+      if (result && typeof result.catch === 'function') {
+        result.catch(() => undefined);
+      }
+    } catch {
+      // Losing a log line must never interrupt instrument processing.
+    }
   }
 }

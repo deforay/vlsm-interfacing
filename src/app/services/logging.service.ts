@@ -14,8 +14,18 @@ let logEntrySeq = 0;
   providedIn: 'root'
 })
 export class LoggingService implements OnDestroy {
+  // WHY: the queue is fed from the instrument receive path, which can log far
+  // faster than the 10s drain. If persistence ever stalls, an unbounded queue
+  // grows until the renderer dies, so cap it and drop the oldest entries.
+  private static readonly MAX_QUEUED_LOGS = 20000;
+  // If a batch write hasn't returned in this long it is treated as lost, so a
+  // single stuck write can't block every later batch for the rest of the session.
+  private static readonly PROCESSING_STALL_TIMEOUT_MS = 180000;
+
   private logQueue: LogEntry[] = [];
   private isProcessing = false;
+  private processingStartedAt = 0;
+  private droppedLogCount = 0;
   private processingInterval = 10000; // Process queue every 10 seconds
   private databaseServicePromise: Promise<any> | null = null;
   private readonly queueProcessingTimer: ReturnType<typeof setInterval>;
@@ -65,6 +75,11 @@ export class LoggingService implements OnDestroy {
     // even when we intentionally suppress them from the live operator console.
     if (options.persist !== false) {
       this.logQueue.push(logEntry);
+      if (this.logQueue.length > LoggingService.MAX_QUEUED_LOGS) {
+        const overflow = this.logQueue.length - LoggingService.MAX_QUEUED_LOGS;
+        this.logQueue.splice(0, overflow);
+        this.droppedLogCount += overflow;
+      }
     }
   }
 
@@ -76,11 +91,29 @@ export class LoggingService implements OnDestroy {
   }
 
   private async processQueue() {
-    if (this.isProcessing || this.logQueue.length === 0) {
+    if (this.isProcessing) {
+      // A write that never settles would otherwise latch this flag on and stop
+      // the queue draining for the rest of the session. Let the next tick past
+      // the stall window start a fresh batch; the stuck one still owns its own
+      // slice of entries, so nothing is written twice.
+      const stalledFor = Date.now() - this.processingStartedAt;
+      if (stalledFor < LoggingService.PROCESSING_STALL_TIMEOUT_MS) {
+        return;
+      }
+      console.error(`Log persistence stalled for ${stalledFor}ms; resuming queue processing`);
+    }
+
+    if (this.logQueue.length === 0) {
       return;
     }
 
+    if (this.droppedLogCount > 0) {
+      console.error(`Dropped ${this.droppedLogCount} queued log entries after exceeding the in-memory limit`);
+      this.droppedLogCount = 0;
+    }
+
     this.isProcessing = true;
+    this.processingStartedAt = Date.now();
     const logsToProcess = this.logQueue.splice(0); // Process all logs in the queue
 
     try {
