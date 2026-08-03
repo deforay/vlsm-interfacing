@@ -18,6 +18,15 @@
       ]
     }
   ],
+  "extraResources": [
+    {
+      "from": "shared",
+      "to": "shared",
+      "filter": [
+        "**/*.js"
+      ]
+    }
+  ],
   "artifactName": "${productName}-${version}-${os}-${arch}.${ext}",
   "win": {
     "icon": "dist/browser/assets/icons",
