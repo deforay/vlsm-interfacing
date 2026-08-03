@@ -671,9 +671,10 @@
             </div>
             <div class="card-body">
               <p class="help-text">
-                Saves a copy of these settings on a schedule, so a mistaken change or a reinstall does not mean
-                configuring every instrument again. Backups contain no passwords, so they are safe to leave on this
-                machine.
+                Saves a copy of these settings whenever they change, so a mistaken change or a reinstall does not mean
+                configuring every instrument again. Nothing is written when the settings are the same as the last
+                backup, so the copies kept are the last few <em>different</em> configurations rather than the last few
+                days. Backups contain no passwords, so they are safe to leave on this machine.
               </p>
 
               <div class="form-group">
@@ -686,12 +687,14 @@
 
               <div class="form-row">
                 <div class="form-group">
-                  <label for="backupInterval">How often</label>
+                  <label for="backupInterval">Check for changes</label>
                   <select id="backupInterval" class="form-control" [value]="backupConfig.interval"
                     [disabled]="!backupConfig.enabled || backupBusy"
                     (change)="onBackupIntervalChange($any($event.target).value)">
                     <option *ngFor="let option of backupIntervals" [value]="option.value">{{ option.label }}</option>
                   </select>
+                  <small class="help-text">How soon a change is captured. A backup is written only if
+                    something changed.</small>
                 </div>
                 <div class="form-group">
                   <label for="backupRetention">Backups to keep</label>
@@ -706,9 +709,12 @@
                 <div><strong>Folder:</strong> <span class="backup-path">{{ backupDirectory }}</span></div>
                 <div><strong>Saved backups:</strong> {{ backupCount }}</div>
                 <div>
-                  <strong>Last backup:</strong>
+                  <strong>Last change saved:</strong>
                   <span *ngIf="lastBackupAt">{{ lastBackupAt | date:'medium' }}</span>
                   <span *ngIf="!lastBackupAt">None yet</span>
+                </div>
+                <div *ngIf="lastCheckedAt">
+                  <strong>Last checked:</strong> {{ lastCheckedAt | date:'medium' }}
                 </div>
               </div>
 

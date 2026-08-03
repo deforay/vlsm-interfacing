@@ -21,7 +21,14 @@ export const LEGACY_SETTINGS_EXPORT_SCHEMA_VERSION = 0;
  */
 export const MIN_PASSPHRASE_LENGTH = 8;
 
-export type SettingsBackupInterval = 'hourly' | 'daily' | 'weekly';
+/**
+ * No hourly option: this configuration changes a few times a year, so an
+ * hourly schedule only produces identical files. See settingsFingerprint —
+ * a backup is written only when something actually changed, which makes the
+ * interval a ceiling on how often a change can be captured rather than a
+ * promise to write a file.
+ */
+export type SettingsBackupInterval = 'daily' | 'weekly' | 'monthly';
 
 export interface SettingsBackupConfig {
   enabled: boolean;
@@ -42,13 +49,23 @@ export const SETTINGS_BACKUP_CONFIG_KEY = 'backupConfig';
 export const SETTINGS_BACKUP_DIR_NAME = 'settings-backups';
 
 export const SETTINGS_BACKUP_INTERVAL_MS: Record<SettingsBackupInterval, number> = {
-  hourly: 60 * 60 * 1000,
   daily: 24 * 60 * 60 * 1000,
-  weekly: 7 * 24 * 60 * 60 * 1000
+  weekly: 7 * 24 * 60 * 60 * 1000,
+  monthly: 30 * 24 * 60 * 60 * 1000
 };
 
-/** Key holding the timestamp of the last successful automatic backup. */
+/** Timestamp of the last backup actually written. Shown to the user. */
 export const LAST_SETTINGS_BACKUP_AT_KEY = 'lastSettingsBackupAt';
+
+/**
+ * Timestamp of the last time a backup was considered. Drives scheduling,
+ * which must advance even when nothing was written — otherwise an unchanged
+ * configuration would be re-checked on every tick forever.
+ */
+export const LAST_SETTINGS_BACKUP_CHECK_AT_KEY = 'lastSettingsBackupCheckAt';
+
+/** Fingerprint of the last backup written, used to skip identical ones. */
+export const LAST_SETTINGS_BACKUP_FINGERPRINT_KEY = 'lastSettingsBackupFingerprint';
 
 export interface SettingsExportEnvelopeBase {
   schemaVersion: number;
@@ -167,6 +184,44 @@ export function prepareSettingsForExport(
   return options.includeCredentials ? settings : scrubSensitiveSettings(settings);
 }
 
+/**
+ * Serialises settings with object keys in a stable order.
+ *
+ * electron-store does not guarantee insertion order across writes, so plain
+ * JSON.stringify would report a change every time an unrelated key moved,
+ * defeating the point of comparing at all. Arrays keep their order, which is
+ * meaningful for instrument lists.
+ */
+function stableStringify(value: any): string {
+  if (value === null || typeof value !== 'object') {
+    return JSON.stringify(value) ?? 'null';
+  }
+  if (Array.isArray(value)) {
+    return `[${value.map(stableStringify).join(',')}]`;
+  }
+  const entries = Object.keys(value)
+    .sort()
+    .map(key => `${JSON.stringify(key)}:${stableStringify(value[key])}`);
+  return `{${entries.join(',')}}`;
+}
+
+/**
+ * Identifies a configuration by content, so an unchanged one is not written
+ * again. Retention then holds the last N *distinct* configurations rather than
+ * N copies of the current one — which is the difference between being able to
+ * go back a year and only being able to go back N days.
+ *
+ * Volatile bookkeeping is excluded: these change without the configuration
+ * meaningfully changing, and would make every backup look distinct.
+ */
+export function settingsFingerprint(settings: Record<string, any>): string {
+  const meaningful = { ...settings };
+  ['appPath', 'appVersion', 'loggedin', LAST_SETTINGS_BACKUP_AT_KEY,
+    LAST_SETTINGS_BACKUP_CHECK_AT_KEY, LAST_SETTINGS_BACKUP_FINGERPRINT_KEY]
+    .forEach(key => delete meaningful[key]);
+  return stableStringify(meaningful);
+}
+
 /** `settings-20260803-021500.json` — lexical order matches chronological order. */
 export function formatBackupTimestamp(date: Date): string {
   const pad = (value: number) => value.toString().padStart(2, '0');
@@ -210,8 +265,10 @@ export function selectBackupsToPrune(fileNames: string[], retention: number): st
 }
 
 export function normalizeBackupConfig(raw: any): SettingsBackupConfig {
+  // An 'hourly' value from a build that offered it falls through to the
+  // default, along with anything else unrecognised.
   const interval: SettingsBackupInterval =
-    raw?.interval === 'hourly' || raw?.interval === 'weekly' || raw?.interval === 'daily'
+    raw?.interval === 'weekly' || raw?.interval === 'monthly' || raw?.interval === 'daily'
       ? raw.interval
       : DEFAULT_SETTINGS_BACKUP_CONFIG.interval;
 

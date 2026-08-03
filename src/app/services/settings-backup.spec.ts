@@ -6,7 +6,8 @@ import {
   normalizeBackupConfig,
   parseSettingsExport,
   prepareSettingsForExport,
-  selectBackupsToPrune
+  selectBackupsToPrune,
+  settingsFingerprint
 } from '../../../shared/settings-backup';
 
 function sampleSettings(): any {
@@ -178,10 +179,71 @@ describe('scheduled backup housekeeping', () => {
       .toEqual({ enabled: true, interval: 'daily', retention: 10 });
     expect(normalizeBackupConfig({ enabled: false, interval: 'weekly', retention: 3 }))
       .toEqual({ enabled: false, interval: 'weekly', retention: 3 });
+    expect(normalizeBackupConfig({ interval: 'monthly' }).interval).toBe('monthly');
+  });
+
+  it('migrates an hourly setting from an earlier build to the default', () => {
+    // Hourly was offered briefly and removed: this configuration changes a few
+    // times a year, so it only ever produced identical files.
+    expect(normalizeBackupConfig({ enabled: true, interval: 'hourly', retention: 10 }).interval).toBe('daily');
   });
 
   it('clamps retention to a sane range', () => {
     expect(normalizeBackupConfig({ retention: 0 }).retention).toBe(1);
     expect(normalizeBackupConfig({ retention: 5000 }).retention).toBe(100);
+  });
+});
+
+describe('settings fingerprint', () => {
+  it('is identical for the same settings', () => {
+    expect(settingsFingerprint(sampleSettings())).toBe(settingsFingerprint(sampleSettings()));
+  });
+
+  it('ignores key order, which electron-store does not preserve', () => {
+    const a = { commonConfig: { labID: 'LAB001', mysqlHost: '127.0.0.1' }, lisApiConfig: { url: 'u' } };
+    const b = { lisApiConfig: { url: 'u' }, commonConfig: { mysqlHost: '127.0.0.1', labID: 'LAB001' } };
+
+    expect(settingsFingerprint(a)).toBe(settingsFingerprint(b));
+  });
+
+  it('changes when a setting actually changes', () => {
+    const before = sampleSettings();
+    const after = sampleSettings();
+    after.commonConfig.mysqlHost = '10.0.0.9';
+
+    expect(settingsFingerprint(before)).not.toBe(settingsFingerprint(after));
+  });
+
+  it('notices an added or removed instrument', () => {
+    const before: any = { instrumentsConfig: [{ instrumentId: 'A' }] };
+    const after: any = { instrumentsConfig: [{ instrumentId: 'A' }, { instrumentId: 'B' }] };
+
+    expect(settingsFingerprint(before)).not.toBe(settingsFingerprint(after));
+  });
+
+  it('treats instrument order as meaningful', () => {
+    const a: any = { instrumentsConfig: [{ instrumentId: 'A' }, { instrumentId: 'B' }] };
+    const b: any = { instrumentsConfig: [{ instrumentId: 'B' }, { instrumentId: 'A' }] };
+
+    expect(settingsFingerprint(a)).not.toBe(settingsFingerprint(b));
+  });
+
+  it('ignores bookkeeping that changes without the configuration changing', () => {
+    const before: any = { commonConfig: { labID: 'LAB001' }, appVersion: '4.1.10', loggedin: false, appPath: '/a' };
+    const after: any = { commonConfig: { labID: 'LAB001' }, appVersion: '4.1.11', loggedin: true, appPath: '/b' };
+
+    // Otherwise every upgrade and every login would burn a retention slot.
+    expect(settingsFingerprint(before)).toBe(settingsFingerprint(after));
+  });
+
+  it('ignores its own backup bookkeeping', () => {
+    const before: any = { commonConfig: { labID: 'LAB001' }, lastSettingsBackupAt: '2026-08-01T00:00:00.000Z' };
+    const after: any = { commonConfig: { labID: 'LAB001' }, lastSettingsBackupAt: '2026-08-02T00:00:00.000Z' };
+
+    expect(settingsFingerprint(before)).toBe(settingsFingerprint(after));
+  });
+
+  it('distinguishes null from a missing value', () => {
+    expect(settingsFingerprint({ a: null })).not.toBe(settingsFingerprint({}));
   });
 });

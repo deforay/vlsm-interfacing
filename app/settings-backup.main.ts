@@ -18,6 +18,8 @@ import {
 import {
   DEFAULT_SETTINGS_BACKUP_CONFIG,
   LAST_SETTINGS_BACKUP_AT_KEY,
+  LAST_SETTINGS_BACKUP_CHECK_AT_KEY,
+  LAST_SETTINGS_BACKUP_FINGERPRINT_KEY,
   PlainSettingsExport,
   SETTINGS_BACKUP_CONFIG_KEY,
   SETTINGS_BACKUP_DIR_NAME,
@@ -31,6 +33,7 @@ import {
   parseSettingsExport,
   prepareSettingsForExport,
   selectBackupsToPrune,
+  settingsFingerprint,
   stripInstallationIdentity
 } from '../shared/settings-backup';
 
@@ -70,26 +73,52 @@ function backupDir(userDataPath: string): string {
   return path.join(userDataPath, SETTINGS_BACKUP_DIR_NAME);
 }
 
+export interface BackupWriteResult {
+  /** False when the configuration was identical to the last backup. */
+  written: boolean;
+  filePath?: string;
+  pruned: number;
+}
+
 /**
- * Writes one scrubbed, versioned snapshot and prunes older ones.
+ * Writes one scrubbed, versioned snapshot and prunes older ones — unless the
+ * configuration is byte-for-byte what the last backup already holds.
+ *
+ * Skipping unchanged snapshots is what makes retention useful here. This
+ * configuration changes a few times a year, so writing on every schedule would
+ * fill all ten slots with copies of today and prune away the only older
+ * configuration worth going back to.
  *
  * Scheduled backups never contain credentials: they are written unattended, so
  * a passphrase would have to be stored on the same disk as the backups, which
  * protects nothing. Credentials are a deliberate manual export.
  */
-function writeScheduledBackup(deps: SettingsBackupDeps): { filePath: string; pruned: number } {
-  const dir = backupDir(deps.userDataPath);
-  fs.mkdirSync(dir, { recursive: true });
-
+function writeScheduledBackup(deps: SettingsBackupDeps): BackupWriteResult {
   const now = new Date();
   const settings = prepareSettingsForExport(deps.store.store, { includeCredentials: false });
+  const fingerprint = settingsFingerprint(settings);
+
+  deps.store.set(LAST_SETTINGS_BACKUP_CHECK_AT_KEY, now.toISOString());
+
+  const dir = backupDir(deps.userDataPath);
+  // A matching fingerprint is only trustworthy while the file it describes is
+  // still on disk; if the folder was emptied by hand, write a fresh one.
+  const unchanged = deps.store.get(LAST_SETTINGS_BACKUP_FINGERPRINT_KEY) === fingerprint
+    && existingBackupCount(dir) > 0;
+
+  if (unchanged) {
+    return { written: false, pruned: 0 };
+  }
+
+  fs.mkdirSync(dir, { recursive: true });
+
   const envelope = buildPlainExport(settings, {
     appVersion: deps.appVersion,
     exportedAt: now.toISOString(),
     source: 'scheduled'
   });
 
-  const filePath = path.join(dir, buildScheduledBackupFileName(now));
+  const filePath = uniqueBackupPath(dir, buildScheduledBackupFileName(now));
   fs.writeFileSync(filePath, JSON.stringify(envelope, null, 2), 'utf8');
 
   const { retention } = readBackupConfig(deps.store);
@@ -103,7 +132,42 @@ function writeScheduledBackup(deps: SettingsBackupDeps): { filePath: string; pru
   });
 
   deps.store.set(LAST_SETTINGS_BACKUP_AT_KEY, now.toISOString());
-  return { filePath, pruned: stale.length };
+  deps.store.set(LAST_SETTINGS_BACKUP_FINGERPRINT_KEY, fingerprint);
+  return { written: true, filePath, pruned: stale.length };
+}
+
+/**
+ * Backup names carry a timestamp only to the second, so two backups written
+ * within the same second would resolve to one path and the second would
+ * silently replace the first — destroying a configuration that differed.
+ * Rare, but the whole point of this folder is that nothing in it is lost.
+ *
+ * The suffix keeps the name sorting immediately after the colliding one, so
+ * chronological pruning still holds.
+ */
+function uniqueBackupPath(dir: string, fileName: string): string {
+  const candidate = path.join(dir, fileName);
+  if (!fs.existsSync(candidate)) {
+    return candidate;
+  }
+
+  const base = fileName.replace(/\.json$/, '');
+  for (let suffix = 2; suffix < 1000; suffix++) {
+    const next = path.join(dir, `${base}-${suffix}.json`);
+    if (!fs.existsSync(next)) {
+      return next;
+    }
+  }
+  throw new Error(`Could not find a free backup filename for ${fileName}`);
+}
+
+function existingBackupCount(dir: string): number {
+  try {
+    return fs.readdirSync(dir).filter(isScheduledBackupFileName).length;
+  } catch {
+    // Directory does not exist until the first backup runs.
+    return 0;
+  }
 }
 
 let backupTimer: NodeJS.Timeout | null = null;
@@ -114,7 +178,10 @@ let backupTimer: NodeJS.Timeout | null = null;
 const SCHEDULER_TICK_MS = 5 * 60 * 1000;
 
 function backupIsDue(store: any, config: SettingsBackupConfig, now: number): boolean {
-  const last = store.get(LAST_SETTINGS_BACKUP_AT_KEY);
+  // Keyed on when a backup was last *considered*, not last written. An
+  // unchanged configuration writes nothing, and keying on the write time would
+  // leave it permanently due and re-fingerprinting on every tick.
+  const last = store.get(LAST_SETTINGS_BACKUP_CHECK_AT_KEY);
   if (!last) {
     return true;
   }
@@ -136,8 +203,10 @@ function runScheduledBackupIfDue(deps: SettingsBackupDeps): void {
     if (!config.enabled || !backupIsDue(deps.store, config, Date.now())) {
       return;
     }
-    const { filePath, pruned } = writeScheduledBackup(deps);
-    console.log(`Settings backup written: ${filePath}${pruned ? ` (pruned ${pruned})` : ''}`);
+    const result = writeScheduledBackup(deps);
+    console.log(result.written
+      ? `Settings backup written: ${result.filePath}${result.pruned ? ` (pruned ${result.pruned})` : ''}`
+      : 'Settings unchanged since the last backup; nothing written.');
   } catch (err) {
     // A failed backup must never take down the app or interrupt instrument
     // traffic; it is reported and retried on the next tick.
@@ -298,18 +367,12 @@ export function registerSettingsBackupIpc(deps: SettingsBackupDeps): void {
 
   ipcMain.handle('get-backup-config', () => {
     const dir = backupDir(deps.userDataPath);
-    let count = 0;
-    try {
-      count = fs.readdirSync(dir).filter(isScheduledBackupFileName).length;
-    } catch {
-      // Directory does not exist until the first backup runs.
-      count = 0;
-    }
     return {
       config: readBackupConfig(deps.store),
       directory: dir,
       lastBackupAt: deps.store.get(LAST_SETTINGS_BACKUP_AT_KEY) ?? null,
-      backupCount: count
+      lastCheckedAt: deps.store.get(LAST_SETTINGS_BACKUP_CHECK_AT_KEY) ?? null,
+      backupCount: existingBackupCount(dir)
     };
   });
 
@@ -324,8 +387,12 @@ export function registerSettingsBackupIpc(deps: SettingsBackupDeps): void {
 
   ipcMain.handle('run-backup-now', () => {
     try {
-      const { filePath, pruned } = writeScheduledBackup(deps);
-      return { status: 'success', filePath, pruned, message: 'Backup written.' };
+      const result = writeScheduledBackup(deps);
+      // Reported rather than written twice: a second identical file would tell
+      // the user nothing and would push a genuinely older one out of retention.
+      return result.written
+        ? { status: 'success', written: true, filePath: result.filePath, pruned: result.pruned, message: 'Backup written.' }
+        : { status: 'success', written: false, message: 'Settings are unchanged since the last backup.' };
     } catch (err) {
       log.error(`Manual backup run failed: ${formatUnknownError(err)}`);
       return { status: 'error', message: 'Could not write the backup.' };

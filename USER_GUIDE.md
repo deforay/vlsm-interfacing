@@ -145,12 +145,18 @@ Open **Settings → Backup & Restore**.
 
 ### 4.1 Automatic Backup
 
-The tool saves a copy of your settings on a schedule so that a mistaken change, a failed disk, or a
-reinstall does not mean configuring every instrument again. This is on by default, once a day, keeping
-the last 10 copies.
+The tool saves a copy of your settings whenever they change, so that a mistaken change, a failed disk,
+or a reinstall does not mean configuring every instrument again. This is on by default, checking once
+a day and keeping the last 10 copies.
 
-You can change how often it runs and how many copies to keep, and **Open Backup Folder** shows you
-where they are. Only settings are backed up — test results and raw analyzer data are not.
+**A backup is only written when something actually changed.** Settings normally change a few times a
+year, so checking daily does not mean a file a day — the 10 copies kept are the last 10 *different*
+configurations. That is what lets you go back to how things were months ago rather than only to last
+week. **Check for changes** sets how soon a change gets captured, not how many files you get.
+
+**Back Up Now** does the same thing on demand, and will tell you if there is nothing new to save.
+**Open Backup Folder** shows you where the copies are. Only settings are backed up — test results and
+raw analyzer data are not.
 
 > Automatic backups never contain passwords, so they are safe to leave on the machine. After restoring
 > from one you will need to re-enter the database password and LIS credentials.

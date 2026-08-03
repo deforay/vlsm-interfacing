@@ -71,10 +71,11 @@ export class SettingsComponent implements OnInit, OnDestroy {
   public backupCount: number = 0;
   public backupBusy: boolean = false;
   public backupMessage: string = '';
+  public lastCheckedAt: string = null;
   public readonly backupIntervals: { value: SettingsBackupInterval; label: string }[] = [
-    { value: 'hourly', label: 'Every hour' },
-    { value: 'daily', label: 'Every day' },
-    { value: 'weekly', label: 'Every week' }
+    { value: 'daily', label: 'Check daily' },
+    { value: 'weekly', label: 'Check weekly' },
+    { value: 'monthly', label: 'Check monthly' }
   ];
 
   /**
@@ -1061,6 +1062,7 @@ export class SettingsComponent implements OnInit, OnDestroy {
       this.backupConfig = status.config;
       this.backupDirectory = status.directory;
       this.lastBackupAt = status.lastBackupAt;
+      this.lastCheckedAt = status.lastCheckedAt;
       this.backupCount = status.backupCount;
     } catch (error) {
       console.error('Could not read the backup configuration:', error);
@@ -1096,9 +1098,13 @@ export class SettingsComponent implements OnInit, OnDestroy {
     this.backupMessage = '';
     try {
       const response = await this.electronService.ipcRenderer.invoke('run-backup-now');
-      this.backupMessage = response?.status === 'success'
-        ? 'Backup written.'
-        : 'The backup could not be written.';
+      if (response?.status !== 'success') {
+        this.backupMessage = 'The backup could not be written.';
+      } else {
+        this.backupMessage = response.written
+          ? 'Backup written.'
+          : 'Settings are unchanged since the last backup, so nothing new was written.';
+      }
       await this.loadBackupStatus();
     } finally {
       this.backupBusy = false;
