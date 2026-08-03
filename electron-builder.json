@@ -26,7 +26,11 @@
       "nsis"
     ]
   },
+  "nsis": {
+    "artifactName": "${productName}-${version}-${os}-${arch}-setup.${ext}"
+  },
   "portable": {
+    "artifactName": "${productName}-${version}-${os}-${arch}-portable.${ext}",
     "splashImage": "dist/browser/assets/icons/electron.bmp"
   },
   "mac": {
