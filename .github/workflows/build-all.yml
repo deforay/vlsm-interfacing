@@ -2,7 +2,7 @@ name: Build All Platforms
 
 on:
   push:
-    tags: ['v*']           # still supports tag pushes (Linux only by default)
+    tags: ['v*']           # releases are cut by pushing a v* tag
   workflow_dispatch:        # and manual runs
     inputs:
       build_windows:
@@ -13,10 +13,71 @@ on:
 permissions:
   contents: write
 
+# Each build job uploads its own installers to the release as soon as that
+# platform finishes, so the Linux .deb is downloadable ~6 minutes in without
+# waiting on the ~20 minute Windows leg. Actions minutes are free and unmetered
+# on public repositories, so building both on every tag costs nothing.
+
 jobs:
+  # Fails in seconds on a version/tag mismatch, before any long build starts.
+  # Also the single place the release tag is decided, so no two jobs can
+  # disagree about what is being shipped.
+  version-check:
+    name: Check version and tag
+    runs-on: ubuntu-latest
+    outputs:
+      release_tag: ${{ steps.tag.outputs.release_tag }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Resolve and validate release tag
+        id: tag
+        shell: bash
+        env:
+          REF_TYPE: ${{ github.ref_type }}
+          REF_NAME: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+
+          PKG_VERSION=$(node -p "require('./package.json').version")
+          APP_VERSION=$(node -p "require('./app/package.json').version")
+
+          # These two drift silently: electron-builder takes the app version
+          # while the release takes the root one, so a mismatch ships builds
+          # labelled differently from the release they land on.
+          if [ "$PKG_VERSION" != "$APP_VERSION" ]; then
+            echo "::error::Version mismatch: package.json=$PKG_VERSION but app/package.json=$APP_VERSION. Run 'npm run bump <version>'."
+            exit 1
+          fi
+
+          if [ "$REF_TYPE" = "tag" ]; then
+            if [ "$REF_NAME" != "v$PKG_VERSION" ]; then
+              echo "::error::Tag $REF_NAME does not match package.json version v$PKG_VERSION. The release would be published under the wrong tag."
+              exit 1
+            fi
+            RELEASE_TAG="$REF_NAME"
+          else
+            RELEASE_TAG="v$PKG_VERSION"
+          fi
+
+          echo "release_tag=$RELEASE_TAG" >> "$GITHUB_OUTPUT"
+          echo "Release tag: $RELEASE_TAG"
+
+  # Same lint/test/audit/build gate that guards master, reused rather than
+  # duplicated. Nothing is built or published from an unverified commit.
+  verify:
+    name: Verify
+    needs: version-check
+    uses: ./.github/workflows/verify.yml
+
   build-linux:
     runs-on: ubuntu-latest
     name: Build Linux x64
+    needs: [version-check, verify]
     container:
       image: electronuserland/builder:latest
 
@@ -52,11 +113,23 @@ jobs:
           if-no-files-found: error
           retention-days: 7
 
+      # Publishes as soon as Linux is done. Only from a tag: a manual run off a
+      # branch produces run artifacts but must never touch a public release.
+      - name: Publish Linux assets to ${{ needs.version-check.outputs.release_tag }}
+        if: github.ref_type == 'tag'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ needs.version-check.outputs.release_tag }}
+          name: ${{ needs.version-check.outputs.release_tag }}
+          generate_release_notes: true
+          draft: false
+          files: release/*.deb
+
       - name: List build artifacts (non-blocking)
         if: always()
         shell: bash
         run: |
-          echo "Runner OS: ${{ runner.os }}"
+          echo "Runner OS: ${RUNNER_OS}"
           [ -d release ] && ls -la release || echo "no release/ dir"
           ldd --version
 
@@ -68,10 +141,11 @@ jobs:
     # "undefined", so compiling native deps (@vscode/sqlite3) fails.
     runs-on: windows-2022
     name: Build Windows x64
-    # Only build Windows on manual dispatch when explicitly requested.
-    # Tag pushes (releases) ship Linux only by default — request a Windows
-    # build on demand via the "Run workflow" button.
-    if: github.event_name == 'workflow_dispatch' && inputs.build_windows == true
+    needs: [version-check, verify]
+    # Always build for a release tag so one tag push produces a complete
+    # release. Manual runs keep it opt-in, since those are usually quick
+    # Linux-only smoke builds.
+    if: github.event_name != 'workflow_dispatch' || inputs.build_windows == true
 
     steps:
       - uses: actions/checkout@v4
@@ -105,70 +179,22 @@ jobs:
           if-no-files-found: error
           retention-days: 7
 
+      # Adds the .exe installers to the same release, whenever Windows lands.
+      # If Linux got there first this updates that release; if Windows somehow
+      # finishes first it creates it. Either order works.
+      - name: Publish Windows assets to ${{ needs.version-check.outputs.release_tag }}
+        if: github.ref_type == 'tag'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ needs.version-check.outputs.release_tag }}
+          name: ${{ needs.version-check.outputs.release_tag }}
+          generate_release_notes: true
+          draft: false
+          files: release/*.exe
+
       - name: List build artifacts (non-blocking)
         if: always()
         shell: pwsh
         run: |
           "Runner OS: $env:RUNNER_OS"
           if (Test-Path release) { Get-ChildItem release } else { "no release/ dir" }
-
-  release:
-    name: Create GitHub Release with all assets
-    needs:
-      - build-linux
-      - build-windows
-    # run for tag pushes OR manual runs (even if a build leg failed)
-    if: always() && (startsWith(github.ref, 'refs/tags/v') || github.event_name == 'workflow_dispatch')
-    runs-on: ubuntu-latest
-    permissions:
-      contents: write
-
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: actions/setup-node@v4
-        with:
-          node-version: '22'
-
-      # Read version from package.json and set tag = v<version>
-      - name: Derive release tag from package.json
-        id: ver
-        shell: bash
-        run: |
-          PKG_VERSION=$(node -p "require('./package.json').version")
-          echo "pkg_version=$PKG_VERSION" >> "$GITHUB_OUTPUT"
-          echo "RELEASE_TAG=v$PKG_VERSION" >> "$GITHUB_ENV"
-          echo "Will release tag: v$PKG_VERSION"
-
-      - id: dl-linux
-        uses: actions/download-artifact@v4
-        with:
-          name: linux-x64
-          path: dist/linux
-        continue-on-error: true
-
-      - id: dl-win
-        uses: actions/download-artifact@v4
-        with:
-          name: windows-x64
-          path: dist/windows
-        continue-on-error: true
-
-      - name: Show downloaded files
-        run: |
-          echo "Linux:" && ls -lh dist/linux || true
-          echo "Windows:" && ls -lh dist/windows || true
-
-      - name: Publish release v${{ steps.ver.outputs.pkg_version }}
-        if: steps.dl-linux.outcome == 'success' || steps.dl-win.outcome == 'success'
-        uses: softprops/action-gh-release@v2
-        with:
-          tag_name: ${{ env.RELEASE_TAG }}        # e.g. v3.1.5 from package.json
-          name: ${{ env.RELEASE_TAG }}
-          generate_release_notes: true
-          # Windows build is opt-in via workflow_dispatch — when it's skipped,
-          # dist/windows/ won't exist, so don't fail on unmatched patterns.
-          fail_on_unmatched_files: false
-          files: |
-            dist/linux/*
-            dist/windows/*

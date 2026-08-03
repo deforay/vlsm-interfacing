@@ -4,6 +4,9 @@ on:
   pull_request:
   push:
     branches: [master]
+  # Lets the release pipeline run these exact checks before it builds anything,
+  # instead of keeping a second copy of them in build-all.yml.
+  workflow_call:
 
 permissions:
   contents: read
