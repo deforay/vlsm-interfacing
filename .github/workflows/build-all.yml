@@ -10,8 +10,10 @@ on:
         type: boolean
         default: false
 
+# Read-only by default; only the two jobs that publish release assets are
+# granted contents: write.
 permissions:
-  contents: write
+  contents: read
 
 # Each build job uploads its own installers to the release as soon as that
 # platform finishes, so the Linux .deb is downloadable ~6 minutes in without
@@ -25,6 +27,8 @@ jobs:
   version-check:
     name: Check version and tag
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     outputs:
       release_tag: ${{ steps.tag.outputs.release_tag }}
     steps:
@@ -72,12 +76,17 @@ jobs:
   verify:
     name: Verify
     needs: version-check
+    permissions:
+      contents: read
     uses: ./.github/workflows/verify.yml
 
   build-linux:
     runs-on: ubuntu-latest
     name: Build Linux x64
     needs: [version-check, verify]
+    # Needed by the publish step below, which creates/updates the release.
+    permissions:
+      contents: write
     container:
       image: electronuserland/builder:latest
 
@@ -142,6 +151,9 @@ jobs:
     runs-on: windows-2022
     name: Build Windows x64
     needs: [version-check, verify]
+    # Needed by the publish step below, which creates/updates the release.
+    permissions:
+      contents: write
     # Always build for a release tag so one tag push produces a complete
     # release. Manual runs keep it opt-in, since those are usually quick
     # Linux-only smoke builds.
