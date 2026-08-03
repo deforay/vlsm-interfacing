@@ -25,10 +25,10 @@ A standalone Electron application that receives test results from laboratory ins
 
 ```bash
 # Install latest version
-curl -fsSL https://raw.githubusercontent.com/deforay/vlsm-interfacing/main/scripts/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/deforay/vlsm-interfacing/master/scripts/install.sh | bash
 
 # Install a specific version
-curl -fsSL https://raw.githubusercontent.com/deforay/vlsm-interfacing/main/scripts/install.sh | bash -s -- --tag v4.0.3
+curl -fsSL https://raw.githubusercontent.com/deforay/vlsm-interfacing/master/scripts/install.sh | bash -s -- --tag v4.0.3
 ```
 
 ## Getting Started
