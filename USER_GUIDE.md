@@ -139,6 +139,45 @@ At the bottom of the console, two timestamps show:
 
 ---
 
+## 4. Backup and Restore
+
+Open **Settings → Backup & Restore**.
+
+### 4.1 Automatic Backup
+
+The tool saves a copy of your settings on a schedule so that a mistaken change, a failed disk, or a
+reinstall does not mean configuring every instrument again. This is on by default, once a day, keeping
+the last 10 copies.
+
+You can change how often it runs and how many copies to keep, and **Open Backup Folder** shows you
+where they are. Only settings are backed up — test results and raw analyzer data are not.
+
+> Automatic backups never contain passwords, so they are safe to leave on the machine. After restoring
+> from one you will need to re-enter the database password and LIS credentials.
+
+### 4.2 Exporting Settings
+
+**Export Settings** asks what the file should contain:
+
+| Choice | Contains | Use it for |
+|--------|----------|------------|
+| **Settings Only** | Instruments, database host, LIS configuration. No passwords. | Sharing a setup, or a copy you may email or store on a shared drive |
+| **Settings and Credentials** | The above plus the database password and LIS credentials, encrypted with a passphrase you choose | A complete backup you can restore without re-entering anything |
+
+If you choose to include credentials you will be asked for a passphrase. **There is no way to recover
+the file without it** — store the passphrase somewhere safe and separate from the backup itself.
+
+### 4.3 Importing Settings
+
+**Import Settings** accepts any file produced by this tool, including ones from older versions. If the
+file is encrypted you will be asked for its passphrase. The app restarts its settings once the import
+succeeds.
+
+> Importing never copies the original machine's identity. A restored copy registers as a separate
+> installation, so results are never counted twice.
+
+---
+
 ## Quick Reference
 
 | Action | Where |
@@ -146,5 +185,7 @@ At the bottom of the console, two timestamps show:
 | Change settings | Console → **Settings** button (top right) |
 | View raw data | Console → **View Raw Data** button (bottom left) |
 | View dashboard | Console → **Dashboard** button (top right) |
-| Export settings | Settings → **Export Settings** (for backup or sharing) |
-| Import settings | Settings → **Import Settings** (to restore or replicate setup) |
+| Export settings | Settings → **Backup & Restore** → **Export Settings** |
+| Import settings | Settings → **Backup & Restore** → **Import Settings** |
+| Change backup schedule | Settings → **Backup & Restore** → **Automatic Backup** |
+| Find saved backups | Settings → **Backup & Restore** → **Open Backup Folder** |

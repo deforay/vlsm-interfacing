@@ -7,6 +7,11 @@ import * as sqlite3 from '@vscode/sqlite3';
 import * as log from 'electron-log/main';
 import { setupSqlite } from './sqlite3helper.main';
 import { registerIntelisConnectionIpc } from './intelis-connection.main';
+import {
+  registerSettingsBackupIpc,
+  startScheduledSettingsBackups,
+  stopScheduledSettingsBackups
+} from './settings-backup.main';
 
 const Store = require('electron-store');
 let win: BrowserWindow = null;
@@ -534,28 +539,20 @@ try {
   function registerIpcHandlers() {
     registerIntelisConnectionIpc(store);
 
-    ipcMain.handle('export-settings', async (event, settingsJSON) => {
-      try {
-        const today = new Date();
-        const timestamp = `${today.getFullYear()}${(today.getMonth() + 1).toString().padStart(2, '0')}${today.getDate().toString().padStart(2, '0')}-${today.getHours().toString().padStart(2, '0')}${today.getMinutes().toString().padStart(2, '0')}`;
-        const defaultPath = `interface-settings-${timestamp}.json`;
+    // Settings export/import and scheduled local backups. Owns the store
+    // directly so passphrases and decrypted credentials never cross IPC.
+    registerSettingsBackupIpc({
+      store,
+      appVersion: app.getVersion(),
+      userDataPath: app.getPath('userData'),
+      getWindow: () => win
+    });
 
-        const { filePath, canceled } = await dialog.showSaveDialog({
-          title: 'Export Settings',
-          defaultPath: defaultPath,
-          filters: [{ name: 'JSON Files', extensions: ['json'] }]
-        });
-
-        if (canceled) {
-          return { status: 'cancelled', message: 'Export cancelled.' };
-        } else {
-          fs.writeFileSync(filePath, settingsJSON, 'utf8');
-          return { status: 'success', message: 'Settings successfully exported.' };
-        }
-      } catch (err) {
-        log.error(`Failed to save settings: ${formatUnknownError(err)}`);
-        return { status: 'error', message: 'Failed to export settings.' };
-      }
+    startScheduledSettingsBackups({
+      store,
+      appVersion: app.getVersion(),
+      userDataPath: app.getPath('userData'),
+      getWindow: () => win
     });
 
     ipcMain.handle('getUserDataPath', () => {
@@ -662,37 +659,6 @@ try {
           reject({ success: false, error: 'Connection test timeout', code: 'TIMEOUT' });
         }, 15000);
       });
-    });
-
-    ipcMain.handle('import-settings', async (event) => {
-      try {
-        const { filePaths, canceled } = await dialog.showOpenDialog({
-          title: 'Import Settings',
-          filters: [{ name: 'JSON Files', extensions: ['json'] }],
-          properties: ['openFile']
-        });
-        if (canceled || !filePaths || filePaths.length === 0) {
-          return { status: 'cancelled', message: 'Import cancelled.' };
-        }
-        const filePath = filePaths[0];
-        const data = fs.readFileSync(filePath, 'utf-8');
-        const importedSettings = JSON.parse(data);
-        // Installation identity and credentials are machine-bound. Importing
-        // them would clone an installation and can invalidate usage reporting and
-        // result idempotency, so they are never accepted from settings files.
-        delete importedSettings.intelisConnection;
-        delete importedSettings.sourceInstallationId;
-        win.webContents.send('imported-settings', importedSettings);
-        for (const key in importedSettings) {
-          if (importedSettings.hasOwnProperty(key)) {
-            store.set(key, importedSettings[key]);
-          }
-        }
-        return { status: 'success', message: 'Settings successfully imported.' };
-      } catch (err) {
-        console.error('Failed to import settings:', err);
-        return { status: 'error', message: 'Failed to import settings.' };
-      }
     });
 
     ipcMain.handle('dialog', (event, method, params) => {
@@ -930,6 +896,7 @@ try {
   });
 
   app.on('window-all-closed', () => {
+    stopScheduledSettingsBackups();
     if (tray) {
       tray.destroy();
       tray = null;

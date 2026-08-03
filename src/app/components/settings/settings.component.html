@@ -660,6 +660,107 @@
           </div>
         </div>
 
+        <!-- Backup & Restore -->
+        <div *ngSwitchCase="'backup'">
+          <div class="config-card">
+            <div class="card-header">
+              <div class="header-content">
+                <i class="fas fa-clock-rotate-left"></i>
+                <h2>Automatic Backup</h2>
+              </div>
+            </div>
+            <div class="card-body">
+              <p class="help-text">
+                Saves a copy of these settings on a schedule, so a mistaken change or a reinstall does not mean
+                configuring every instrument again. Backups contain no passwords, so they are safe to leave on this
+                machine.
+              </p>
+
+              <div class="form-group">
+                <label class="checkbox-label">
+                  <input type="checkbox" [checked]="backupConfig.enabled" [disabled]="backupBusy"
+                    (change)="onBackupEnabledChange($any($event.target).checked)">
+                  <span>Back these settings up automatically</span>
+                </label>
+              </div>
+
+              <div class="form-row">
+                <div class="form-group">
+                  <label for="backupInterval">How often</label>
+                  <select id="backupInterval" class="form-control" [value]="backupConfig.interval"
+                    [disabled]="!backupConfig.enabled || backupBusy"
+                    (change)="onBackupIntervalChange($any($event.target).value)">
+                    <option *ngFor="let option of backupIntervals" [value]="option.value">{{ option.label }}</option>
+                  </select>
+                </div>
+                <div class="form-group">
+                  <label for="backupRetention">Backups to keep</label>
+                  <input id="backupRetention" type="number" class="form-control" min="1" max="100"
+                    [value]="backupConfig.retention" [disabled]="!backupConfig.enabled || backupBusy"
+                    (change)="onBackupRetentionChange($any($event.target).value)">
+                  <small class="help-text">Older ones are removed once this many exist.</small>
+                </div>
+              </div>
+
+              <div class="backup-status">
+                <div><strong>Folder:</strong> <span class="backup-path">{{ backupDirectory }}</span></div>
+                <div><strong>Saved backups:</strong> {{ backupCount }}</div>
+                <div>
+                  <strong>Last backup:</strong>
+                  <span *ngIf="lastBackupAt">{{ lastBackupAt | date:'medium' }}</span>
+                  <span *ngIf="!lastBackupAt">None yet</span>
+                </div>
+              </div>
+
+              <div class="button-row">
+                <button type="button" class="btn btn-outline-primary" [disabled]="backupBusy" (click)="runBackupNow()">
+                  <i class="fas" [ngClass]="backupBusy ? 'fa-spinner fa-spin' : 'fa-download'"></i>
+                  <span>Back Up Now</span>
+                </button>
+                <button type="button" class="btn btn-outline-secondary" (click)="openBackupFolder()">
+                  <i class="fas fa-folder-open"></i>
+                  <span>Open Backup Folder</span>
+                </button>
+              </div>
+              <p class="housekeeping-status" *ngIf="backupMessage">{{ backupMessage }}</p>
+            </div>
+          </div>
+
+          <div class="config-card">
+            <div class="card-header">
+              <div class="header-content">
+                <i class="fas fa-file-export"></i>
+                <h2>Manual Export and Import</h2>
+              </div>
+            </div>
+            <div class="card-body">
+              <p class="help-text">
+                Use this to move a configuration to another machine or to keep a copy elsewhere. Exporting offers a
+                choice: settings only, or settings and credentials. A file containing credentials is encrypted with a
+                passphrase and cannot be opened without it.
+              </p>
+              <div class="retention-notice">
+                <i class="fas fa-shield-alt"></i>
+                <div>
+                  <strong>This installation's identity is never exported</strong>
+                  <p>A machine restored from a settings file registers as a separate installation, so results are not
+                    attributed twice.</p>
+                </div>
+              </div>
+              <div class="button-row">
+                <button type="button" class="btn btn-outline-primary" (click)="exportSettings()">
+                  <i class="fas fa-file-export"></i>
+                  <span>Export Settings</span>
+                </button>
+                <button type="button" class="btn btn-outline-primary" (click)="importSettings()">
+                  <i class="fas fa-file-import"></i>
+                  <span>Import Settings</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+
         <!-- Troubleshooting -->
         <div *ngSwitchCase="'troubleshoot'">
           <div class="config-card housekeeping-card">
@@ -729,4 +830,54 @@
       </button>
     </div>
   </form>
+
+  <!-- Passphrase entry. Deliberately outside the settings form so that pressing
+       Enter confirms the passphrase instead of saving settings. -->
+  <div class="passphrase-backdrop" *ngIf="passphrasePrompt">
+    <div class="passphrase-modal" role="dialog" aria-modal="true" aria-labelledby="passphraseTitle">
+      <h3 id="passphraseTitle">
+        {{ passphrasePrompt.mode === 'export' ? 'Choose a Passphrase' : 'Enter the Passphrase' }}
+      </h3>
+
+      <p class="help-text" *ngIf="passphrasePrompt.mode === 'export'">
+        The exported file will contain the database password and LIS credentials, encrypted with this passphrase.
+        There is no way to recover the file without it, so store it somewhere safe and separate from the backup.
+      </p>
+      <p class="help-text" *ngIf="passphrasePrompt.mode === 'import'">
+        This file is encrypted. Enter the passphrase that was chosen when it was exported.
+      </p>
+
+      <div class="form-group">
+        <label for="passphraseInput">Passphrase</label>
+        <input id="passphraseInput" type="password" class="form-control" autocomplete="off"
+          [(ngModel)]="passphrasePrompt.passphrase" [ngModelOptions]="{standalone: true}"
+          (keyup.enter)="submitPassphrase()">
+        <small class="help-text" *ngIf="passphrasePrompt.mode === 'export'">
+          At least {{ minPassphraseLength }} characters.
+        </small>
+      </div>
+
+      <div class="form-group" *ngIf="passphrasePrompt.mode === 'export'">
+        <label for="passphraseConfirmInput">Confirm passphrase</label>
+        <input id="passphraseConfirmInput" type="password" class="form-control" autocomplete="off"
+          [(ngModel)]="passphrasePrompt.confirmPassphrase" [ngModelOptions]="{standalone: true}"
+          (keyup.enter)="submitPassphrase()">
+      </div>
+
+      <p class="passphrase-error" *ngIf="passphrasePrompt.error">
+        <i class="fas fa-exclamation-circle"></i>
+        <span>{{ passphrasePrompt.error }}</span>
+      </p>
+
+      <div class="button-row">
+        <button type="button" class="btn btn-outline-secondary" (click)="cancelPassphrasePrompt()">
+          <span>Cancel</span>
+        </button>
+        <button type="button" class="btn btn-primary" [disabled]="backupBusy" (click)="submitPassphrase()">
+          <i class="fas" [ngClass]="backupBusy ? 'fa-spinner fa-spin' : 'fa-lock'"></i>
+          <span>{{ passphrasePrompt.mode === 'export' ? 'Export' : 'Import' }}</span>
+        </button>
+      </div>
+    </div>
+  </div>
 </div>

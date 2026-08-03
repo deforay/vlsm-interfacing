@@ -18,6 +18,12 @@ import {
   IntelisConnectionState,
   isValidIntelisConnectionCode
 } from '../../../../shared/intelis-connection';
+import {
+  DEFAULT_SETTINGS_BACKUP_CONFIG,
+  MIN_PASSPHRASE_LENGTH,
+  SettingsBackupConfig,
+  SettingsBackupInterval
+} from '../../../../shared/settings-backup';
 
 @Component({
   standalone: false,
@@ -43,6 +49,7 @@ export class SettingsComponent implements OnInit, OnDestroy {
     { id: 'database', label: 'Database', icon: 'fas fa-database' },
     { id: 'instruments', label: 'Instruments', icon: 'fas fa-microscope' },
     { id: 'lisapi', label: 'LIS Connection', icon: 'fas fa-plug' },
+    { id: 'backup', label: 'Backup & Restore', icon: 'fas fa-shield-alt' },
     { id: 'troubleshoot', label: 'Troubleshooting', icon: 'fas fa-wrench' }
   ];
 
@@ -56,6 +63,34 @@ export class SettingsComponent implements OnInit, OnDestroy {
   public lisConnectionChoice: 'intelis' | 'other' | null = null;
   public logCleanupBusy: boolean = false;
   public logCleanupMessage: string = '';
+
+  // Backup & restore
+  public backupConfig: SettingsBackupConfig = { ...DEFAULT_SETTINGS_BACKUP_CONFIG };
+  public backupDirectory: string = '';
+  public lastBackupAt: string = null;
+  public backupCount: number = 0;
+  public backupBusy: boolean = false;
+  public backupMessage: string = '';
+  public readonly backupIntervals: { value: SettingsBackupInterval; label: string }[] = [
+    { value: 'hourly', label: 'Every hour' },
+    { value: 'daily', label: 'Every day' },
+    { value: 'weekly', label: 'Every week' }
+  ];
+
+  /**
+   * Passphrase entry for encrypted export/import. Native dialogs cannot take
+   * text input, so this drives a small in-app modal. The passphrase is held
+   * only for the length of the operation and cleared afterwards.
+   */
+  public passphrasePrompt: {
+    mode: 'export' | 'import';
+    passphrase: string;
+    confirmPassphrase: string;
+    error: string;
+    filePath?: string;
+  } = null;
+
+  public readonly minPassphraseLength = MIN_PASSPHRASE_LENGTH;
 
   get intelisResultsEnabled(): boolean {
     return !!getIntelisResultDeliveryLimits(this.intelisConnectionState.connection);
@@ -198,6 +233,7 @@ export class SettingsComponent implements OnInit, OnDestroy {
     void this.intelisConnectionService.load().then(result => {
       if (!result.ok) this.intelisError = result.error?.message || 'Unable to load the InteLIS connection.';
     });
+    void this.loadBackupStatus();
   }
 
   ngOnDestroy(): void {
@@ -873,23 +909,204 @@ export class SettingsComponent implements OnInit, OnDestroy {
     }
   }
 
-  exportSettings() {
-    this.electronStoreService.exportSettings();
+  /**
+   * Two kinds of export. The plain one is the long-standing behaviour and
+   * omits credentials; the full one includes them and is therefore only ever
+   * written encrypted under a passphrase the user supplies.
+   */
+  async exportSettings(): Promise<void> {
+    const choice = await this.electronService.ipcRenderer.invoke('show-confirm-dialog', {
+      type: 'question',
+      buttons: ['Cancel', 'Settings Only', 'Settings and Credentials'],
+      defaultId: 1,
+      cancelId: 0,
+      title: 'Export Settings',
+      message: 'What should the exported file contain?',
+      detail:
+        'Settings Only — instruments, database host and LIS configuration. Passwords are left out, so they must be re-entered after restoring. The file is plain JSON.\n\n'
+        + 'Settings and Credentials — everything above plus the database password and LIS credentials. The file is encrypted with a passphrase you choose and cannot be restored without it.\n\n'
+        + 'Neither option includes this installation\'s identity, so a restored copy registers as a separate installation.'
+    });
+
+    if (choice?.response === 1) {
+      const response = await this.electronStoreService.exportSettings({ includeCredentials: false });
+      await this.reportExportResult(response);
+      return;
+    }
+
+    if (choice?.response === 2) {
+      this.passphrasePrompt = { mode: 'export', passphrase: '', confirmPassphrase: '', error: '' };
+    }
   }
 
-  importSettings(): void {
-    this.electronService.ipcRenderer.invoke('import-settings')
-      .then(response => {
-        console.log('Import response:', response);
-      })
-      .catch(err => {
-        console.error('Error importing settings:', err);
+  /**
+   * Reads the chosen file's envelope first, so the passphrase is only asked
+   * for when the file actually needs one.
+   */
+  async importSettings(): Promise<void> {
+    const inspected = await this.electronService.ipcRenderer.invoke('inspect-settings-file');
+
+    if (inspected?.status === 'cancelled') return;
+
+    if (inspected?.status !== 'success') {
+      await this.showBackupDialog('error', 'Import Failed', 'That file could not be read as a settings export.', inspected?.message);
+      return;
+    }
+
+    if (inspected.encrypted) {
+      this.passphrasePrompt = {
+        mode: 'import',
+        passphrase: '',
+        confirmPassphrase: '',
+        error: '',
+        filePath: inspected.filePath
+      };
+      return;
+    }
+
+    await this.applyImport({ filePath: inspected.filePath });
+  }
+
+  async submitPassphrase(): Promise<void> {
+    const prompt = this.passphrasePrompt;
+    if (!prompt) return;
+
+    if (prompt.passphrase.length < this.minPassphraseLength) {
+      prompt.error = `Use at least ${this.minPassphraseLength} characters.`;
+      return;
+    }
+
+    if (prompt.mode === 'export' && prompt.passphrase !== prompt.confirmPassphrase) {
+      prompt.error = 'The two passphrases do not match.';
+      return;
+    }
+
+    prompt.error = '';
+    this.backupBusy = true;
+
+    try {
+      if (prompt.mode === 'export') {
+        const response = await this.electronStoreService.exportSettings({
+          includeCredentials: true,
+          passphrase: prompt.passphrase
+        });
+        this.passphrasePrompt = null;
+        await this.reportExportResult(response);
+        return;
+      }
+
+      const response = await this.applyImport({
+        filePath: prompt.filePath,
+        passphrase: prompt.passphrase
       });
-    this.electronService.ipcRenderer.on('imported-settings', (event, importedSettings) => {
-      console.log('Imported Settings:', importedSettings);
-      // Reload the page to pick up the newly imported settings from the store
+
+      // A wrong passphrase keeps the modal open so it can be retried without
+      // picking the file again.
+      if (response?.status === 'error') {
+        prompt.error = response.message;
+        return;
+      }
+      this.passphrasePrompt = null;
+    } finally {
+      this.backupBusy = false;
+    }
+  }
+
+  cancelPassphrasePrompt(): void {
+    this.passphrasePrompt = null;
+  }
+
+  private async applyImport(options: { filePath: string; passphrase?: string }): Promise<any> {
+    const response = await this.electronService.ipcRenderer.invoke('import-settings', options);
+
+    if (response?.status === 'success') {
+      await this.showBackupDialog('info', 'Import Complete', 'Settings were imported.', response.message);
+      // Reload so every service picks the new settings up from the store.
       window.location.reload();
+    } else if (response?.status === 'error') {
+      // Reported by the caller when a retry is possible; shown here otherwise.
+      if (!options.passphrase) {
+        await this.showBackupDialog('error', 'Import Failed', 'Settings could not be imported.', response.message);
+      }
+    }
+
+    return response;
+  }
+
+  private async reportExportResult(response: any): Promise<void> {
+    if (!response || response.status === 'cancelled') return;
+
+    await this.showBackupDialog(
+      response.status === 'success' ? 'info' : 'error',
+      response.status === 'success' ? 'Export Complete' : 'Export Failed',
+      response.status === 'success' ? 'The settings file was written.' : 'The settings file could not be written.',
+      response.message
+    );
+  }
+
+  private showBackupDialog(type: string, title: string, message: string, detail?: string): Promise<any> {
+    return this.electronService.ipcRenderer.invoke('show-confirm-dialog', {
+      type,
+      buttons: ['OK'],
+      defaultId: 0,
+      title,
+      message,
+      detail: detail ?? ''
     });
+  }
+
+  async loadBackupStatus(): Promise<void> {
+    try {
+      const status = await this.electronService.ipcRenderer.invoke('get-backup-config');
+      this.backupConfig = status.config;
+      this.backupDirectory = status.directory;
+      this.lastBackupAt = status.lastBackupAt;
+      this.backupCount = status.backupCount;
+    } catch (error) {
+      console.error('Could not read the backup configuration:', error);
+    }
+  }
+
+  async updateBackupConfig(patch: Partial<SettingsBackupConfig>): Promise<void> {
+    this.backupBusy = true;
+    try {
+      const response = await this.electronService.ipcRenderer.invoke('set-backup-config', patch);
+      if (response?.config) this.backupConfig = response.config;
+      await this.loadBackupStatus();
+    } finally {
+      this.backupBusy = false;
+    }
+  }
+
+  onBackupEnabledChange(enabled: boolean): void {
+    void this.updateBackupConfig({ enabled });
+  }
+
+  onBackupIntervalChange(interval: SettingsBackupInterval): void {
+    void this.updateBackupConfig({ interval });
+  }
+
+  onBackupRetentionChange(retention: string | number): void {
+    void this.updateBackupConfig({ retention: Number(retention) });
+  }
+
+  async runBackupNow(): Promise<void> {
+    if (this.backupBusy) return;
+    this.backupBusy = true;
+    this.backupMessage = '';
+    try {
+      const response = await this.electronService.ipcRenderer.invoke('run-backup-now');
+      this.backupMessage = response?.status === 'success'
+        ? 'Backup written.'
+        : 'The backup could not be written.';
+      await this.loadBackupStatus();
+    } finally {
+      this.backupBusy = false;
+    }
+  }
+
+  openBackupFolder(): void {
+    void this.electronService.ipcRenderer.invoke('open-backup-folder');
   }
 
 }
