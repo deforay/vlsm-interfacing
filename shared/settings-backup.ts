@@ -252,16 +252,104 @@ export function isScheduledBackupFileName(fileName: string): boolean {
   return fileName.startsWith(SCHEDULED_BACKUP_PREFIX) && fileName.endsWith(SCHEDULED_BACKUP_SUFFIX);
 }
 
+// Thinning tiers applied underneath the user's "backups to keep" number.
+// Fixed rather than configurable: they exist to stop a burst of edits from
+// evicting older history, which is not something a lab should have to reason
+// about. Worst case is retention + 12 + 24 files of about a kilobyte each.
+export const BACKUP_WEEKLY_TIER_WEEKS = 12;
+export const BACKUP_MONTHLY_TIER_MONTHS = 24;
+
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+// Trailing -2, -3 … are collision suffixes for backups written in the same
+// second; the timestamp is still what dates the file.
+const BACKUP_NAME_PATTERN =
+  /^settings-(\d{4})(\d{2})(\d{2})-(\d{2})(\d{2})(\d{2})(?:-\d+)?\.json$/;
+
 /**
- * Given the files in the backup directory, returns the ones to delete so that
- * `retention` newest remain. Names sort chronologically, so this is a slice.
- * Unrecognised files are ignored rather than deleted — the directory is the
- * user's, and deleting something we did not write would be a bad surprise.
+ * Recovers the time a backup was written from its name. Local time, matching
+ * how the name was built. Returns null for anything unrecognised, which the
+ * caller treats as "do not touch".
  */
-export function selectBackupsToPrune(fileNames: string[], retention: number): string[] {
-  const keep = Math.max(1, Math.floor(retention));
-  const backups = fileNames.filter(isScheduledBackupFileName).sort();
-  return backups.slice(0, Math.max(0, backups.length - keep));
+export function parseBackupTimestamp(fileName: string): Date | null {
+  const match = BACKUP_NAME_PATTERN.exec(fileName);
+  if (!match) {
+    return null;
+  }
+  const [, year, month, day, hour, minute, second] = match.map(Number) as unknown as number[];
+  const date = new Date(year, month - 1, day, hour, minute, second);
+  return Number.isNaN(date.getTime()) ? null : date;
+}
+
+function weekBucket(date: Date): number {
+  return Math.floor(date.getTime() / DAY_MS / 7);
+}
+
+function monthBucket(date: Date): string {
+  return `${date.getFullYear()}-${date.getMonth()}`;
+}
+
+function monthsBetween(from: Date, to: Date): number {
+  return (to.getFullYear() - from.getFullYear()) * 12 + (to.getMonth() - from.getMonth());
+}
+
+/**
+ * Given the files in the backup directory, returns the ones to delete.
+ *
+ * Three tiers survive: the newest `retention` backups, then the newest backup
+ * of each of the last few weeks, then the newest of each of the last couple of
+ * years of months. Without the older tiers a burst of edits — initial setup,
+ * or an afternoon of troubleshooting — would fill every slot with variations
+ * of today and evict the stable configuration worth going back to.
+ *
+ * Because backups are only written when settings change, the weekly and
+ * monthly tiers select among files that already exist rather than causing new
+ * ones. Files this function does not recognise are left alone: the directory
+ * belongs to the user, and deleting something we did not write would be a bad
+ * surprise.
+ */
+export function selectBackupsToPrune(
+  fileNames: string[],
+  retention: number,
+  now: Date = new Date()
+): string[] {
+  const keepRecent = Math.max(1, Math.floor(retention));
+
+  const dated = fileNames
+    .filter(isScheduledBackupFileName)
+    .map(name => ({ name, date: parseBackupTimestamp(name) }))
+    .filter((entry): entry is { name: string; date: Date } => entry.date != null)
+    .sort((a, b) => b.date.getTime() - a.date.getTime());
+
+  const keep = new Set<string>();
+
+  dated.slice(0, keepRecent).forEach(entry => keep.add(entry.name));
+
+  // Entries are newest-first, so the first one seen in a bucket is its newest.
+  const seenWeeks = new Set<number>();
+  const seenMonths = new Set<string>();
+
+  for (const entry of dated) {
+    const ageDays = (now.getTime() - entry.date.getTime()) / DAY_MS;
+
+    if (ageDays <= BACKUP_WEEKLY_TIER_WEEKS * 7) {
+      const bucket = weekBucket(entry.date);
+      if (!seenWeeks.has(bucket)) {
+        seenWeeks.add(bucket);
+        keep.add(entry.name);
+      }
+    }
+
+    if (monthsBetween(entry.date, now) <= BACKUP_MONTHLY_TIER_MONTHS) {
+      const bucket = monthBucket(entry.date);
+      if (!seenMonths.has(bucket)) {
+        seenMonths.add(bucket);
+        keep.add(entry.name);
+      }
+    }
+  }
+
+  return dated.filter(entry => !keep.has(entry.name)).map(entry => entry.name);
 }
 
 export function normalizeBackupConfig(raw: any): SettingsBackupConfig {

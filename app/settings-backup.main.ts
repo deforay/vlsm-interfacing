@@ -122,7 +122,7 @@ function writeScheduledBackup(deps: SettingsBackupDeps): BackupWriteResult {
   fs.writeFileSync(filePath, JSON.stringify(envelope, null, 2), 'utf8');
 
   const { retention } = readBackupConfig(deps.store);
-  const stale = selectBackupsToPrune(fs.readdirSync(dir), retention);
+  const stale = selectBackupsToPrune(fs.readdirSync(dir), retention, now);
   stale.forEach(name => {
     try {
       fs.unlinkSync(path.join(dir, name));

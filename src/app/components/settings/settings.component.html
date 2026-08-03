@@ -697,11 +697,12 @@
                     something changed.</small>
                 </div>
                 <div class="form-group">
-                  <label for="backupRetention">Backups to keep</label>
+                  <label for="backupRetention">Recent backups to keep</label>
                   <input id="backupRetention" type="number" class="form-control" min="1" max="100"
                     [value]="backupConfig.retention" [disabled]="!backupConfig.enabled || backupBusy"
                     (change)="onBackupRetentionChange($any($event.target).value)">
-                  <small class="help-text">Older ones are removed once this many exist.</small>
+                  <small class="help-text">Plus a weekly copy for 3 months and a monthly copy for 2
+                    years, kept automatically.</small>
                 </div>
               </div>
 

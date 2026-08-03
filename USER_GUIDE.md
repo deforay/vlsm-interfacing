@@ -154,9 +154,14 @@ year, so checking daily does not mean a file a day — the 10 copies kept are th
 configurations. That is what lets you go back to how things were months ago rather than only to last
 week. **Check for changes** sets how soon a change gets captured, not how many files you get.
 
+Older copies are thinned rather than simply deleted. Beyond the recent ones you keep, the tool holds on
+to one backup per week for the last three months and one per month for the last two years. This matters
+on a busy day: if you change settings ten times while setting an instrument up, those ten changes do
+not push out the stable configuration from last month that you might actually want back.
+
 **Back Up Now** does the same thing on demand, and will tell you if there is nothing new to save.
-**Open Backup Folder** shows you where the copies are. Only settings are backed up — test results and
-raw analyzer data are not.
+**Open Backup Folder** shows you where the copies are — one folder, newest last, named by date and
+time. Only settings are backed up — test results and raw analyzer data are not.
 
 > Automatic backups never contain passwords, so they are safe to leave on the machine. After restoring
 > from one you will need to re-enter the database password and LIS credentials.

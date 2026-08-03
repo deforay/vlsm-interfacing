@@ -4,6 +4,7 @@ import {
   SETTINGS_EXPORT_SCHEMA_VERSION,
   buildScheduledBackupFileName,
   normalizeBackupConfig,
+  parseBackupTimestamp,
   parseSettingsExport,
   prepareSettingsForExport,
   selectBackupsToPrune,
@@ -146,7 +147,8 @@ describe('scheduled backup housekeeping', () => {
     expect([later, earlier].sort()).toEqual([earlier, later]);
   });
 
-  it('prunes the oldest backups beyond the retention count', () => {
+  it('prunes same-week backups beyond the retention count', () => {
+    const now = new Date(2026, 7, 5, 12, 0, 0);
     const files = [
       'settings-20260801-020000.json',
       'settings-20260802-020000.json',
@@ -154,7 +156,9 @@ describe('scheduled backup housekeeping', () => {
       'settings-20260804-020000.json'
     ];
 
-    expect(selectBackupsToPrune(files, 2)).toEqual([
+    // All four fall in one week and one month, so only the newest survives the
+    // weekly and monthly tiers; retention keeps the two newest.
+    expect(selectBackupsToPrune(files, 2, now).sort()).toEqual([
       'settings-20260801-020000.json',
       'settings-20260802-020000.json'
     ]);
@@ -163,14 +167,82 @@ describe('scheduled backup housekeeping', () => {
   it('leaves unrelated files in the folder alone', () => {
     const files = ['notes.txt', 'interface-settings-20260803-020000.json', 'settings-20260801-020000.json'];
 
-    expect(selectBackupsToPrune(files, 1)).toEqual([]);
+    expect(selectBackupsToPrune(files, 1, new Date(2026, 7, 5))).toEqual([]);
   });
 
   it('never prunes everything, even with a nonsense retention', () => {
+    const now = new Date(2026, 7, 3, 12, 0, 0);
     const files = ['settings-20260801-020000.json', 'settings-20260802-020000.json'];
 
-    expect(selectBackupsToPrune(files, 0)).toEqual(['settings-20260801-020000.json']);
-    expect(selectBackupsToPrune(files, -5)).toEqual(['settings-20260801-020000.json']);
+    expect(selectBackupsToPrune(files, 0, now)).toEqual(['settings-20260801-020000.json']);
+    expect(selectBackupsToPrune(files, -5, now)).toEqual(['settings-20260801-020000.json']);
+  });
+
+  it('keeps a weekly copy so a burst of edits cannot evict older history', () => {
+    const now = new Date(2026, 7, 5, 12, 0, 0);
+    // A day of troubleshooting, plus one older configuration per week.
+    const burst = Array.from({ length: 10 }, (_, i) =>
+      `settings-20260805-${String(9 + i).padStart(2, '0')}0000.json`);
+    const older = [
+      'settings-20260729-020000.json',
+      'settings-20260722-020000.json',
+      'settings-20260715-020000.json'
+    ];
+
+    const pruned = selectBackupsToPrune([...burst, ...older], 5, now);
+
+    // The stable configurations from previous weeks are what someone would
+    // actually want to go back to, so they must outlive the burst.
+    older.forEach(name => expect(pruned).not.toContain(name));
+    expect(pruned.length).toBeGreaterThan(0);
+  });
+
+  it('thins old weeks down to one backup each', () => {
+    const now = new Date(2026, 7, 5, 12, 0, 0);
+    const files = [
+      'settings-20260720-020000.json',
+      'settings-20260721-020000.json',
+      'settings-20260722-020000.json'
+    ];
+
+    const pruned = selectBackupsToPrune(files, 1, now);
+
+    // Same week, so only its newest is worth keeping.
+    expect(pruned.sort()).toEqual(['settings-20260720-020000.json', 'settings-20260721-020000.json']);
+  });
+
+  it('keeps a monthly copy well beyond the weekly window', () => {
+    const now = new Date(2026, 7, 5, 12, 0, 0);
+    const files = [
+      'settings-20260105-020000.json',
+      'settings-20260210-020000.json',
+      'settings-20260315-020000.json'
+    ];
+
+    // Older than 12 weeks, so the weekly tier no longer applies, but each is
+    // the only backup of its month.
+    expect(selectBackupsToPrune(files, 1, now)).toEqual([]);
+  });
+
+  it('drops backups older than the monthly window', () => {
+    const now = new Date(2026, 7, 5, 12, 0, 0);
+    const files = ['settings-20230105-020000.json', 'settings-20260805-020000.json'];
+
+    expect(selectBackupsToPrune(files, 1, now)).toEqual(['settings-20230105-020000.json']);
+  });
+
+  it('ignores a backup whose name carries no readable timestamp', () => {
+    const files = ['settings-notatimestamp.json', 'settings-20260805-020000.json'];
+
+    expect(selectBackupsToPrune(files, 1, new Date(2026, 7, 5))).toEqual([]);
+  });
+
+  it('dates a collision-suffixed backup by its timestamp', () => {
+    expect(parseBackupTimestamp('settings-20260803-211611-2.json'))
+      .toEqual(new Date(2026, 7, 3, 21, 16, 11));
+    expect(parseBackupTimestamp('settings-20260803-211611.json'))
+      .toEqual(new Date(2026, 7, 3, 21, 16, 11));
+    expect(parseBackupTimestamp('notes.txt')).toBeNull();
   });
 
   it('falls back to defaults for missing or invalid backup config', () => {
