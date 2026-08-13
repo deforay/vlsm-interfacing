@@ -76,7 +76,7 @@
     "bootstrap": "5.3.8",
     "concurrently": "9.2.4",
     "conventional-changelog-cli": "4.1.0",
-    "electron": "41.10.5",
+    "electron": "43.4.0",
     "electron-builder": "26.15.3",
     "electron-debug": "4.1.0",
     "electron-reloader": "1.2.3",
