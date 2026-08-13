@@ -25,13 +25,15 @@
     "test:settings-crypto": "node scripts/test-settings-crypto.mjs",
     "test:packaged-paths": "node scripts/test-packaged-paths.mjs",
     "test:watch": "ng test",
-    "verify": "npm run lint && npm test && npm run build:prod",
+    "verify": "npm run check:safety && npm run lint && npm test && npm run build:prod",
     "security:audit": "npm audit --audit-level=high",
     "bump": "node scripts/bump-version.mjs",
     "e2e": "npm run build:prod && playwright test -c e2e/playwright.config.ts e2e/",
     "e2e:show-trace": "playwright show-trace e2e/tracing/trace.zip",
     "version": "conventional-changelog -i CHANGELOG.md -s -r 0 && git add CHANGELOG.md",
-    "lint": "ng lint"
+    "lint": "ng lint",
+    "check:safety": "node scripts/check-electron-safety.mjs",
+    "install-hooks": "bash scripts/install-hooks.sh"
   },
   "dependencies": {
     "@angular/animations": "21.2.20",

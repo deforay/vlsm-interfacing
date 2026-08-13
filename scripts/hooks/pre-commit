@@ -1,0 +1,36 @@
+#!/usr/bin/env bash
+#
+# Fast local feedback for scripts/check-electron-safety.mjs.
+#
+# CI is the enforcement -- this hook is not, and is not meant to be. It is not
+# installed by default, a clone without it commits happily, and --no-verify skips
+# it. That is fine: the point is to tell you at the moment you write the line,
+# rather than eight minutes into a build, because that is when the context for
+# deciding "is this one actually safe?" is still in your head.
+#
+# Install with:  npm run install-hooks
+set -uo pipefail
+
+root="$(git rev-parse --show-toplevel 2>/dev/null)" || exit 0
+cd "$root" || exit 0
+
+# Nothing staged in the two trees the check covers -> nothing it could report.
+if ! git diff --cached --name-only --diff-filter=ACMR \
+    | grep -qE '^(app|src)/.*\.(ts|js|mjs|cjs|html)$'; then
+    exit 0
+fi
+
+command -v node >/dev/null 2>&1 || exit 0   # no node on PATH: not this hook's problem
+
+# Scans the working tree, not the index. A partially staged file is therefore
+# judged by what is on disk, which can differ from what is being committed --
+# accepted deliberately, because reading the index would mean materialising every
+# staged blob to a temp tree for a check that CI repeats authoritatively anyway.
+if ! node scripts/check-electron-safety.mjs; then
+    echo ""
+    echo "Commit blocked by scripts/hooks/pre-commit."
+    echo "Fix the finding, waive it with a reason, or bypass with: git commit --no-verify"
+    exit 1
+fi
+
+exit 0

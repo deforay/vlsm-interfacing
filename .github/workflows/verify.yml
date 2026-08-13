@@ -30,5 +30,12 @@ jobs:
       - name: Audit production dependencies
         run: npm audit --omit=dev --audit-level=high
 
+      # Also part of `npm run verify` below, so it runs locally too. Repeated here
+      # as its own step because it costs milliseconds and a failure is a design
+      # decision to discuss, not a broken build -- worth surfacing under its own
+      # name rather than buried in the tail of a lint/test/build log.
+      - name: Check Electron safety invariants
+        run: npm run check:safety
+
       - name: Verify application
         run: npm run verify

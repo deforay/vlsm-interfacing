@@ -69,3 +69,33 @@ npm run verify
 This checks lint rules, unit tests, the Electron main-process compilation, and
 the optimized Angular production build. The same gate runs automatically for
 pull requests and pushes to `master`.
+
+### Electron safety invariants
+
+`npm run verify` starts with `npm run check:safety`, which asserts the two facts
+that keep this app's renderer safe. The renderer runs with `nodeIntegration`
+enabled, so anything that executes as script there executes with full Node. That
+is only safe because every value reaching the DOM goes through Angular's
+escaping, and the window only ever loads the bundled `file://` build.
+
+The check fails on changes that would break either — writing unescaped HTML
+(`innerHTML`, `bypassSecurityTrust*`), loading remote content into a window,
+opening a second web context, weakening `webPreferences`, or evaluating code at
+runtime. Each finding explains what it protects and what to do instead.
+
+If a finding is genuinely safe, say why on the line or the one above:
+
+```ts
+element.innerHTML = LEGAL_NOTICE; // electron-safety-ok: module constant, no input
+```
+
+A reason is required; a bare marker is still rejected.
+
+For the same check as a pre-commit hook, run once per clone:
+
+```bash
+npm run install-hooks
+```
+
+CI is the enforcement — the hook is only faster feedback, and `--no-verify`
+skips it.
