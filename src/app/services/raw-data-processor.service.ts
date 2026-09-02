@@ -187,15 +187,18 @@ export class RawDataProcessorService {
         const parts = astmData.split(this.instrumentInterfaceService['astmHelper'].getStartMarker());
         const persistencePromises: Promise<boolean>[] = [];
 
+        const astmHelper = this.instrumentInterfaceService['astmHelper'];
         for (const part of parts) {
           if (!part) continue;
           const astmArray = part.split(/<CR>/);
-          const dataBlock = this.instrumentInterfaceService['astmHelper'].getASTMDataBlock(astmArray);
 
-          if (Object.keys(dataBlock).length > 0) {
-            persistencePromises.push(
-              this.instrumentInterfaceService.processStoredASTMDataBlock(dataBlock, part, instrumentConnectionData)
-            );
+          for (const group of astmHelper.splitASTMRecordsByOrder(astmArray)) {
+            const dataBlock = astmHelper.getASTMDataBlock(group);
+            if (Object.keys(dataBlock).length > 0) {
+              persistencePromises.push(
+                this.instrumentInterfaceService.processStoredASTMDataBlock(dataBlock, part, instrumentConnectionData)
+              );
+            }
           }
         }
         persistenceResults = await this.withPersistenceTimeout(Promise.all(persistencePromises));

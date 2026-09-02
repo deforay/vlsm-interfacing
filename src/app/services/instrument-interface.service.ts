@@ -468,6 +468,12 @@ export class InstrumentInterfaceService {
     // match is NAKed so the instrument retransmits it (E1381 section 6.3).
     const tokens = that.astmHelper.assembleASTMFrames(instrumentConnectionData, astmText);
     for (const token of tokens) {
+      if (token.kind === 'control' && (token.text === '\x05' || token.text === '\x06')) {
+        // ENQ opens a session and ACK answers our own frames: acknowledge,
+        // but neither belongs in the stored transmission.
+        that.astmHelper.sendACK(instrumentConnectionData, 'Sending ACK');
+        continue;
+      }
       if (token.kind === 'frame' && !token.valid) {
         that.astmHelper.sendNAK(
           instrumentConnectionData,
@@ -601,17 +607,23 @@ export class InstrumentInterfaceService {
       completeMessage = completeMessage.trim();
       completeMessage = completeMessage.replace(/[\r\n\x0B\x0C\u0085\u2028\u2029]+/gm, '\r');
 
-      if (instrumentConnectionData.machineType === 'abbott-alinity-m') {
-        that.processHL7DataAlinity(instrumentConnectionData, completeMessage);
-      }
-      else if (instrumentConnectionData.machineType === 'roche-cobas-5800') {
-        that.processHL7DataRoche5800(instrumentConnectionData, completeMessage);
-      }
-      else if (instrumentConnectionData.machineType === 'roche-cobas-6800') {
-        that.processHL7DataRoche68008800(instrumentConnectionData, completeMessage);
-      }
-      else {
-        that.processHL7Data(instrumentConnectionData, completeMessage);
+      // A block that is not HL7 must not take the socket handler down with it.
+      try {
+        if (instrumentConnectionData.machineType === 'abbott-alinity-m') {
+          that.processHL7DataAlinity(instrumentConnectionData, completeMessage);
+        }
+        else if (instrumentConnectionData.machineType === 'roche-cobas-5800') {
+          that.processHL7DataRoche5800(instrumentConnectionData, completeMessage);
+        }
+        else if (instrumentConnectionData.machineType === 'roche-cobas-6800') {
+          that.processHL7DataRoche68008800(instrumentConnectionData, completeMessage);
+        }
+        else {
+          that.processHL7Data(instrumentConnectionData, completeMessage);
+        }
+      } catch (error) {
+        that.utilitiesService.logger('error', 'Failed to parse HL7 message: ' + error, instrumentConnectionData.instrumentId);
+        that.recordProcessingFailure('hl7_parse_failed', instrumentConnectionData);
       }
     }
 

@@ -201,6 +201,12 @@ export class UtilitiesService {
       '\r': '<CR>'      // Carriage Return to <CR>
     };
 
+    if (withChecksum) {
+      // A record split across frames continues after <ETB>cc<CR><LF><STX>n.
+      // Join the pieces before the frame number can leak into the record.
+      astmData = astmData.replace(/\x17[0-9A-Fa-f]{2}\r?\n?\x02\d/g, '');
+    }
+
     // Replace control characters, but conditionally handle <ETB>
     astmData = astmData.replace(
       withChecksum ? /[\x05\x02\x03\x04\x17\n\r]/g : /[\x05\x02\x03\n\r]/g,

@@ -393,16 +393,14 @@ export class ASTMHelperService {
           continue;
         }
 
-        const dataArray = this.getASTMDataBlock(astmArray);
-
-        if (Object.keys(dataArray).length === 0) {
+        if (Object.keys(this.getASTMDataBlock(astmArray)).length === 0) {
           this.utilitiesService.logger('info', 'No ASTM data extracted from chunk', instrumentId);
           continue;
         }
 
-        const sampleResult = this.extractSampleResultFromASTM(dataArray, partData);
-        if (sampleResult) {
-          sampleResults.push(sampleResult);
+        const extracted = this.extractSampleResultsFromASTM(astmArray, partData);
+        if (extracted.length > 0) {
+          sampleResults.push(...extracted);
         } else {
           this.utilitiesService.logger('warn', 'Failed to extract sample result from ASTM chunk', instrumentId);
         }
@@ -489,6 +487,57 @@ export class ASTMHelperService {
       isEOT: astmText === this.EOT,
       isNAK: astmText === this.NAK
     };
+  }
+
+  /**
+   * Splits the records of one message into one group per order record.
+   *
+   * A batch upload carries one H record and then P/O/R records for several
+   * patients. Records before the first O record (H, and any P or C) are
+   * shared by every group; each O record starts a new group that keeps the
+   * records after it until the next O record.
+   * @param astmArray Records of one message, in transmission order
+   * @returns One record array per order, or a single array when there is no O record
+   */
+  splitASTMRecordsByOrder(astmArray: string[]): string[][] {
+    const preamble: string[] = [];
+    const groups: string[][] = [];
+    let current: string[] | null = null;
+
+    for (const record of astmArray) {
+      const recordType = (record ?? '').replace(/^\d*/, '').charAt(0);
+      if (recordType === 'O') {
+        current = [...preamble, record];
+        groups.push(current);
+      } else if (current) {
+        current.push(record);
+      } else {
+        preamble.push(record);
+      }
+    }
+
+    return groups.length > 0 ? groups : [astmArray];
+  }
+
+  /**
+   * Extracts one sample result per order record in a message
+   * @param astmArray Records of one message, in transmission order
+   * @param partData Raw ASTM part data, stored with each result
+   * @returns Sample results in transmission order; empty when no order could be read
+   */
+  extractSampleResultsFromASTM(astmArray: string[], partData: string): any[] {
+    const results: any[] = [];
+    for (const group of this.splitASTMRecordsByOrder(astmArray)) {
+      const dataArray = this.getASTMDataBlock(group);
+      if (Object.keys(dataArray).length === 0) {
+        continue;
+      }
+      const sampleResult = this.extractSampleResultFromASTM(dataArray, partData);
+      if (sampleResult) {
+        results.push(sampleResult);
+      }
+    }
+    return results;
   }
 
   /**
