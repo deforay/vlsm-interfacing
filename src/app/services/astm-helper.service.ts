@@ -11,6 +11,24 @@ export interface ASTMProcessingResult {
   sampleResults?: any[];
 }
 
+/**
+ * One unit pulled out of the inbound byte stream in checksum mode.
+ *
+ * - `control`: a single ENQ, EOT, ACK or NAK byte.
+ * - `frame`: a complete <STX>...<ETX|ETB>cc[<CR><LF>] frame. `valid` says
+ *   whether the two checksum characters matched the frame contents.
+ * - `unframed`: text that is not inside a frame. Some analyzers do not frame
+ *   every byte, so this is passed through the way every chunk was before
+ *   frame validation existed.
+ */
+export interface ASTMFrameToken {
+  kind: 'control' | 'frame' | 'unframed';
+  text: string;
+  valid?: boolean;
+  expected?: string;
+  received?: string;
+}
+
 @Injectable({
   providedIn: 'root'
 })
@@ -21,6 +39,7 @@ export class ASTMHelperService {
   protected NAK = '\x15'; // Negative Acknowledge
   protected STX = '\x02'; // Start of Text
   protected ETX = '\x03'; // End of Text
+  protected ETB = '\x17'; // End of Transmission Block
   protected EOT = '\x04'; // End of Transmission
   protected ENQ = '\x05'; // Enquiry
   protected ACK = '\x06'; // Acknowledge
@@ -32,11 +51,16 @@ export class ASTMHelperService {
   // This is used to send an ACK response to the instrument after processing a message
   // It is defined as a Buffer to ensure it is sent in the correct binary format
   private readonly ACK_BUFFER = Buffer.from('\x06', 'binary');
+  private readonly NAK_BUFFER = Buffer.from('\x15', 'binary');
+  // E1381 frame numbers run 1..7 then 0, and restart at 1 for each message.
+  private static readonly FRAME_NUMBER_MODULUS = 8;
 
   // Track sequence numbers for different instruments
   private astmSequenceNumbers: Map<string, number> = new Map();
   // Buffer ASTM payloads per instrument until we receive EOT
   private astmBuffers: Map<string, string> = new Map();
+  // Bytes of a frame that has not finished arriving yet (checksum mode only)
+  private astmFrameBuffers: Map<string, string> = new Map();
   private astmBufferExpiryTimers: Map<string, ReturnType<typeof setTimeout>> = new Map();
 
   constructor(private utilitiesService: UtilitiesService) { }
@@ -72,6 +96,132 @@ export class ASTMHelperService {
     } catch (error) {
       this.utilitiesService.logger('error', 'Failed to send ASTM ACK: ' + error, instrumentConnectionData.instrumentId);
     }
+  }
+
+  /**
+   * Sends NAK so the instrument retransmits the last frame (E1381 section 6.3).
+   * Only used in checksum mode, when a frame fails checksum verification.
+   */
+  sendNAK(instrumentConnectionData: any, logMessage?: string): void {
+    try {
+      if (instrumentConnectionData &&
+        instrumentConnectionData.connectionSocket &&
+        instrumentConnectionData.connectionSocket.writable) {
+        this.utilitiesService.logger('warn', logMessage || 'Sending ASTM NAK', instrumentConnectionData.instrumentId);
+        instrumentConnectionData.connectionSocket.write(this.NAK_BUFFER, 'binary');
+      }
+    } catch (error) {
+      this.utilitiesService.logger('error', 'Failed to send ASTM NAK: ' + error, instrumentConnectionData.instrumentId);
+    }
+  }
+
+  /**
+   * Splits the inbound byte stream into control bytes, complete frames and
+   * unframed text. Bytes of a frame that has not finished arriving are kept
+   * per instrument until the next chunk. Used in checksum mode only.
+   * @param instrumentConnectionData Connection the bytes came from
+   * @param chunk The newly received bytes
+   * @returns Tokens that are complete and ready to be acted on
+   */
+  assembleASTMFrames(instrumentConnectionData: any, chunk: string): ASTMFrameToken[] {
+    const instrumentId = instrumentConnectionData?.instrumentId;
+    if (!instrumentId) {
+      return [];
+    }
+
+    const buffered = (this.astmFrameBuffers.get(instrumentId) ?? '') + chunk;
+    const { tokens, remainder } = this.extractASTMFrames(buffered);
+
+    if (!remainder) {
+      this.astmFrameBuffers.delete(instrumentId);
+      return tokens;
+    }
+
+    if (Buffer.byteLength(remainder, 'utf8') > ASTMHelperService.MAX_INCOMPLETE_BUFFER_BYTES) {
+      this.clearInstrumentBuffer(instrumentId);
+      instrumentConnectionData.transmissionStatusSubject?.next(false);
+      this.utilitiesService.logger('warn', 'Discarded oversized incomplete ASTM frame', instrumentId);
+      return tokens;
+    }
+
+    this.astmFrameBuffers.set(instrumentId, remainder);
+    this.scheduleBufferExpiry(instrumentConnectionData);
+    return tokens;
+  }
+
+  /**
+   * Pure tokenizer behind assembleASTMFrames.
+   * @param buffered Bytes received so far that have not been consumed
+   * @returns Complete tokens and the bytes still waiting for more data
+   */
+  extractASTMFrames(buffered: string): { tokens: ASTMFrameToken[]; remainder: string } {
+    const tokens: ASTMFrameToken[] = [];
+    const controlBytes = [this.ENQ, this.EOT, this.ACK, this.NAK];
+    let buffer = buffered;
+
+    while (buffer.length > 0) {
+      const first = buffer.charAt(0);
+
+      if (controlBytes.includes(first)) {
+        tokens.push({ kind: 'control', text: first });
+        buffer = buffer.slice(1);
+        continue;
+      }
+
+      // CR/LF that trail a frame may arrive in a later chunk. Outside a frame
+      // they carry no meaning.
+      if (first === this.CR || first === this.LF) {
+        buffer = buffer.slice(1);
+        continue;
+      }
+
+      if (first === this.STX) {
+        const terminatorIndex = this.findFrameTerminator(buffer, 1);
+        // Wait for <ETX|ETB> plus the two checksum characters
+        if (terminatorIndex === -1 || buffer.length < terminatorIndex + 3) {
+          break;
+        }
+
+        let end = terminatorIndex + 3;
+        if (buffer.charAt(end) === this.CR) {
+          end++;
+        }
+        if (buffer.charAt(end) === this.LF) {
+          end++;
+        }
+
+        const frameText = buffer.slice(0, end);
+        const expected = this.calculateChecksum(frameText);
+        const received = buffer.slice(terminatorIndex + 1, terminatorIndex + 3).toUpperCase();
+        tokens.push({ kind: 'frame', text: frameText, valid: expected === received, expected, received });
+        buffer = buffer.slice(end);
+        continue;
+      }
+
+      // Not a frame: pass through up to the next STX or control byte
+      let end = buffer.length;
+      for (let i = 1; i < buffer.length; i++) {
+        const current = buffer.charAt(i);
+        if (current === this.STX || controlBytes.includes(current)) {
+          end = i;
+          break;
+        }
+      }
+      tokens.push({ kind: 'unframed', text: buffer.slice(0, end) });
+      buffer = buffer.slice(end);
+    }
+
+    return { tokens, remainder: buffer };
+  }
+
+  private findFrameTerminator(buffer: string, fromIndex: number): number {
+    for (let i = fromIndex; i < buffer.length; i++) {
+      const current = buffer.charAt(i);
+      if (current === this.ETX || current === this.ETB) {
+        return i;
+      }
+    }
+    return -1;
   }
 
   /**
@@ -129,6 +279,8 @@ export class ASTMHelperService {
     const header = this.STX + sequenceNumber;
     const footer = this.ETX;
     const checksum = this.calculateChecksum(header + message + footer);
+    // EOT ends the message, so the next message starts again at frame 1
+    this.resetSequenceNumber(instrumentId);
     return header + message + footer + checksum + this.CR + this.LF + this.EOT;
   }
 
@@ -142,9 +294,9 @@ export class ASTMHelperService {
 
     // Remove STX if present
     const startIndex = message.startsWith('\x02') ? 1 : 0;
-    // Ensure ETX is present, and trim anything after ETX
-    const endIndex = message.indexOf('\x03') !== -1 ? message.indexOf('\x03') + 1 : message.length;
-    // Adjust message to only include content from start index to ETX (inclusive)
+    // The checksum covers everything after STX up to and including ETX or ETB
+    const terminatorIndex = this.findFrameTerminator(message, startIndex);
+    const endIndex = terminatorIndex !== -1 ? terminatorIndex + 1 : message.length;
     const adjustedMessage = message.substring(startIndex, endIndex);
 
     // Calculate checksum
@@ -165,28 +317,26 @@ export class ASTMHelperService {
    * @returns Current sequence number as a string
    */
   getAndUpdateSequenceNumber(instrumentId: string): string {
-    // Ensure the instrumentId is tracked
-    if (!this.astmSequenceNumbers.has(instrumentId)) {
-      this.astmSequenceNumbers.set(instrumentId, 1);
-    } else {
-      let currentSequence = this.astmSequenceNumbers.get(instrumentId)!;
-      //currentSequence = (currentSequence % 7) + 1; // Cycle from 1 to 7
-      this.astmSequenceNumbers.set(instrumentId, currentSequence + 1);
-    }
-    return this.astmSequenceNumbers.get(instrumentId)!.toString(); // No padding needed
+    const lastSequence = this.astmSequenceNumbers.get(instrumentId);
+    // First frame of a message is 1; then 2..7, 0, 1, ... (E1381 6.3.2)
+    const nextSequence = lastSequence === undefined
+      ? 1
+      : (lastSequence + 1) % ASTMHelperService.FRAME_NUMBER_MODULUS;
+    this.astmSequenceNumbers.set(instrumentId, nextSequence);
+    return nextSequence.toString();
   }
 
   /**
-   * Resets the sequence number for an instrument
+   * Resets the sequence number so the next frame for this instrument is 1
    * @param instrumentId Instrument ID to reset sequence for
    */
   resetSequenceNumber(instrumentId: string): void {
-    console.error("Resetting sequence number for " + instrumentId);
-    this.astmSequenceNumbers.set(instrumentId, 100);
+    this.astmSequenceNumbers.delete(instrumentId);
   }
 
   clearInstrumentBuffer(instrumentId: string): void {
     this.astmBuffers.delete(instrumentId);
+    this.astmFrameBuffers.delete(instrumentId);
     const expiryTimer = this.astmBufferExpiryTimers.get(instrumentId);
     if (expiryTimer) {
       clearTimeout(expiryTimer);
@@ -295,13 +445,14 @@ export class ASTMHelperService {
     }
 
     const expiryTimer = setTimeout(() => {
-      const bufferedData = this.astmBuffers.get(instrumentId);
+      const bufferedData = (this.astmBuffers.get(instrumentId) ?? '') + (this.astmFrameBuffers.get(instrumentId) ?? '');
       this.astmBufferExpiryTimers.delete(instrumentId);
       if (!bufferedData) {
         return;
       }
 
       this.astmBuffers.delete(instrumentId);
+      this.astmFrameBuffers.delete(instrumentId);
       instrumentConnectionData.transmissionStatusSubject?.next(false);
       this.utilitiesService.logger(
         'warn',

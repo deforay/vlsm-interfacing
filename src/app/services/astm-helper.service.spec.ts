@@ -33,6 +33,55 @@ describe('ASTMHelperService', () => {
     expect(checksum).toBe(service.calculateChecksum(framed));
   });
 
+  it('numbers outbound frames 1 to 7 then 0 and restarts at 1 after EOT', () => {
+    const service = createService();
+    const numbers = Array.from({ length: 9 }, () => service.getAndUpdateSequenceNumber('ANALYZER-1'));
+
+    expect(numbers).toEqual(['1', '2', '3', '4', '5', '6', '7', '0', '1']);
+
+    service.frameASTMMessage('H|\\^&\r', 'ANALYZER-1');
+    const nextMessage = service.frameASTMMessage('H|\\^&\r', 'ANALYZER-1');
+    expect(nextMessage.startsWith('\x021H|')).toBe(true);
+  });
+
+  it('checksums an ETB frame through the ETB byte', () => {
+    const service = createService();
+    const etxFrame = '\x021H|\\^&\r\x03';
+    const etbFrame = '\x021H|\\^&\r\x17';
+
+    expect(service.calculateChecksum(etxFrame)).toBe(service.calculateChecksum(etxFrame + 'XX\r\n\x04'));
+    expect(service.calculateChecksum(etbFrame)).toBe(service.calculateChecksum(etbFrame + 'XX\r\n'));
+    expect(service.calculateChecksum(etbFrame)).not.toBe(service.calculateChecksum(etxFrame));
+  });
+
+  it('tokenizes control bytes, frames and unframed text from the inbound stream', () => {
+    const service = createService();
+    const body = '\x021H|\\^&|||LAB001\r\x03';
+    const checksum = service.calculateChecksum(body);
+    const stream = `\x05${body}${checksum}\r\n${body}00\r\n${body}${checksum.toLowerCase()}\x17LOOSE\x04\x02`;
+
+    const { tokens, remainder } = service.extractASTMFrames(stream);
+
+    expect(tokens.map(token => token.kind)).toEqual(['control', 'frame', 'frame', 'frame', 'unframed', 'control']);
+    expect(tokens[0].text).toBe('\x05');
+    expect(tokens[1]).toMatchObject({ valid: true, expected: checksum, received: checksum });
+    expect(tokens[2]).toMatchObject({ valid: false, expected: checksum, received: '00' });
+    expect(tokens[3]).toMatchObject({ valid: true });
+    expect(tokens[4].text).toBe('\x17LOOSE');
+    expect(tokens[5].text).toBe('\x04');
+    expect(remainder).toBe('\x02');
+  });
+
+  it('holds back a frame until its checksum characters have arrived', () => {
+    const service = createService();
+    const body = '\x021H|\\^&|||LAB001\r\x03';
+    const checksum = service.calculateChecksum(body);
+
+    expect(service.extractASTMFrames(body + checksum.charAt(0))).toEqual({ tokens: [], remainder: body + checksum.charAt(0) });
+    expect(service.extractASTMFrames(body + checksum).tokens).toHaveLength(1);
+    expect(service.extractASTMFrames('\r\n' + body + checksum + '\r').remainder).toBe('');
+  });
+
   it('keeps concurrent instrument transmissions isolated until EOT', () => {
     const service = createService();
     const instrumentA = { instrumentId: 'ANALYZER-A' };

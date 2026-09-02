@@ -41,7 +41,7 @@ describe('InstrumentInterfaceService HL7 streams', () => {
       dbService as any,
       tcpService as any,
       utilitiesService as any,
-      {} as any,
+      new HL7HelperService(utilitiesService as any),
       astmHelper as any
     );
 
@@ -167,6 +167,37 @@ describe('InstrumentInterfaceService HL7 streams', () => {
     expect(tcpService.disconnect).toHaveBeenCalledOnce();
   });
 
+  it('processes every MLLP block when several arrive in one chunk', () => {
+    const { service, tcpService } = createService();
+    const key = '10.0.0.1:5001:tcpserver:hl7';
+    tcpService.connectionStack.set(key, createConnection('ANALYZER-A'));
+    const processSpy = vi.spyOn(service, 'processHL7Data').mockImplementation(() => undefined);
+
+    service.handleTCPResponse(key, Buffer.from('\x0bMSH|^~\\&|A|LAB|FIRST\x1c\r\x0bMSH|^~\\&|A|LAB|SECOND\x1c\r'));
+
+    expect(processSpy).toHaveBeenCalledTimes(2);
+    expect(processSpy.mock.calls[0][1]).toContain('FIRST');
+    expect(processSpy.mock.calls[0][1]).not.toContain('SECOND');
+    expect(processSpy.mock.calls[1][1]).toContain('SECOND');
+    expect(processSpy.mock.calls[1][1]).not.toContain('FIRST');
+  });
+
+  it('keeps the tail after a block separator for the next message', () => {
+    const { service, tcpService } = createService();
+    const key = '10.0.0.1:5001:tcpserver:hl7';
+    tcpService.connectionStack.set(key, createConnection('ANALYZER-A'));
+    const processSpy = vi.spyOn(service, 'processHL7Data').mockImplementation(() => undefined);
+
+    service.handleTCPResponse(key, Buffer.from('\x0bMSH|^~\\&|A|LAB|FIRST\x1c'));
+    service.handleTCPResponse(key, Buffer.from('\r\x0bMSH|^~\\&|A|LAB|SEC'));
+    service.handleTCPResponse(key, Buffer.from('OND\x1c\r'));
+
+    expect(processSpy).toHaveBeenCalledTimes(2);
+    expect(processSpy.mock.calls[1][1]).toContain('SECOND');
+    expect(processSpy.mock.calls[1][1]).not.toContain('FIRST');
+    expect((service as any).hl7ReceiveBuffers.has('ANALYZER-A')).toBe(false);
+  });
+
   it('reports successful persistence after parsing a stored HL7 result', async () => {
     const { service, dbService } = createParsingService(true);
     const rawMessage = [
@@ -203,5 +234,114 @@ describe('InstrumentInterfaceService HL7 streams', () => {
     }));
     expect(dbService.recordTelemetryEvent.mock.calls[0][0]).not.toHaveProperty('orderId');
     expect(dbService.recordTelemetryEvent.mock.calls[0][0]).not.toHaveProperty('result');
+  });
+});
+
+describe('InstrumentInterfaceService ASTM frames', () => {
+  const createConnection = (instrumentId: string) => ({
+    instrumentId,
+    machineType: 'generic',
+    labName: 'LAB001',
+    statusSubject: new BehaviorSubject(false),
+    connectionAttemptStatusSubject: new BehaviorSubject(false),
+    transmissionStatusSubject: new BehaviorSubject(false),
+    errorOccurred: false,
+    reconnectAttempts: 0
+  });
+
+  const createASTMService = (protocol: 'astm-checksum' | 'astm-nonchecksum') => {
+    const dbService = {
+      recordRawData: vi.fn((_data, success) => success()),
+      recordTestResults: vi.fn((_data, success) => success({ lastID: 1 })),
+      recordTelemetryEvent: vi.fn().mockResolvedValue(true)
+    };
+    const tcpService = { connectionStack: new Map<string, any>(), disconnect: vi.fn() };
+    const utilities = new UtilitiesService(null, null, { log: vi.fn() } as any);
+    const astmHelper = new ASTMHelperService(utilities);
+    const service = new InstrumentInterfaceService(
+      dbService as any,
+      tcpService as any,
+      utilities,
+      new HL7HelperService(utilities),
+      astmHelper
+    );
+    const socket = { writable: true, write: vi.fn() };
+    const key = `10.0.0.1:5001:tcpserver:${protocol}`;
+    tcpService.connectionStack.set(key, {
+      ...createConnection('ANALYZER-A'),
+      connectionProtocol: protocol,
+      connectionSocket: socket
+    });
+    const sentBytes = () => socket.write.mock.calls.map(call => call[0].toString('binary'));
+    const frame = (body: string, checksum?: string) => {
+      const unchecked = `\x02${body}\x03`;
+      return `${unchecked}${checksum ?? astmHelper.calculateChecksum(unchecked)}\r\n`;
+    };
+
+    return { service, dbService, key, sentBytes, frame };
+  };
+
+  const ACK = '\x06';
+  const NAK = '\x15';
+  const ENQ = '\x05';
+  const EOT = '\x04';
+  const header = '1H|\\^&|||LAB001\r';
+  const order = '2O|1|SAMPLE-001||^^^HIVVL|||||||||||||||||||||F\r';
+  const result = '3R|1|^^^HIVVL|1250|copies/mL\r';
+
+  it('acknowledges frames with a valid checksum and stores the result', () => {
+    const { service, dbService, key, sentBytes, frame } = createASTMService('astm-checksum');
+
+    service.handleTCPResponse(key, Buffer.from(ENQ, 'binary'));
+    service.handleTCPResponse(key, Buffer.from(frame(header), 'binary'));
+    service.handleTCPResponse(key, Buffer.from(frame(order) + frame(result), 'binary'));
+    service.handleTCPResponse(key, Buffer.from(EOT, 'binary'));
+
+    expect(sentBytes()).toEqual([ACK, ACK, ACK, ACK, ACK]);
+    expect(dbService.recordTestResults).toHaveBeenCalledOnce();
+    expect(dbService.recordTestResults.mock.calls[0][0]).toMatchObject({ order_id: 'SAMPLE-001', results: '1250' });
+  });
+
+  it('rejects a corrupt frame with NAK and accepts the retransmission', () => {
+    const { service, dbService, key, sentBytes, frame } = createASTMService('astm-checksum');
+
+    service.handleTCPResponse(key, Buffer.from(frame(header), 'binary'));
+    service.handleTCPResponse(key, Buffer.from(frame(order, '00'), 'binary'));
+    service.handleTCPResponse(key, Buffer.from(frame(order), 'binary'));
+    service.handleTCPResponse(key, Buffer.from(frame(result), 'binary'));
+    service.handleTCPResponse(key, Buffer.from(EOT, 'binary'));
+
+    expect(sentBytes()).toEqual([ACK, NAK, ACK, ACK, ACK]);
+    expect(dbService.recordTestResults).toHaveBeenCalledOnce();
+    expect(dbService.recordRawData.mock.calls[0][0].data.match(/O\|1\|SAMPLE-001/g)).toHaveLength(1);
+    expect(dbService.recordTelemetryEvent).toHaveBeenCalledWith(expect.objectContaining({ failureCode: 'checksum_mismatch' }));
+  });
+
+  it('waits for the rest of a frame split across TCP chunks before acknowledging', () => {
+    const { service, dbService, key, sentBytes, frame } = createASTMService('astm-checksum');
+    const framed = frame(header);
+    const splitAt = 8;
+
+    service.handleTCPResponse(key, Buffer.from(framed.slice(0, splitAt), 'binary'));
+    expect(sentBytes()).toEqual([]);
+
+    service.handleTCPResponse(key, Buffer.from(framed.slice(splitAt), 'binary'));
+    service.handleTCPResponse(key, Buffer.from(frame(order) + frame(result), 'binary'));
+    service.handleTCPResponse(key, Buffer.from(EOT, 'binary'));
+
+    expect(sentBytes()).toEqual([ACK, ACK, ACK, ACK]);
+    expect(dbService.recordTestResults).toHaveBeenCalledOnce();
+  });
+
+  it('keeps accepting unverified frames when the protocol has no checksum', () => {
+    const { service, dbService, key, sentBytes, frame } = createASTMService('astm-nonchecksum');
+
+    service.handleTCPResponse(key, Buffer.from(frame(header), 'binary'));
+    service.handleTCPResponse(key, Buffer.from(frame(order, '00') + frame(result, 'ZZ'), 'binary'));
+    service.handleTCPResponse(key, Buffer.from(EOT, 'binary'));
+
+    expect(sentBytes()).toEqual([ACK, ACK, ACK]);
+    expect(sentBytes()).not.toContain(NAK);
+    expect(dbService.recordTestResults).toHaveBeenCalledOnce();
   });
 });

@@ -458,6 +458,31 @@ export class InstrumentInterfaceService {
     instrumentConnectionData.transmissionStatusSubject.next(true);
     const astmText = that.utilitiesService.hex2ascii(data.toString('hex'));
 
+    if (astmProtocolType !== COMMUNICATION_PROTOCOL.ASTM_CHECKSUM) {
+      // Without checksums there is nothing to verify: accept every chunk as-is
+      that.handleASTMChunk(astmProtocolType, instrumentConnectionData, astmText);
+      return;
+    }
+
+    // With checksums, act on whole frames. A frame whose checksum does not
+    // match is NAKed so the instrument retransmits it (E1381 section 6.3).
+    const tokens = that.astmHelper.assembleASTMFrames(instrumentConnectionData, astmText);
+    for (const token of tokens) {
+      if (token.kind === 'frame' && !token.valid) {
+        that.astmHelper.sendNAK(
+          instrumentConnectionData,
+          `ASTM checksum mismatch (expected ${token.expected}, received ${token.received}). Sending NAK`
+        );
+        that.recordProcessingFailure('checksum_mismatch', instrumentConnectionData);
+        continue;
+      }
+      that.handleASTMChunk(astmProtocolType, instrumentConnectionData, token.text);
+    }
+  }
+
+  private handleASTMChunk(astmProtocolType: string, instrumentConnectionData: InstrumentConnectionStack, astmText: string) {
+    const that = this;
+
     // Inspect the chunk so we know how to handle it
     const processedInfo = that.astmHelper.processASTMText(astmText);
 
@@ -537,19 +562,32 @@ export class InstrumentInterfaceService {
       return;
     }
 
-    that.hl7ReceiveBuffers.set(bufferKey, bufferedData);
-
     that.utilitiesService.logger('info', hl7Text, instrumentConnectionData.instrumentId);
 
-    // If there is a File Separator or 1C or ASCII 28 character,
-    // it means the stream has ended and we can proceed with saving this data
-    if (bufferedData.includes('\x1c')) {
-      // Let us store this Raw Data before we process it
-      instrumentConnectionData.transmissionStatusSubject.next(false);
-      that.utilitiesService.logger('info', 'Received File Separator Character. Ready to process HL7 data', instrumentConnectionData.instrumentId);
+    // MLLP wraps each message as <VT>...<FS><CR>. One chunk may hold several
+    // messages, or the tail of one, so take every complete block and keep
+    // whatever follows the last <FS> for the next chunk.
+    const { messages, remainder } = that.hl7Helper.extractMLLPMessages(bufferedData);
 
+    if (remainder) {
+      that.hl7ReceiveBuffers.set(bufferKey, remainder);
+      that.scheduleHL7BufferExpiry(instrumentConnectionData);
+    } else {
+      // Every received byte belongs to a complete block. Clear before parsing
+      // so a parser exception cannot contaminate the next transmission.
+      that.clearHL7Buffer(bufferKey);
+    }
+
+    if (messages.length === 0) {
+      return;
+    }
+
+    instrumentConnectionData.transmissionStatusSubject.next(false);
+    that.utilitiesService.logger('info', 'Received File Separator Character. Ready to process HL7 data', instrumentConnectionData.instrumentId);
+
+    for (const message of messages) {
       const rawData: RawMachineData = {
-        data: bufferedData,
+        data: message,
         machine: instrumentConnectionData.instrumentId,
         instrument_id: instrumentConnectionData.instrumentId
       };
@@ -559,15 +597,9 @@ export class InstrumentInterfaceService {
         that.utilitiesService.logger('error', 'Failed to save raw data ' + JSON.stringify(err), instrumentConnectionData.instrumentId);
       });
 
-
-      let completeMessage = bufferedData.replace(/[\x0b\x1c]/g, '');
+      let completeMessage = message.replace(/[\x0b\x1c]/g, '');
       completeMessage = completeMessage.trim();
       completeMessage = completeMessage.replace(/[\r\n\x0B\x0C\u0085\u2028\u2029]+/gm, '\r');
-      // The complete frame is now owned by this call. Clear it before parsing
-      // so a parser exception cannot contaminate the next transmission.
-      that.clearHL7Buffer(bufferKey);
-
-      //console.error(that.strData);
 
       if (instrumentConnectionData.machineType === 'abbott-alinity-m') {
         that.processHL7DataAlinity(instrumentConnectionData, completeMessage);
@@ -581,11 +613,9 @@ export class InstrumentInterfaceService {
       else {
         that.processHL7Data(instrumentConnectionData, completeMessage);
       }
-
-      instrumentConnectionData.transmissionStatusSubject.next(false);
-    } else {
-      that.scheduleHL7BufferExpiry(instrumentConnectionData);
     }
+
+    instrumentConnectionData.transmissionStatusSubject.next(false);
   }
 
   private clearHL7Buffer(instrumentId: string): void {

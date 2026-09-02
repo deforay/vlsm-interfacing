@@ -431,6 +431,47 @@ export class HL7HelperService {
   }
 
   /**
+   * Splits buffered MLLP bytes into complete messages.
+   *
+   * A block is <VT> ... <FS> <CR>. The <FS> is what marks a message complete;
+   * the <VT> and trailing <CR> are tolerated when missing because some
+   * analyzers omit them, and the <CR> may arrive in a later TCP chunk.
+   * Bytes before a <VT> that follow an earlier block are dropped as noise.
+   * @param buffered Bytes received so far that have not been consumed
+   * @returns Each complete block (with its own framing bytes) and the unconsumed tail
+   */
+  extractMLLPMessages(buffered: string): { messages: string[]; remainder: string } {
+    const VT = '\x0B';
+    const FS = '\x1C';
+    const messages: string[] = [];
+    let buffer = buffered.replace(/^[\r\n]+/, '');
+
+    for (;;) {
+      const fsIndex = buffer.indexOf(FS);
+      if (fsIndex === -1) {
+        break;
+      }
+
+      let block = buffer.slice(0, fsIndex + 1);
+      const vtIndex = block.indexOf(VT);
+      if (vtIndex > 0) {
+        block = block.slice(vtIndex);
+      }
+
+      let end = fsIndex + 1;
+      if (buffer.charAt(end) === '\r') {
+        end++;
+        block += '\r';
+      }
+
+      messages.push(block);
+      buffer = buffer.slice(end).replace(/^[\r\n]+/, '');
+    }
+
+    return { messages, remainder: buffer };
+  }
+
+  /**
    * Processes HL7 raw text by cleaning control characters
    * @param rawText Raw HL7 text to process
    * @returns Cleaned HL7 text
