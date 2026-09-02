@@ -513,6 +513,12 @@ export class InstrumentInterfaceService {
       instrumentConnectionData.transmissionStatusSubject.next(false);
       const rawDataPayload = parsingResult.rawData ?? '';
 
+      if (!rawDataPayload) {
+        // Abbott m2000 opens and closes empty sessions between runs
+        that.utilitiesService.logger('info', 'Empty ASTM session closed', instrumentConnectionData.instrumentId);
+        return;
+      }
+
       that.utilitiesService.logger('info', 'Received EOT. ASTM payload length: ' + rawDataPayload.length, instrumentConnectionData.instrumentId);
       that.utilitiesService.logger('info', 'Processing ' + astmProtocolType, instrumentConnectionData.instrumentId);
 

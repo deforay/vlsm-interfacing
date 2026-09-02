@@ -201,11 +201,12 @@ export class UtilitiesService {
       '\r': '<CR>'      // Carriage Return to <CR>
     };
 
-    if (withChecksum) {
-      // A record split across frames continues after <ETB>cc<CR><LF><STX>n.
-      // Join the pieces before the frame number can leak into the record.
-      astmData = astmData.replace(/\x17[0-9A-Fa-f]{2}\r?\n?\x02\d/g, '');
-    }
+    // A record split across frames continues after <ETB>cc<CR><LF><STX>n
+    // (GeneXpert fills 240-byte frames and cuts records wherever they fall).
+    // Join the pieces before the frame number can leak into the record. The
+    // checksum characters are optional so this also covers analyzers that
+    // send none.
+    astmData = astmData.replace(/\x17[0-9A-Fa-f]{0,2}\r?\n?\x02\d/g, '');
 
     // Replace control characters, but conditionally handle <ETB>
     astmData = astmData.replace(

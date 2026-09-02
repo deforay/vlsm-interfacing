@@ -554,7 +554,8 @@ export class ASTMHelperService {
         const oSegmentFields = dataArray['O'][0]; // dataArray['O'] is an array of arrays (each sub-array is a segment's fields)
 
         const primarySpecimenId = oSegmentFields[2]?.trim();
-        const instrumentSpecimenId = oSegmentFields[3]?.trim();
+        // O.4 is "specimenId^run^well" on Abbott m2000; keep only the identifier
+        const instrumentSpecimenId = oSegmentFields[3]?.trim().split('^')[0];
 
         sampleResult.order_id = primarySpecimenId;
         // ASTM O.1 is only the record sequence number. Use the analyzer's
@@ -617,6 +618,7 @@ export class ASTMHelperService {
         sampleResult.raw_text = partData;
         sampleResult.result_status = resultStatus === 'F' ? 1 : 0;
         sampleResult.lims_sync_status = LIMS_SYNC_STATUS.PENDING;
+        sampleResult.notes = this.extractASTMComments(dataArray);
 
         return sampleResult;
       }
@@ -626,6 +628,25 @@ export class ASTMHelperService {
       console.error("Error extracting sample result from ASTM:", error);
       return null;
     }
+  }
+
+  /**
+   * Joins the text of the C (comment) records of an order. Abbott m2000
+   * explains a failed order this way, e.g. "4442 : Internal control cycle
+   * number is too high."
+   */
+  extractASTMComments(dataArray: any): string {
+    const comments: string[] = [];
+    for (const fields of dataArray['C'] ?? []) {
+      // GeneXpert sends "Error^2097^Operation terminated^Error 2097: ...^<timestamp>";
+      // the last component that is not a timestamp is the full description.
+      const components = (fields[3] ?? '').split('^').map((part: string) => part.trim()).filter((part: string) => part && !/^\d{14}$/.test(part));
+      const text = components.length > 0 ? components[components.length - 1] : '';
+      if (text) {
+        comments.push(this.utilitiesService.decodeHtmlEntities(text));
+      }
+    }
+    return comments.join(' | ');
   }
 
   /**
