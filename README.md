@@ -1,5 +1,7 @@
 # Instrument Interfacing Tool
 
+![License: AGPL v3](https://img.shields.io/badge/License-AGPL%20v3-blue)
+
 A standalone Electron application that receives test results from laboratory instruments and stores them in a local database (SQLite and/or MySQL). It is designed to be **LIS-agnostic** — any Laboratory Information System can pick up results from the shared database.
 
 ## How It Works
@@ -99,3 +101,24 @@ npm run install-hooks
 
 CI is the enforcement — the hook is only faster feedback, and `--no-verify`
 skips it.
+
+---
+
+## Funding and partners
+
+The Instrument Interfacing Tool is developed with funding from the United States Government (USG). Over the years, the project has benefited from the support and collaboration of partners including the African Society for Laboratory Medicine (ASLM), the American Society for Microbiology (ASM), the African Field Epidemiology Network (AFENET), Emory University, and the Maryland Global Initiatives Corporation (MGIC), among others.
+
+---
+
+## License
+
+The Instrument Interfacing Tool is free and open-source software released under the **GNU Affero General Public License v3.0 (AGPL-3.0)**.
+
+Read the full text in [LICENSE.md](LICENSE.md).
+
+---
+
+## Support
+
+- Email [support@deforay.com](mailto:support@deforay.com)
+- Website [deforay.com](https://deforay.com/)

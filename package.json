@@ -2,6 +2,7 @@
   "main": "app/main.js",
   "version": "4.1.15",
   "private": true,
+  "license": "AGPL-3.0-or-later",
   "scripts": {
     "postinstall": "electron-builder install-app-deps",
     "ng": "ng",
