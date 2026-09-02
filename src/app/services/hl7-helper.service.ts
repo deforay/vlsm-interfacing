@@ -255,13 +255,15 @@ export class HL7HelperService {
       resultOutcome === 'Not Detected') {
       return { results: resultOutcome, test_unit: '', notes: '' };
     } else {
+      // Values are stored exactly as the analyzer reports them. Roche X800
+      // sends a mantissa with a UCUM power-of-ten unit (763 with
+      // 10*-1.{Copies}/mL) and cobas 4800 sends 3.26E+05 cp/mL; reading
+      // those is the LIS's responsibility, not this tool's.
       const testUnit = this.utilitiesService.decodeHtmlEntities(this.extractHL7Unit(singleObx));
-      const expanded = this.expandScientificNotation(resultOutcome, testUnit);
-      const scaled = this.applyUcumExponent(expanded.value, expanded.unit);
 
       return {
-        results: scaled.value,
-        test_unit: scaled.unit,
+        results: resultOutcome,
+        test_unit: testUnit,
         notes: ''
       };
     }
@@ -285,42 +287,6 @@ export class HL7HelperService {
       }
     }
     return '';
-  }
-
-  /**
-   * Roche cobas 4800 reports a quantitative result as text such as
-   * "3.26E+05 cp/mL" with unit "1/mL". Expand it to the plain count the
-   * laboratory expects, as earlier versions of this tool did.
-   */
-  expandScientificNotation(value: string, unit: string): { value: string; unit: string } {
-    const match = /^(\d+(?:\.\d+)?)E([+-]?\d+)\s*cp\/mL$/i.exec((value ?? '').trim());
-    if (!match) {
-      return { value, unit };
-    }
-    const expanded = Number(match[1]) * Math.pow(10, Number(match[2]));
-    return { value: String(Math.round(expanded)), unit: 'copies/mL' };
-  }
-
-  /**
-   * Roche X800 middleware (cobas 5800/6800/8800) reports quantitative results
-   * as a three-digit mantissa with a UCUM power-of-ten unit, for example
-   * value 367 with unit "10*-1.{copies}/mL", which is 36.7 copies/mL.
-   * Storing the mantissa alone misreports the viral load, so the value is
-   * scaled here and the unit reduced to its annotation.
-   */
-  applyUcumExponent(value: string, unit: string): { value: string; unit: string } {
-    const match = /^10\*(-?\d+)\.\{([^}]+)\}\/(\S+)$/.exec(unit ?? '');
-    if (!match || !/^-?\d+(\.\d+)?$/.test(value ?? '')) {
-      return { value, unit };
-    }
-
-    const exponent = Number(match[1]);
-    const scaled = Number(value) * Math.pow(10, exponent);
-    const decimals = exponent < 0 ? -exponent : 0;
-    return {
-      value: scaled.toFixed(decimals),
-      unit: `${match[2]}/${match[3]}`
-    };
   }
 
   private extractObx8Outcome(singleObx: any): string {

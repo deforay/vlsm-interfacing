@@ -7,8 +7,8 @@
  * - One message per sample, each in its own MLLP block.
  * - SPM.2 is "<id>&ROCHE"; SAC.3 repeats the plain id.
  * - A quantitative result is OBX.2 NM with a three-digit mantissa in OBX.5
- *   and a UCUM power-of-ten unit in OBX.6: 367 with "10*-1.{copies}/mL" is
- *   36.7 copies/mL, 101 with "10*0.{copies}/mL" is 101 copies/mL.
+ *   and a UCUM power-of-ten unit in OBX.6, e.g. 367 with "10*-1.{copies}/mL".
+ *   Both are stored as sent; the tool does not interpret them.
  * - Target not detected is OBX.2 ST, OBX.5 "Target Not Detected", OBX.6
  *   "^^UCUM", OBX.8 "ND^^99ROC".
  * - A failed sample has OBX.2 and OBX.5 empty, OBX.8 with the error code and

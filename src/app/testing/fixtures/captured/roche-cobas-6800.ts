@@ -8,7 +8,7 @@
  * - SPM.1 is empty; SPM.2 is the plain sample ID with no &ROCHE suffix.
  * - Four OBX per sample. OBX.1 (HIV^HIV^99ROC, OBX.4 empty) carries the
  *   quantitative value as a three-digit mantissa with a UCUM power-of-ten
- *   unit, e.g. 763 with "10*-1.{Copies}/mL" meaning 76.3 copies/mL, or
+ *   unit, e.g. 763 with "10*-1.{Copies}/mL", stored as sent, or
  *   "ValueNotSet" with a flag in OBX.8 (ND, BT, RR, NR). OBX.2 is NA with Ct
  *   values. OBX.3 (1/1) is ValueNotSet. OBX.4 (1/2) is the textual outcome:
  *   "Titer", "Target Not Detected", "< Titer min" or "Invalid".

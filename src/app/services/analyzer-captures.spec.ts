@@ -175,13 +175,14 @@ describe('Roche cobas 5800 capture (HL7)', () => {
       }
 
       expect(wire.sent()).toHaveLength(8);
+      // Mantissa and UCUM exponent unit are stored exactly as sent
       expect(wire.saved().map(result => [result.order_id, result.results, result.test_unit, result.notes])).toEqual([
         ['VL00000407', 'Failed', '', COBAS_5800_PIPETTING_ERROR],
         ['VL00000397', 'Failed', '', COBAS_5800_CLOT_ERROR],
         ['VL00000671', 'Failed', '', COBAS_5800_CLOT_ERROR],
-        ['VL00000427', '36.7', 'copies/mL', ''],
-        ['VL00000428', '101', 'copies/mL', ''],
-        ['VL00000429', '33.7', 'copies/mL', ''],
+        ['VL00000427', '367', '10*-1.{copies}/mL', ''],
+        ['VL00000428', '101', '10*0.{copies}/mL', ''],
+        ['VL00000429', '337', '10*-1.{copies}/mL', ''],
         ['VL00000430', 'Target Not Detected', '', ''],
         ['VL00000431', 'Target Not Detected', '', '']
       ]);
@@ -197,16 +198,16 @@ describe('Roche cobas 5800 capture (HL7)', () => {
 });
 
 describe('Roche cobas 6800/8800 capture (HL7)', () => {
-  it('scales three-digit mantissas by the UCUM exponent and maps every outcome', () => {
+  it('stores the mantissa and UCUM exponent unit as sent and maps every outcome', () => {
     const wire = createWireHarness({ protocol: 'hl7', machineType: 'roche-cobas-6800' });
 
     wire.receive(COBAS_6800_CAPTURE.map(message => mllp(message)).join(''));
 
     expect(wire.sent()).toHaveLength(6);
     expect(wire.saved().map(result => [result.order_id, result.results, result.test_unit])).toEqual([
-      ['WB26-02146', '76.3', 'Copies/mL'],
-      ['BP26-15201', '194', 'Copies/mL'],
-      ['BP26-15202', '2260000', 'Copies/mL'],
+      ['WB26-02146', '763', '10*-1.{Copies}/mL'],
+      ['BP26-15201', '194', '10*0.{Copies}/mL'],
+      ['BP26-15202', '226', '10*4.{Copies}/mL'],
       ['WB26-02135', 'Target Not Detected', ''],
       ['BP26-15178', '< Titer min', ''],
       ['BP26-16850', 'Invalid', '']
@@ -239,15 +240,16 @@ describe('Roche cobas 4800 capture (HL7)', () => {
       wire.receive(mllp(cobas4800Run('MSG-4800-RUN', COBAS_4800_RUN)));
 
       expect(wire.sent()).toHaveLength(1);
+      // Scientific notation and the 1/mL unit are stored exactly as sent
       expect(wire.saved().map(result => [result.order_id, result.results, result.test_unit])).toEqual([
-        ['0PHJ100001N0QVJ', '326000', 'copies/mL'],
-        ['0PLJ100002N07UX', '246', 'copies/mL'],
+        ['0PHJ100001N0QVJ', '3.26E+05 cp/mL', '1/mL'],
+        ['0PLJ100002N07UX', '2.46E+02 cp/mL', '1/mL'],
         ['0N1J100003O0OEZ', 'Target Not Detected', ''],
         ['VL260001', 'Target Not Detected', ''],
         ['VL260002', '< Titer min', ''],
-        ['VL260003', '67', 'copies/mL'],
+        ['VL260003', '6.73E+01 cp/mL', '1/mL'],
         ['VL260004', 'Invalid', ''],
-        ['VL260005', '170000', 'copies/mL']
+        ['VL260005', '1.70E+05 cp/mL', '1/mL']
       ]);
       expect(wire.saved()[0]).toMatchObject({
         test_id: '0PHJ100001N0QVJ',
