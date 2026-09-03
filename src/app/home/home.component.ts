@@ -1,4 +1,4 @@
-import { Component } from '@angular/core';
+import { Component, ChangeDetectionStrategy } from '@angular/core';
 import { Router } from '@angular/router';
 import { ElectronStoreService } from '../services/electron-store.service';
 
@@ -6,6 +6,7 @@ import { ElectronStoreService } from '../services/electron-store.service';
   standalone: false,
   selector: 'app-home',
   templateUrl: './home.component.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrls: ['./home.component.scss']
 })
 export class HomeComponent {

@@ -624,7 +624,7 @@
                           placeholder="e.g., Roche-Cobas-01" required
                           [matAutocomplete]="autoInstrumentName">
                         <mat-autocomplete #autoInstrumentName="matAutocomplete">
-                          <mat-option *ngFor="let name of filterInstrumentNames(instrument.get('analyzerMachineName')?.value)"
+                          <mat-option *ngFor="let name of filterInstrumentNames($safeNavigationMigration(instrument.get('analyzerMachineName')?.value))"
                             [value]="name">
                             {{ name }}
                           </mat-option>

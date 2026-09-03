@@ -1,11 +1,13 @@
 {
   "compilerOptions": {
+    // TypeScript 6 defaults strict to true; the main process was written non-strict
+    "strict": false,
     "sourceMap": true,
     "declaration": false,
-    "moduleResolution": "node",
+    "moduleResolution": "node16",
     "emitDecoratorMetadata": true,
     "experimentalDecorators": true,
-    "module": "commonjs",
+    "module": "node16",
     "target": "ES2022",
     "types": [
       "node"

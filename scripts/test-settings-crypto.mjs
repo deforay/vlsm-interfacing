@@ -21,14 +21,21 @@ const outDir = fs.mkdtempSync(path.join(os.tmpdir(), 'settings-crypto-'));
 // resolver rejects but its CJS resolver handles.
 function compileCryptoModule() {
   const tsc = path.join(repoRoot, 'node_modules', '.bin', 'tsc');
+  // Run from the temp dir: TypeScript 6 refuses command-line files when a
+  // tsconfig.json is present in the working directory. rootDir keeps the
+  // app/ segment in the output path; strict mirrors tsconfig.serve.json.
   execFileSync(tsc, [
     path.join(repoRoot, 'app', 'settings-crypto.main.ts'),
+    '--rootDir', repoRoot,
     '--outDir', outDir,
-    '--module', 'commonjs',
+    '--module', 'node16',
     '--target', 'es2022',
-    '--moduleResolution', 'node',
+    '--moduleResolution', 'node16',
+    '--strict', 'false',
+    '--types', 'node',
+    '--typeRoots', path.join(repoRoot, 'node_modules', '@types'),
     '--skipLibCheck'
-  ], { stdio: 'pipe' });
+  ], { stdio: 'pipe', cwd: outDir });
 
   return path.join(outDir, 'app', 'settings-crypto.main.js');
 }

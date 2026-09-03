@@ -1,5 +1,5 @@
 // src/app/components/dashboard/dashboard.component.ts
-import { Component, OnDestroy, OnInit } from '@angular/core';
+import { Component, OnDestroy, OnInit, ChangeDetectionStrategy } from '@angular/core';
 import { Router, ActivatedRoute } from '@angular/router';
 import { ConnectionManagerService } from '../../services/connection-manager.service';
 import { UtilitiesService } from '../../services/utilities.service';
@@ -24,6 +24,7 @@ interface SessionData {
   standalone: false,
   selector: 'app-dashboard',
   templateUrl: './dashboard.component.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrls: ['./dashboard.component.scss']
 })
 export class DashboardComponent implements OnInit, OnDestroy {

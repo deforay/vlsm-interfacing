@@ -1,4 +1,4 @@
-import { Component, OnInit, OnDestroy, ChangeDetectorRef, ViewChild, ElementRef } from '@angular/core';
+import { Component, OnInit, OnDestroy, ChangeDetectorRef, ViewChild, ElementRef, ChangeDetectionStrategy } from '@angular/core';
 import { Router } from '@angular/router';
 import { UtilitiesService } from '../../services/utilities.service';
 import { ConnectionManagerService } from '../../services/connection-manager.service';
@@ -14,6 +14,7 @@ import { Subscription } from 'rxjs';
   standalone: false,
   selector: 'app-raw-data',
   templateUrl: './raw-data.component.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrls: ['./raw-data.component.scss']
 })
 export class RawDataComponent implements OnInit, OnDestroy {
