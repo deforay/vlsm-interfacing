@@ -24,7 +24,7 @@ export class AppComponent {
     private intelisResultSync: IntelisResultSyncService,
     private intelisUsageSync: IntelisUsageSyncService
   ) {
-    this.translate.setDefaultLang('en');
+    this.translate.setFallbackLang('en');
 
     if (electronService.isElectron) {
       this.initializeSession();

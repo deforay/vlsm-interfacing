@@ -38,7 +38,7 @@
   "main": "main.js",
   "private": true,
   "dependencies": {
-    "@fortawesome/fontawesome-free": "^6.6.0",
+    "@fortawesome/fontawesome-free": "7.3.1",
     "@vscode/sqlite3": "5.1.14-vscode",
     "electron-log": "5.4.4",
     "electron-store": "^8.2.0",

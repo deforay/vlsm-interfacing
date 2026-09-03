@@ -8,7 +8,7 @@ import { SharedModule } from './shared/shared.module';
 import { AppRoutingModule } from './app-routing.module';
 
 // NG Translate
-import { TranslateModule } from '@ngx-translate/core';
+import { provideTranslateService } from '@ngx-translate/core';
 import { provideTranslateHttpLoader } from '@ngx-translate/http-loader';
 import { HomeModule } from './home/home.module';
 
@@ -67,11 +67,13 @@ import { MatInputModule } from '@angular/material/input';
     SharedModule,
     HomeModule,
     AppRoutingModule,
-    ReactiveFormsModule,
-    TranslateModule.forRoot()
+    ReactiveFormsModule
   ],
   providers: [
-    provideTranslateHttpLoader({ prefix: './assets/i18n/', suffix: '.json' }),
+    provideTranslateService({
+      loader: provideTranslateHttpLoader({ prefix: './assets/i18n/', suffix: '.json' }),
+      fallbackLang: 'en'
+    }),
     ElectronService,
     DatabaseService,
     TcpConnectionService,
