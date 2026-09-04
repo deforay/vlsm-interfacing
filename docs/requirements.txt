@@ -1,0 +1,2 @@
+# Pinned so the site that builds in CI is the site that built locally.
+mkdocs-material==9.7.7

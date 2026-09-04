@@ -19,7 +19,7 @@
 # the repository carries no vendor name and the reader can be swapped without
 # editing anything. Set it in the untracked .env, or in your shell profile.
 #
-# The brief is READ from docs/review-brief.md rather than repeated here. Two
+# The brief is READ from docs/technical/review-brief.md rather than repeated here. Two
 # copies of a review brief means the one nobody edits is the one that runs.
 set -uo pipefail
 
@@ -45,7 +45,7 @@ if [ -z "${REVIEW_AGENT:-}" ]; then
     exit 1
 fi
 
-BRIEF_FILE="docs/review-brief.md"
+BRIEF_FILE="docs/technical/review-brief.md"
 if [ ! -f "$BRIEF_FILE" ]; then
     echo "Missing $BRIEF_FILE — the standing brief the reader is given." >&2
     exit 1
@@ -58,7 +58,9 @@ BRIEF="$(cat "$BRIEF_FILE")"
 # its way to the database, or a second copy of a frame reassembly, is a patient
 # safety bug here rather than a matter of taste.
 CONTEXT="Before reviewing, read these for the rules this codebase is held to:
-- docs/review-brief.md — the invariants, and what a finding must look like
+- docs/technical/review-brief.md — the invariants, and what a finding must look like
+- docs/technical/ — how the system is put together, the protocols as the analyzers
+  actually speak them, and what is stored where
 - src/app/services/analyzer-captures.spec.ts and src/app/testing/fixtures/captured/ —
   transmissions from real laboratories, replayed. These are the contract with the
   field: a change that alters what a real analyzer's message stores must fail here.

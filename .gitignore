@@ -38,3 +38,4 @@ shared/*.js.map
 
 # Local-only settings, e.g. the name of the review CLI #
 .env
+site/

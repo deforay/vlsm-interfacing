@@ -1,0 +1,93 @@
+site_name: InteLIS Interfacing
+site_description: Receives test results from laboratory analyzers and hands them to a laboratory information system.
+site_url: https://deforay.github.io/intelis-interfacing/
+repo_url: https://github.com/deforay/intelis-interfacing
+repo_name: deforay/intelis-interfacing
+edit_uri: edit/master/docs/
+copyright: Free and open-source under the GNU Affero General Public License v3.0
+
+theme:
+  name: material
+  language: en
+  icon:
+    repo: fontawesome/brands/github
+  features:
+    - navigation.instant
+    - navigation.tracking
+    - navigation.sections
+    - navigation.top
+    - content.action.edit
+    - content.code.copy
+    - search.highlight
+    - search.suggest
+    - toc.follow
+  palette:
+    # The site follows the reader's system setting, with a manual override.
+    - media: "(prefers-color-scheme)"
+      toggle:
+        icon: material/brightness-auto
+        name: Follow system
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      primary: teal
+      accent: teal
+      toggle:
+        icon: material/brightness-7
+        name: Switch to dark
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      primary: teal
+      accent: teal
+      toggle:
+        icon: material/brightness-4
+        name: Switch to light
+
+markdown_extensions:
+  - admonition
+  - attr_list
+  - def_list
+  - md_in_html
+  - tables
+  - toc:
+      permalink: true
+  - pymdownx.details
+  - pymdownx.highlight:
+      anchor_linenums: true
+  - pymdownx.inlinehilite
+  - pymdownx.superfences
+  - pymdownx.tabbed:
+      alternate_style: true
+  - pymdownx.snippets
+
+plugins:
+  - search
+
+# A link that does not resolve is a broken instruction in a document someone is
+# following at a bench, so the build fails on one rather than shipping it.
+strict: true
+validation:
+  links:
+    absolute_links: relative_to_docs
+    unrecognized_links: warn
+  nav:
+    omitted_files: warn
+
+nav:
+  - Home: index.md
+  - User guide:
+      - guide/index.md
+      - Installing: guide/install.md
+      - Settings: guide/settings.md
+      - The console: guide/console.md
+      - Backup and restore: guide/backup-restore.md
+      - When something is wrong: guide/troubleshooting.md
+  - Technical guide:
+      - technical/index.md
+      - How it is put together: technical/architecture.md
+      - Protocols on the wire: technical/protocols.md
+      - Analyzers as they behave: technical/analyzers.md
+      - What is stored, and where: technical/storage.md
+      - Usage statistics: technical/telemetry.md
+      - Building and releasing: technical/building.md
+      - Reviewing a change: technical/reviewing.md
+      - The review brief: technical/review-brief.md
