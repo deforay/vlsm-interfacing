@@ -23,7 +23,8 @@ import {
   COBAS_4800_RESULT_TIME_FORMATTED, COBAS_4800_RUN, cobas4800Query, cobas4800Run
 } from '../testing/fixtures/captured/roche-cobas-4800';
 import {
-  GENEXPERT_END_TIME_FORMATTED, GENEXPERT_TESTS, genexpertFrames, genexpertMessage, genexpertSession
+  GENEXPERT_END_TIME_FORMATTED, GENEXPERT_FR_END_TIME_FORMATTED, GENEXPERT_FR_OPERATOR, GENEXPERT_FR_TESTS,
+  GENEXPERT_TESTS, genexpertFrMessage, genexpertFrames, genexpertMessage, genexpertSession
 } from '../testing/fixtures/captured/cepheid-genexpert';
 
 describe('Abbott m2000 capture (ASTM)', () => {
@@ -322,3 +323,67 @@ describe('Cepheid GeneXpert capture (ASTM)', () => {
   }
 });
 
+
+/**
+ * The DRC laboratory reported empty and truncated results while running an
+ * older build: records cut across ETB frames were not rejoined, so a result
+ * either lost every field after the cut or kept the frame's ETB and checksum
+ * inside the value ("co\x17E4" instead of "copies/mL"). These replay the
+ * capture that showed it.
+ */
+describe('Cepheid GeneXpert 6.5 French capture (ASTM)', () => {
+  const expected = [
+    ['Xpert H 040726163316', 'HIV-1', '60,96', 'copies/mL', ''],
+    ['VL07260009', 'HIV-1', 'NON DÉTECTÉ', 'copies/mL', ''],
+    ['VL04260007', 'HIV-1', 'DÉTECTÉ', 'copies/mL', ''],
+    ['VL04260004', 'HIV-1', '1420403,41', 'copies/mL', ''],
+    ['VL05260008', 'HIV-1', 'PAS DE RÉSULTAT', 'copies/mL', ''],
+    ['VL08260017', 'HIV-1', 'ERREUR', 'copies/mL', 'Erreur 2096: Erreur d\'expiration spécifique au test n°1\u00a0: 18, 30, 0, 0'],
+    ['Xpert H 040726162551', 'HIV_QUALXC1', 'NON DÉTECTÉ', '', ''],
+    ['EID08260001', 'HIV_QUALXC1', 'DÉTECTÉ', '', '']
+  ];
+
+  for (const protocol of ['astm-checksum', 'astm-nonchecksum'] as const) {
+    it(`rejoins records cut mid-field across frames, in French and with decimal commas (${protocol})`, () => {
+      const wire = createWireHarness({ protocol, machineType: 'cepheid-genexpert' });
+
+      for (const test of GENEXPERT_FR_TESTS) {
+        const frames = genexpertFrames(genexpertFrMessage(test));
+        if (protocol === 'astm-checksum') {
+          wire.receive(ENQ + frames.join('') + EOT);
+        } else {
+          wire.receive(ENQ);
+          for (const frame of frames) {
+            wire.receive(frame);
+          }
+          wire.receive(EOT);
+        }
+      }
+
+      expect(wire.sent()).not.toContain(NAK);
+      expect(wire.saved().map(result => [result.order_id, result.test_type, result.results, result.test_unit, result.notes])).toEqual(expected);
+      expect(wire.saved()[0]).toMatchObject({
+        test_id: 'Xpert H 040726163316',
+        tested_by: GENEXPERT_FR_OPERATOR,
+        analysed_date_time: GENEXPERT_FR_END_TIME_FORMATTED,
+        result_status: 1
+      });
+      for (const result of wire.saved()) {
+        expect(result.results, result.order_id).not.toMatch(/[\x02\x03\x17]/);
+        expect(result.test_unit, result.order_id).not.toMatch(/[\x02\x03\x17]/);
+        expect(result.raw_text, result.order_id).not.toMatch(/\x17|\x02/);
+      }
+    });
+  }
+
+  it('recovers every result when the whole session arrives as one chunk', () => {
+    const wire = createWireHarness({ protocol: 'astm-nonchecksum', machineType: 'cepheid-genexpert' });
+
+    for (const test of GENEXPERT_FR_TESTS) {
+      wire.receive(ENQ + genexpertFrames(genexpertFrMessage(test)).join(''));
+      wire.receive(EOT);
+    }
+
+    expect(wire.saved().map(result => [result.order_id, result.test_type, result.results, result.test_unit, result.notes])).toEqual(expected);
+  });
+});
