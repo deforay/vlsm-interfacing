@@ -13,7 +13,7 @@ test.describe('Check Home Page', async () => {
   test.beforeAll( async () => {
     // WHY: never let automated tests read or migrate an operator's real local
     // database and settings. Each run gets a disposable Electron profile.
-    userDataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'vlsm-interfacing-e2e-'));
+    userDataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'intelis-interfacing-e2e-'));
     app = await electron.launch({
       args: [
         path.join(__dirname, '../app/main.js'),

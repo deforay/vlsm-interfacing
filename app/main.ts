@@ -480,6 +480,12 @@ function createWindow(): BrowserWindow {
   const today = new Date();
   const dateString = `${today.getFullYear()}-${(today.getMonth() + 1).toString().padStart(2, '0')}-${today.getDate().toString().padStart(2, '0')}`;
   log.transports.file.fileName = `${dateString}.log`;
+  // Named for the same reason userData is: electron-log's default directory is
+  // the product name on macOS and Linux. Keeping the logs beside the database
+  // means a rename cannot scatter them, and there is one folder to ask a
+  // laboratory for when something needs explaining.
+  log.transports.file.resolvePathFn = () =>
+    path.join(app.getPath('userData'), 'logs', log.transports.file.fileName as string);
 
   Store.initRenderer();
   store = new Store();

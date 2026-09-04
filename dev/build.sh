@@ -23,12 +23,12 @@ node -v
 cd ~
 
 # Remove old application directory if exists
-sudo rm -rf vlsm-interfacing
+sudo rm -rf intelis-interfacing
 
 # Clone repository
 echo "Cloning repository..."
-git clone https://github.com/deforay/vlsm-interfacing
-cd vlsm-interfacing/
+git clone https://github.com/deforay/intelis-interfacing
+cd intelis-interfacing/
 
 # Install dependencies (npm ci automatically deletes node_modules first)
 echo "Installing dependencies..."

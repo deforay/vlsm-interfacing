@@ -1,26 +1,52 @@
 #!/usr/bin/env bash
 #
-# Install the latest VLSM Interfacing release (Debian/Ubuntu, .deb).
+# Install the latest InteLIS Interfacing release (Debian/Ubuntu, .deb).
 #
 # Quick install:
-#   curl -fsSL https://raw.githubusercontent.com/deforay/vlsm-interfacing/master/scripts/install.sh | bash
+#   curl -fsSL https://raw.githubusercontent.com/deforay/intelis-interfacing/master/scripts/install.sh | bash
 #
 # Install a specific version (note the `bash -s --` to forward flags through the pipe):
-#   curl -fsSL https://raw.githubusercontent.com/deforay/vlsm-interfacing/master/scripts/install.sh | bash -s -- --tag v4.0.3
+#   curl -fsSL https://raw.githubusercontent.com/deforay/intelis-interfacing/master/scripts/install.sh | bash -s -- --tag v4.0.3
 #
 # If sudo prompts for a password, download first then run instead of piping:
-#   curl -fsSL https://raw.githubusercontent.com/deforay/vlsm-interfacing/master/scripts/install.sh -o install.sh && bash install.sh
+#   curl -fsSL https://raw.githubusercontent.com/deforay/intelis-interfacing/master/scripts/install.sh -o install.sh && bash install.sh
 
 set -euo pipefail
 
 REPO_OWNER="deforay"
-REPO_NAME="vlsm-interfacing"
+REPO_NAME="intelis-interfacing"
+
+# The package name the tool shipped under before it was renamed. A machine that
+# has it installed is upgraded rather than given a second copy: dpkg names a
+# package after the product, so the rename would otherwise leave two
+# applications, two menu entries and two services on the same machine.
+LEGACY_PACKAGE_NAME="vlsm-interfacing"
 TEMP_DOWNLOAD_DIR=""
 
 cleanup_temp_download_dir() {
   if [[ -n "${TEMP_DOWNLOAD_DIR}" ]]; then
     rm -rf -- "${TEMP_DOWNLOAD_DIR}"
   fi
+}
+
+# Takes the machine off the package the tool shipped under before the rename.
+#
+# WHY: dpkg identifies a package by name, and the new name is a different
+# package as far as it is concerned. Installing over the old one would leave
+# both: two entries in the applications menu, two copies in /opt, and an
+# operator who cannot tell which one they just opened.
+#
+# The laboratory's data is untouched by this. Settings, the database and the
+# backups live under the user's configuration directory, which the package
+# manager neither owns nor removes -- and which the application names for
+# itself precisely so a rename cannot move it.
+remove_legacy_package() {
+  if ! dpkg-query -W -f='${Status}' "${LEGACY_PACKAGE_NAME}" 2>/dev/null | grep -q 'install ok installed'; then
+    return
+  fi
+
+  echo "Removing the previous ${LEGACY_PACKAGE_NAME} package (your settings and results stay where they are)"
+  sudo dpkg --remove "${LEGACY_PACKAGE_NAME}"
 }
 
 usage() {
@@ -144,6 +170,8 @@ install_latest() {
 
   echo "Downloading ${asset_url}"
   curl -fL "${asset_url}" -o "${package_path}"
+
+  remove_legacy_package
 
   echo "Installing ${package_path}"
   if sudo dpkg -i "${package_path}"; then

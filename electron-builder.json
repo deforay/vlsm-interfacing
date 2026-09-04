@@ -1,6 +1,6 @@
 {
-  "productName": "vlsm-interfacing",
-  "appId": "com.deforay.vlsm-interfacing",
+  "productName": "intelis-interfacing",
+  "appId": "app.intelis.interfacing",
   "asar": false,
   "directories": {
     "output": "release/"
@@ -36,6 +36,7 @@
     ]
   },
   "nsis": {
+    "guid": "94f6f827-8263-5f05-a641-73580cb0a2f1",
     "artifactName": "${productName}-${version}-${os}-${arch}-setup.${ext}"
   },
   "portable": {
@@ -54,5 +55,12 @@
       "deb"
     ],
     "category": "Utility"
+  },
+  "deb": {
+    "fpm": [
+      "--replaces", "vlsm-interfacing",
+      "--conflicts", "vlsm-interfacing",
+      "--provides", "vlsm-interfacing"
+    ]
   }
 }

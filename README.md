@@ -1,8 +1,10 @@
-# Instrument Interfacing Tool
+# InteLIS Interfacing
 
 ![License: AGPL v3](https://img.shields.io/badge/License-AGPL%20v3-blue)
 
 A standalone Electron application that receives test results from laboratory instruments and stores them in a local database (SQLite and/or MySQL). It is designed to be **LIS-agnostic** — any Laboratory Information System can pick up results from the shared database.
+
+> Previously released as **vlsm-interfacing**. Upgrading in place keeps everything: the same settings, database, results and backups, in the same folder as before. On Debian and Ubuntu the installer removes the old package for you; on Windows the installer replaces the old version rather than sitting beside it.
 
 ## How It Works
 
@@ -27,10 +29,10 @@ A standalone Electron application that receives test results from laboratory ins
 
 ```bash
 # Install latest version
-curl -fsSL https://raw.githubusercontent.com/deforay/vlsm-interfacing/master/scripts/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/deforay/intelis-interfacing/master/scripts/install.sh | bash
 
 # Install a specific version
-curl -fsSL https://raw.githubusercontent.com/deforay/vlsm-interfacing/master/scripts/install.sh | bash -s -- --tag v4.0.3
+curl -fsSL https://raw.githubusercontent.com/deforay/intelis-interfacing/master/scripts/install.sh | bash -s -- --tag v4.0.3
 ```
 
 ## Getting Started
@@ -45,8 +47,8 @@ For developers or anyone who wants to build the application locally from source.
 
 ```bash
 # Clone the repository
-git clone https://github.com/deforay/vlsm-interfacing.git
-cd vlsm-interfacing
+git clone https://github.com/deforay/intelis-interfacing.git
+cd intelis-interfacing
 
 # Install dependencies
 npm install
@@ -127,13 +129,13 @@ REVIEW_AGENT=<your-review-cli>
 
 ## Funding and partners
 
-The Instrument Interfacing Tool is developed with funding from the United States Government (USG). Over the years, the project has benefited from the support and collaboration of partners including the African Society for Laboratory Medicine (ASLM), the American Society for Microbiology (ASM), the African Field Epidemiology Network (AFENET), Emory University, and the Maryland Global Initiatives Corporation (MGIC), among others.
+InteLIS Interfacing is developed with funding from the United States Government (USG). Over the years, the project has benefited from the support and collaboration of partners including the African Society for Laboratory Medicine (ASLM), the American Society for Microbiology (ASM), the African Field Epidemiology Network (AFENET), Emory University, and the Maryland Global Initiatives Corporation (MGIC), among others.
 
 ---
 
 ## License
 
-The Instrument Interfacing Tool is free and open-source software released under the **GNU Affero General Public License v3.0 (AGPL-3.0)**.
+InteLIS Interfacing is free and open-source software released under the **GNU Affero General Public License v3.0 (AGPL-3.0)**.
 
 Read the full text in [LICENSE.md](LICENSE.md).
 

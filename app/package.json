@@ -1,8 +1,8 @@
 {
-  "name": "vlsm-interfacing",
+  "name": "intelis-interfacing",
   "version": "4.2.1",
   "description": "Interfacing Tool By InteLIS",
-  "homepage": "https://github.com/deforay/vlsm-interfacing",
+  "homepage": "https://github.com/deforay/intelis-interfacing",
   "author": {
     "name": "Deforay",
     "email": "support@deforay.com"
