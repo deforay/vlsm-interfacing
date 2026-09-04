@@ -128,6 +128,35 @@ describe('HL7 over the wire', () => {
       expect(wire.raw()[0]).toBe(mllp(GENERIC_HIV_VL, { cr: false }));
     });
 
+    it('stores a block waiting for its CR when the connection goes away first', () => {
+      vi.useFakeTimers();
+      const wire = harness();
+
+      wire.receive(VT + GENERIC_HIV_VL + FS);
+      wire.disconnect();
+
+      // The analyzer finished sending this result. Disconnecting inside the
+      // grace period must not be what loses it.
+      expect(wire.saved()).toHaveLength(1);
+      expect(wire.raw()).toEqual([mllp(GENERIC_HIV_VL, { cr: false })]);
+    });
+
+    it('leaves the next block alone when the CR arrives after the grace has passed', () => {
+      vi.useFakeTimers();
+      const wire = harness();
+
+      wire.receive(VT + GENERIC_HIV_VL + FS);
+      vi.advanceTimersByTime(InstrumentInterfaceService.MLLP_TERMINATOR_GRACE_MS);
+      // Past the grace the block has been taken, so this <CR> belongs to a
+      // block already stored: it is noise on the wire now, and must not become
+      // part of the next one.
+      wire.receive(CR);
+      wire.receive(mllp(GENERIC_BATCH));
+
+      expect(wire.saved()).toHaveLength(4);
+      expect(wire.raw()).toEqual([mllp(GENERIC_HIV_VL, { cr: false }), mllp(GENERIC_BATCH)]);
+    });
+
     it('stores the unit as the analyzer wrote it, padding included', () => {
       const wire = harness();
       const padded = GENERIC_HIV_VL.replace('|copies/mL|', '| copies/mL |');

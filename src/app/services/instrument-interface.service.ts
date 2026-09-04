@@ -27,7 +27,9 @@ export class InstrumentInterfaceService {
   // its incomplete HL7 transmission until the frame separator arrives.
   private readonly hl7ReceiveBuffers = new Map<string, string>();
   private readonly hl7BufferExpiryTimers = new Map<string, ReturnType<typeof setTimeout>>();
-  private readonly hl7TerminatorTimers = new Map<string, ReturnType<typeof setTimeout>>();
+  // A block that is complete but for its <CR>, with the timer waiting for it
+  // and the work to take the block as it stands
+  private readonly hl7PendingTerminator = new Map<string, { timer: ReturnType<typeof setTimeout>; flush: () => void }>();
   private connectedInstruments = new Map<string, BehaviorSubject<boolean>>();
   private readonly connectionStatusSubscriptions = new Map<string, Subscription>();
   private readonly resultSavedSubject = new Subject<{ sampleResult: any; instrumentId: string }>();
@@ -93,6 +95,10 @@ export class InstrumentInterfaceService {
   }
 
   private clearInstrumentReceiveState(instrumentId: string): void {
+    // A block waiting only for its <CR> is a result the analyzer finished
+    // sending. Connecting, reconnecting or disconnecting must not be what
+    // loses it, so it is taken before the state it sits in is cleared.
+    this.flushPendingTerminator(instrumentId);
     this.clearHL7Buffer(instrumentId);
     this.astmHelper.clearInstrumentBuffer(instrumentId);
   }
@@ -677,12 +683,31 @@ export class InstrumentInterfaceService {
     this.clearHL7TerminatorTimer(instrumentId);
   }
 
+  /**
+   * Cancels the wait for a <CR> without taking the block. Used when more bytes
+   * arrive: they are read again from the buffer, terminator and all.
+   */
   private clearHL7TerminatorTimer(instrumentId: string): void {
-    const terminatorTimer = this.hl7TerminatorTimers.get(instrumentId);
-    if (terminatorTimer) {
-      clearTimeout(terminatorTimer);
-      this.hl7TerminatorTimers.delete(instrumentId);
+    const pending = this.hl7PendingTerminator.get(instrumentId);
+    if (pending) {
+      clearTimeout(pending.timer);
+      this.hl7PendingTerminator.delete(instrumentId);
     }
+  }
+
+  /**
+   * Takes a block that was waiting for its <CR> now, rather than losing it.
+   * Used when the connection goes away inside the grace period: the block is
+   * complete and the analyzer has already been told nothing is wrong with it.
+   */
+  private flushPendingTerminator(instrumentId: string): void {
+    const pending = this.hl7PendingTerminator.get(instrumentId);
+    if (!pending) {
+      return;
+    }
+    clearTimeout(pending.timer);
+    this.hl7PendingTerminator.delete(instrumentId);
+    pending.flush();
   }
 
   /**
@@ -694,8 +719,7 @@ export class InstrumentInterfaceService {
     const instrumentId = instrumentConnectionData.instrumentId;
     this.clearHL7TerminatorTimer(instrumentId);
 
-    const terminatorTimer = setTimeout(() => {
-      this.hl7TerminatorTimers.delete(instrumentId);
+    const flush = () => {
       const buffered = this.hl7ReceiveBuffers.get(instrumentId);
       if (!buffered) {
         return;
@@ -710,9 +734,14 @@ export class InstrumentInterfaceService {
       }
 
       this.deliverHL7Messages(instrumentConnectionData, messages);
+    };
+
+    const timer = setTimeout(() => {
+      this.hl7PendingTerminator.delete(instrumentId);
+      flush();
     }, InstrumentInterfaceService.MLLP_TERMINATOR_GRACE_MS);
 
-    this.hl7TerminatorTimers.set(instrumentId, terminatorTimer);
+    this.hl7PendingTerminator.set(instrumentId, { timer, flush });
   }
 
   private scheduleHL7BufferExpiry(instrumentConnectionData: InstrumentConnectionStack): void {

@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { ASTMHelperService } from './astm-helper.service';
+import { UtilitiesService } from './utilities.service';
 import {
   ACK, CR, ENQ, EOT, LF, NAK,
   astmContinuationFrames, astmFrame, astmFrames, astmSession, createWireHarness, e1381Checksum
@@ -250,7 +251,19 @@ describe('ASTM over the wire (with checksum)', () => {
       // sample that has a result.
       expect(wire.saved()).toHaveLength(1);
       expect(wire.saved()[0]).toMatchObject({ order_id: 'SAMPLE-M2000-001', results: '1250' });
+
+      // The repeat is left out of the stored transmission on purpose. Framing
+      // is gone by the time raw_data is read back, so a second copy of the
+      // record in there is indistinguishable from a second order, and
+      // reprocessing would save the failure row this fix exists to prevent.
       expect(wire.raw()[0].match(/SAMPLE-M2000-001/g)).toHaveLength(1);
+
+      const utilities = new UtilitiesService(null, null, { log: vi.fn() } as any);
+      const reprocessed = utilities.removeControlCharacters(wire.raw()[0], true)
+        .split(wire.astmHelper.getStartMarker())
+        .filter(Boolean)
+        .flatMap(part => wire.astmHelper.splitASTMRecordsByOrder(part.split(/<CR>/)));
+      expect(reprocessed).toHaveLength(1);
     });
 
     it('does not acknowledge a frame until its checksum has arrived', () => {
