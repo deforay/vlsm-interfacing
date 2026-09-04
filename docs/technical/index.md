@@ -15,8 +15,6 @@ looks the way it does.
   leaves the machine.
 - **[Building and releasing](building.md)** — the gate, the release, and the
   identifiers that must not move.
-- **[Reviewing a change](reviewing.md)** and **[the review brief](review-brief.md)**
-  — what a second reader is asked to look for.
 
 ## The one rule worth reading first
 

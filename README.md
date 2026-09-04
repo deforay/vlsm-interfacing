@@ -56,9 +56,7 @@ npm run verify          # the gate: safety check, lint, tests, production build
 
 See [building and
 releasing](https://deforay.github.io/intelis-interfacing/technical/building/)
-for what the gate covers and how a release is cut, and [reviewing a
-change](https://deforay.github.io/intelis-interfacing/technical/reviewing/) for
-the second reader every change goes through.
+for what the gate covers and how a release is cut.
 
 ## Funding and partners
 

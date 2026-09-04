@@ -1,8 +1,11 @@
 # Reviewing a change
 
 Passing the gate is not the same as being read. `bin/review` hands a change to a
-reviewing CLI along with [the brief](review-brief.md), which says what this
-codebase must never get wrong.
+reviewing CLI along with [the brief](brief.md), which says what this codebase
+must never get wrong.
+
+This is how the code is worked on, not something the tool does, so it is kept
+out of the published documentation.
 
 ```bash
 bin/review                  # everything since the last reviewed commit

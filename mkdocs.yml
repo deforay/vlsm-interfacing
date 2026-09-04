@@ -51,6 +51,11 @@ markdown_extensions:
   - toc:
       permalink: true
   - pymdownx.details
+  # Material ships the icon sets; without this the :material-...: shortcodes
+  # render as their own text.
+  - pymdownx.emoji:
+      emoji_index: !!python/name:material.extensions.emoji.twemoji
+      emoji_generator: !!python/name:material.extensions.emoji.to_svg
   - pymdownx.highlight:
       anchor_linenums: true
   - pymdownx.inlinehilite
@@ -89,5 +94,3 @@ nav:
       - What is stored, and where: technical/storage.md
       - Usage statistics: technical/telemetry.md
       - Building and releasing: technical/building.md
-      - Reviewing a change: technical/reviewing.md
-      - The review brief: technical/review-brief.md
