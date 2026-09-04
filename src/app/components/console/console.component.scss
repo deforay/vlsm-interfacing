@@ -1395,3 +1395,25 @@ $background-color: #f9fafb;
     gap: 0.5rem !important;
   }
 }
+
+/* Enough presence to be noticed once, not enough to compete with the console. */
+.update-banner {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.6rem 1rem;
+  margin-bottom: 0.75rem;
+  border: 1px solid rgba(13, 110, 253, 0.25);
+  border-radius: 6px;
+  background: rgba(13, 110, 253, 0.06);
+  font-size: 0.9rem;
+
+  .update-text {
+    flex: 1;
+  }
+
+  .update-dismiss {
+    text-decoration: none;
+    opacity: 0.75;
+  }
+}

@@ -7,6 +7,7 @@ import * as sqlite3 from '@vscode/sqlite3';
 import * as log from 'electron-log/main';
 import { setupSqlite } from './sqlite3helper.main';
 import { registerIntelisConnectionIpc } from './intelis-connection.main';
+import { registerUpdateCheckIpc } from './update-check.main';
 import {
   registerSettingsBackupIpc,
   startScheduledSettingsBackups,
@@ -569,6 +570,7 @@ try {
 
   function registerIpcHandlers() {
     registerIntelisConnectionIpc(store);
+    registerUpdateCheckIpc();
 
     // Settings export/import and scheduled local backups. Owns the store
     // directly so passphrases and decrypted credentials never cross IPC.

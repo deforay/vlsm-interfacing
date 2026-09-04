@@ -5,6 +5,7 @@ import { Router } from '@angular/router';
 import { ElectronStoreService } from '../../services/electron-store.service';
 import { InstrumentInterfaceService } from '../../services/instrument-interface.service';
 import { UtilitiesService } from '../../services/utilities.service';
+import { UpdateCheckService } from '../../services/update-check.service';
 import { TcpConnectionService } from '../../services/tcp-connection.service';
 import { ConnectionManagerService } from '../../services/connection-manager.service';
 import { ConnectionParams } from '../../interfaces/connection-params.interface';
@@ -46,6 +47,8 @@ export class ConsoleComponent implements OnInit, AfterViewInit, OnDestroy {
   public commonSettings = null;
   public instrumentsSettings = null;
   public appVersion: string = null;
+  /** The newer release to mention, or null when there is nothing to say. */
+  public availableUpdate: { version: string } | null = null;
   public lastLimsSync = '';
   public lastResultReceived = '';
   public recentResultsInterval: any; // Interval for fetching recent results
@@ -57,6 +60,7 @@ export class ConsoleComponent implements OnInit, AfterViewInit, OnDestroy {
   public lastOrders: any;
   public showScrollToTop = false;
   private readonly ipc: any;
+  private updateSubscription: Subscription | null = null;
   public availableInstruments = [];
   private readonly loadedLogInstrumentIds = new Set<string>();
   public instrumentLogs: { [instrumentId: string]: { logs: any[]; filteredLogs: any[] } } = {};
@@ -142,6 +146,7 @@ export class ConsoleComponent implements OnInit, AfterViewInit, OnDestroy {
     private readonly utilitiesService: UtilitiesService,
     private readonly logDisplayService: LogDisplayService,
     private readonly snackBar: MatSnackBar,
+    private readonly updateCheckService: UpdateCheckService,
     private readonly router: Router) {
     if ((<any>window).require) {
       this.ipc = (<any>window).require('electron').ipcRenderer;
@@ -188,6 +193,12 @@ export class ConsoleComponent implements OnInit, AfterViewInit, OnDestroy {
     const that = this;
     that.loadSettings();
     that.checkMysqlConnection();
+
+    that.updateSubscription = that.updateCheckService.availableUpdate().subscribe(update => {
+      that.availableUpdate = update;
+      that.cdRef.detectChanges();
+    });
+    that.updateCheckService.start();
 
     // Scroll to the top of the page when the component initializes
     window.scrollTo(0, 0);
@@ -934,8 +945,19 @@ export class ConsoleComponent implements OnInit, AfterViewInit, OnDestroy {
     this.connectionManagerService.forceRestartConnection(instrument);
   }
 
+  dismissUpdate() {
+    if (this.availableUpdate) {
+      this.updateCheckService.dismiss(this.availableUpdate.version);
+    }
+  }
+
+  openReleasesPage() {
+    void this.updateCheckService.openReleasesPage();
+  }
+
   ngOnDestroy() {
     this.viewDestroyed = true;
+    this.updateSubscription?.unsubscribe();
     document.removeEventListener('visibilitychange', this.visibilityChangeHandler);
     if (this.initialResultsTimeout) {
       clearTimeout(this.initialResultsTimeout);
