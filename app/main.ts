@@ -35,10 +35,19 @@ const args = process.argv.slice(1),
 // the SQLite helper both resolve this path when they are constructed.
 //
 // Serving is left on Electron's default, so `npm start` does not read and write
-// the data of an installation on the same machine.
+// the data of an installation on the same machine. So is a run given an explicit
+// --user-data-dir: the end-to-end tests hand Electron a disposable profile for
+// exactly that reason, and a pin that overrode it would point them at a real
+// laboratory's database and copy it into the test trace.
 const DATA_DIRECTORY_NAME = 'vlsm-interfacing';
-if (!serve) {
-  app.setPath('userData', path.join(app.getPath('appData'), DATA_DIRECTORY_NAME));
+const profileChosenByCaller = args.some(argument => argument.startsWith('--user-data-dir'));
+if (!serve && !profileChosenByCaller) {
+  const dataDirectory = path.join(app.getPath('appData'), DATA_DIRECTORY_NAME);
+  // Electron creates userData itself before it is first read, overridden or
+  // not. Creating it here anyway costs nothing and does not rely on that
+  // staying true of every platform and every version.
+  fs.mkdirSync(dataDirectory, { recursive: true });
+  app.setPath('userData', dataDirectory);
 }
 
 const Store = require('electron-store');

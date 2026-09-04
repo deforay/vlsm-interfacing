@@ -44,18 +44,33 @@ does not tell you whether there is a number to read.
 
 ## Abbott Alinity m — HL7
 
-- `SPM.3` carries the specimen identifier.
+- **`SPM.2` and `SPM.3` are always empty.** The sample identifier is in `SAC.3`.
+  Reading it from the specimen segment, as most analyzers would have it, stores
+  an empty sample ID.
 - `OBX.6` is `^Copies/mL`: the identifier component empty, the text filled.
+- Sixteen `INV` segments and an `NTE` sit between the result `OBX` and the
+  supplemental ones.
 - Not-detected and below-range outcomes come through as text rather than
   numbers.
 
 ## Roche cobas 4800, 5800, 6800/8800 — HL7
 
-- 6800/8800 report a quantitative result on the second observation, with a
-  `&ROCHE` suffix to strip, and `OBX.6` as `copies/mL^^UCUM`.
-- A UCUM unit can carry a power of ten: `10*-1.{Copies}/mL` with a mantissa. It
-  is stored as sent — reading it is the LIS's job.
-- cobas 4800 reports quantitative results as text such as `3.26E+05 cp/mL`.
+All three send OUL^R22 over MLLP and disagree about where things are.
+
+- **The `&ROCHE` suffix is a 4800 and 5800 habit.** Both send `SPM.2` as
+  `<id>&ROCHE`, and it is stripped to get the identifier; the 5800 repeats the
+  plain identifier in `SAC.3`. The 6800/8800 sends a plain `SPM.2` with no
+  suffix, and leaves `SPM.1` empty.
+- **6800/8800**: four `OBX` per sample. The **first** carries the result —
+  a value, or `ValueNotSet` with a flag in `OBX.8` (`ND`, `BT`, `RR`, `NR`).
+  The second is `NA` with Ct values, and the fourth the textual outcome. An
+  invalid run has an empty second `OBX`, flags such as `P02T`, and `OBX.11` = `X`.
+- **5800**: a quantitative result is `NM` with a three-digit mantissa in `OBX.5`
+  and a UCUM power of ten in `OBX.6` — 367 with `10*-1.{copies}/mL`. Both are
+  stored as sent; multiplying them out is the LIS's job, not this tool's.
+- **4800**: each specimen group carries two `OBX`. The first is a run-time
+  range; the **second** is the result, as text: `3.26E+05 cp/mL` with unit
+  `1/mL^^UCUM`, or `Target Not Detected`, `< Titer min`, `Invalid`.
 - Instrument errors and flags arrive as text and are stored as `Failed` with the
   detail kept in the notes.
 

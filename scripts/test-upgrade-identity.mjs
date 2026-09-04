@@ -65,14 +65,21 @@ for (const consumer of ['new Store(', 'setupSqlite(', 'app.getPath(\'userData\')
   console.log(`  ok  ${consumer} runs after the pin`);
 }
 
-// Development is deliberately left on Electron's default so `npm start` cannot
-// write into an installation's data on the same machine.
+// A served run and a run handed its own profile are deliberately left alone, so
+// neither `npm start` nor the end-to-end tests can write into an installation's
+// data on the same machine.
+const guard = main.slice(pin - 400, pin);
 assert.match(
-  main.slice(pin - 200, pin),
-  /if \(!serve\) \{/,
-  'the pin should apply to installations only, leaving a served run on the default path'
+  guard,
+  /if \(!serve && !profileChosenByCaller\) \{/,
+  'the pin should apply to installations only, leaving a served run and an explicit profile alone'
 );
-console.log('  ok  a served run keeps its own directory');
+assert.match(
+  guard,
+  /mkdirSync\(dataDirectory, \{ recursive: true \}\)/,
+  'the data directory should be created before it is pinned'
+);
+console.log('  ok  a served run and an explicit profile keep their own directory');
 
 assert.equal(
   builder.nsis?.guid,

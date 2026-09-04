@@ -29,24 +29,71 @@ cleanup_temp_download_dir() {
   fi
 }
 
+legacy_package_installed() {
+  dpkg-query -W -f='${Status}' "${LEGACY_PACKAGE_NAME}" 2>/dev/null | grep -q 'install ok installed'
+}
+
 # Takes the machine off the package the tool shipped under before the rename.
 #
-# WHY: dpkg identifies a package by name, and the new name is a different
-# package as far as it is concerned. Installing over the old one would leave
-# both: two entries in the applications menu, two copies in /opt, and an
-# operator who cannot tell which one they just opened.
+# WHY this is needed at all: dpkg identifies a package by name, and the new
+# name is a different package as far as it is concerned. Installing alongside
+# the old one would leave both -- two entries in the applications menu, two
+# copies in /opt, and an operator who cannot tell which one they just opened.
 #
-# The laboratory's data is untouched by this. Settings, the database and the
+# WHY it is not simply done first: a laboratory that ends an upgrade with no
+# application at all is worse off than one that never started it. apt can
+# remove the old package and install the new one as a single transaction, and
+# a failure part way through leaves the working application in place. That is
+# the path taken whenever apt is available, which on Debian and Ubuntu is
+# always. The fallback below only removes the old package once the new one has
+# proved it cannot install any other way.
+#
+# The laboratory's data is untouched either way. Settings, the database and the
 # backups live under the user's configuration directory, which the package
 # manager neither owns nor removes -- and which the application names for
 # itself precisely so a rename cannot move it.
 remove_legacy_package() {
-  if ! dpkg-query -W -f='${Status}' "${LEGACY_PACKAGE_NAME}" 2>/dev/null | grep -q 'install ok installed'; then
+  if ! legacy_package_installed; then
     return
   fi
 
   echo "Removing the previous ${LEGACY_PACKAGE_NAME} package (your settings and results stay where they are)"
   sudo dpkg --remove "${LEGACY_PACKAGE_NAME}"
+}
+
+install_package() {
+  local package_path="$1"
+
+  if command -v apt-get >/dev/null 2>&1; then
+    # One transaction: dependencies resolved, the superseded package removed if
+    # it is there, and nothing removed at all if the install cannot proceed.
+    echo "Installing ${package_path}"
+    if sudo apt-get install -y "${package_path}"; then
+      echo "Installation completed."
+      return 0
+    fi
+    echo "apt-get could not install the package." >&2
+    return 1
+  fi
+
+  # No apt on this machine. Try the install as it stands first, so a package
+  # that cannot be installed for any other reason does not cost the laboratory
+  # the copy it is running.
+  echo "Installing ${package_path}"
+  if sudo dpkg -i "${package_path}"; then
+    echo "Installation completed."
+    return 0
+  fi
+
+  if legacy_package_installed; then
+    remove_legacy_package
+    if sudo dpkg -i "${package_path}"; then
+      echo "Installation completed."
+      return 0
+    fi
+  fi
+
+  return 1
 }
 
 usage() {
@@ -171,17 +218,13 @@ install_latest() {
   echo "Downloading ${asset_url}"
   curl -fL "${asset_url}" -o "${package_path}"
 
-  remove_legacy_package
-
-  echo "Installing ${package_path}"
-  if sudo dpkg -i "${package_path}"; then
-    echo "Installation completed."
+  if install_package "${package_path}"; then
     return
   fi
 
   # WHY: dpkg can leave dependency resolution incomplete for local .deb files.
   # apt-get -f install repairs dependencies and finishes package configuration.
-  echo "dpkg reported dependency issues. Repairing with apt-get -f install..."
+  echo "The install reported dependency issues. Repairing with apt-get -f install..."
   sudo apt-get install -f -y
   echo "Installation completed after dependency repair."
 }

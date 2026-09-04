@@ -53,7 +53,11 @@ git tag v4.3.0 && git push origin v4.3.0
 
 Pushing a `v*` tag is what cuts the release. The workflow re-runs the full gate,
 refuses to continue if the tag and `package.json` disagree, then builds and
-publishes installers for Windows, macOS and Linux.
+publishes a Debian package and the Windows installer and portable build.
+
+macOS is configured in `electron-builder.json` and can be built locally with
+`npm run electron:build`, but no release job produces a `.dmg`: adding one means
+a macOS runner and, to be worth downloading, a signing certificate.
 
 `npm run bump` exists because the version lives in four files, and a partial
 bump ships installers labelled differently from the release they land on.

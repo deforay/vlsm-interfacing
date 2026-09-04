@@ -33,7 +33,7 @@ speaks them.
 curl -fsSL https://raw.githubusercontent.com/deforay/intelis-interfacing/master/scripts/install.sh | bash
 ```
 
-Windows and macOS installers are on the
+Windows installers are on the
 [releases page](https://github.com/deforay/intelis-interfacing/releases). Full
 instructions, including what happens when you upgrade, are in the
 [installation guide](https://deforay.github.io/intelis-interfacing/guide/install/).

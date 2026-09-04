@@ -33,8 +33,9 @@ rather not install anything.
 
 ## macOS
 
-Download the `.dmg` from the
-[releases page](https://github.com/deforay/intelis-interfacing/releases).
+There is no published macOS build. The application can be built from source on
+a Mac — see [building and releasing](../technical/building.md) — but releases
+carry Windows and Debian packages only.
 
 ## Upgrading
 
