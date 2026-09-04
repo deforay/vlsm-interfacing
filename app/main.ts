@@ -13,14 +13,39 @@ import {
   stopScheduledSettingsBackups
 } from './settings-backup.main';
 
+const args = process.argv.slice(1),
+  serve = args.some(val => val === '--serve');
+
+// The directory holding a laboratory's data is named here, not derived.
+//
+// WHY: Electron puts userData under app.getName(), which is the product name.
+// Everything a laboratory has is inside it -- the settings store, interface.db,
+// the automatic backups, the migrations that have been applied. Rename the
+// product and every existing installation points at an empty folder: no
+// instruments configured, no results, no history, and no error to explain it.
+// Naming the directory instead of deriving it makes the product free to be
+// called anything without a single lab noticing.
+//
+// The name is the one installations have always used and must not be changed,
+// even when the product is renamed around it. scripts/test-data-directory.mjs
+// says so again where someone editing this file will meet it.
+//
+// Must run before anything opens the store or the database: electron-store and
+// the SQLite helper both resolve this path when they are constructed.
+//
+// Serving is left on Electron's default, so `npm start` does not read and write
+// the data of an installation on the same machine.
+const DATA_DIRECTORY_NAME = 'vlsm-interfacing';
+if (!serve) {
+  app.setPath('userData', path.join(app.getPath('appData'), DATA_DIRECTORY_NAME));
+}
+
 const Store = require('electron-store');
 let win: BrowserWindow = null;
 let store = new Store();
 let sqlite3Obj: sqlite3.Database = null;
 let sqliteDbName: string = 'interface.db';
 const FORCE_MIGRATION_REPLAY_KEY = 'forceMigrationReplayRequested';
-const args = process.argv.slice(1),
-  serve = args.some(val => val === '--serve');
 let tray: Tray = null;
 
 function formatUnknownError(error: unknown): string {
