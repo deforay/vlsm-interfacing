@@ -1,0 +1,8 @@
+# Reviewed commits, oldest first. One line per finished review:
+#
+#   <reviewed-up-to>  <date>  <range>
+#
+# The last line is where `bin/review` starts when given no argument, so the
+# next run reads only what has landed since. Append-only: correct a mistake by
+# adding a line, never by editing one.
+991e072  2026-08-13  release 4.1.15, the version in the field when this record began

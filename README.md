@@ -102,6 +102,27 @@ npm run install-hooks
 CI is the enforcement — the hook is only faster feedback, and `--no-verify`
 skips it.
 
+### A second reader
+
+Passing the gate is not the same as being read. `bin/review` hands a change to a
+reviewing CLI with the brief in `docs/review-brief.md`, which says what this
+codebase must never get wrong — a value altered on its way to the laboratory
+system, a result attached to the wrong sample, framing left inside a field.
+
+```bash
+bin/review                  # everything since the last reviewed commit
+bin/review <a>..<b>         # a range
+bin/review --uncommitted    # the working tree, before committing
+```
+
+`REVIEWED` at the repository root records what has already been read, so a bare
+run covers only what has landed since. Name the CLI once, in the untracked
+`.env`, so the repository stays independent of it:
+
+```bash
+REVIEW_AGENT=<your-review-cli>
+```
+
 ---
 
 ## Funding and partners

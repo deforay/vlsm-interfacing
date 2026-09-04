@@ -1,0 +1,123 @@
+#!/usr/bin/env bash
+#
+# review — hand the change to a second reader before it is trusted.
+#
+# Usage:
+#   bin/review                  everything since the last reviewed commit
+#   bin/review <a>..<b>         a range; the mark moves to <b> when it ends at HEAD
+#   bin/review <commit-sha>     one commit, without moving the mark
+#   bin/review --uncommitted    the working tree, before committing
+#   bin/review --help           this text
+#
+# REVIEWED, at the repository root, is the mark: one line per finished review,
+# the reviewed-up-to commit first. The last line is where the next run starts,
+# so nobody has to remember which commits a reader has already seen. It moves
+# only when a review ends at HEAD and the reader exits clean; a single-commit
+# or working-tree review leaves it where it was.
+#
+# The reviewing CLI is named by $REVIEW_AGENT rather than written down here, so
+# the repository carries no vendor name and the reader can be swapped without
+# editing anything. Set it in the untracked .env, or in your shell profile.
+#
+# The brief is READ from docs/review-brief.md rather than repeated here. Two
+# copies of a review brief means the one nobody edits is the one that runs.
+set -uo pipefail
+
+cd "$(dirname "$0")/.."
+
+if [ "${1:-}" = "--help" ] || [ "${1:-}" = "-h" ]; then
+    sed -n '3,23p' "$0" | sed 's/^# \{0,1\}//'
+    exit 0
+fi
+
+# Falls back to the untracked .env so the reader's name lives on the machine
+# rather than in the repo. Only this one key is read: a CLI that reads a diff has
+# no business inheriting the database password or the signing certificate.
+if [ -z "${REVIEW_AGENT:-}" ] && [ -f .env ]; then
+    REVIEW_AGENT="$(awk -F= '/^[[:space:]]*REVIEW_AGENT[[:space:]]*=/ {
+        sub(/^[^=]*=[[:space:]]*/, ""); gsub(/^["'\'']|["'\'']$/, ""); print; exit }' .env)"
+fi
+
+if [ -z "${REVIEW_AGENT:-}" ]; then
+    echo "REVIEW_AGENT is not set — it names the CLI that performs the review." >&2
+    echo "Set it in the untracked .env:   REVIEW_AGENT=<your-review-cli>" >&2
+    echo "or in your shell profile:       export REVIEW_AGENT=<your-review-cli>" >&2
+    exit 1
+fi
+
+BRIEF_FILE="docs/review-brief.md"
+if [ ! -f "$BRIEF_FILE" ]; then
+    echo "Missing $BRIEF_FILE — the standing brief the reader is given." >&2
+    exit 1
+fi
+BRIEF="$(cat "$BRIEF_FILE")"
+
+# The reader reads the repository itself, so it gets pointers rather than pasted
+# files. Naming these is the difference between a review of this system and a
+# review of some TypeScript: without them it cannot know that a value rounded on
+# its way to the database, or a second copy of a frame reassembly, is a patient
+# safety bug here rather than a matter of taste.
+CONTEXT="Before reviewing, read these for the rules this codebase is held to:
+- docs/review-brief.md — the invariants, and what a finding must look like
+- src/app/services/analyzer-captures.spec.ts and src/app/testing/fixtures/captured/ —
+  transmissions from real laboratories, replayed. These are the contract with the
+  field: a change that alters what a real analyzer's message stores must fail here.
+- src/app/testing/wire-harness.ts — bytes in, database rows out, with the real
+  parsers. A defect that a harness test could catch and does not is itself a finding.
+- app/sqlite-migrations/ — append-only; the versions table records what has run.
+- scripts/check-electron-safety.mjs — why the renderer's Node integration is safe,
+  and the two assumptions that keep it that way.
+
+$BRIEF"
+
+# The scope travels inside the prompt rather than as a flag: the built-in review
+# modes are mutually exclusive with custom instructions, and the instructions are
+# the entire point of this script.
+MARK_FILE="REVIEWED"
+MARK="$( [ -f "$MARK_FILE" ] && awk 'NF && $1 !~ /^#/ {last=$1} END {print last}' "$MARK_FILE" || true )"
+RANGE=""
+END=""
+
+case "${1:-}" in
+    --uncommitted)
+        SCOPE="Review the staged, unstaged and untracked changes in the working tree (\`git status\`, \`git diff\`, \`git diff --cached\`)." ;;
+    "")
+        if [ -z "$MARK" ]; then
+            echo "No mark in $MARK_FILE. Name a range the first time: bin/review <a>..<b>" >&2
+            exit 1
+        fi
+        if [ "$(git rev-parse "$MARK")" = "$(git rev-parse HEAD)" ]; then
+            echo "Nothing to review: HEAD is the last reviewed commit ($(git rev-parse --short "$MARK"))."
+            exit 0
+        fi
+        RANGE="$MARK..HEAD"
+        END="HEAD"
+        SCOPE="Review the changes introduced by the commits $RANGE: \`git log --oneline $RANGE\` and \`git diff $RANGE\`. Ignore code outside that diff except where you need it to judge the diff." ;;
+    *..*)
+        RANGE="$1"
+        END="${1##*..}"
+        SCOPE="Review the changes introduced by the commits $RANGE: \`git log --oneline $RANGE\` and \`git diff $RANGE\`. Ignore code outside that diff except where you need it to judge the diff." ;;
+    *)
+        SCOPE="Review the changes introduced by commit $1: \`git show $1\`. Ignore code outside that diff except where you need it to judge the diff." ;;
+esac
+
+if [ -n "$RANGE" ]; then
+    echo "Reviewing $(git rev-parse --short "${RANGE%%..*}")..$(git rev-parse --short "$END") — $(git rev-list --count "$RANGE") commit(s):"
+    git log --oneline "$RANGE"
+    echo
+fi
+
+"$REVIEW_AGENT" review "$SCOPE
+
+$CONTEXT"
+STATUS=$?
+
+# The mark moves only for a range that ends at HEAD and a reader that finished.
+# A range ending earlier is a re-read, and a crash is not a review.
+if [ "$STATUS" -eq 0 ] && [ -n "$END" ] && [ "$(git rev-parse "$END")" = "$(git rev-parse HEAD)" ]; then
+    printf '%s  %s  %s..%s\n' "$(git rev-parse --short HEAD)" "$(date +%Y-%m-%d)" "$(git rev-parse --short "${RANGE%%..*}")" "$(git rev-parse --short "$END")" >> "$MARK_FILE"
+    echo
+    echo "Marked $(git rev-parse --short HEAD) as reviewed in $MARK_FILE."
+fi
+
+exit "$STATUS"
