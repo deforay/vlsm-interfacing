@@ -28,7 +28,7 @@ jobs:
         run: npm ci --ignore-scripts
 
       - name: Audit production dependencies
-        run: npm audit --omit=dev --audit-level=high
+        run: npm run security:audit
 
       # Also part of `npm run verify` below, so it runs locally too. Repeated here
       # as its own step because it costs milliseconds and a failure is a design
