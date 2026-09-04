@@ -89,6 +89,9 @@ for entry in ${INSTALLED:-}; do
     for unpacked in ${HALF_CONFIGURED:-}; do
       [[ "$unpacked" == "$requested" ]] && status="install ok unpacked"
     done
+    for held in ${HELD:-}; do
+      [[ "$held" == "$requested" ]] && status="hold ok installed"
+    done
     rendered="${format//\$\{Status\}/$status}"
     rendered="${rendered//\$\{Version\}/${entry#*=}}"
     printf '%s' "$rendered"
@@ -166,6 +169,13 @@ INSTALLED="intelis-interfacing=4.3.0" HALF_CONFIGURED="intelis-interfacing" \
   APT_INSTALL_EXIT=100 APT_FIX_EXIT=100 run_install
 expect "does not call a half-installed package a working one" '[[ ${status} -ne 0 ]]'
 expect "says the requested version is not installed" 'grep -q "requested version is not installed" <<< "${output}"'
+
+echo "a package an administrator has pinned with apt-mark hold"
+# dpkg reports "hold ok installed" for it. That is an administrator's intent,
+# not a failure, and the application runs.
+INSTALLED="intelis-interfacing=4.3.0" HELD="intelis-interfacing" \
+  APT_INSTALL_EXIT=100 APT_FIX_EXIT=0 run_install
+expect "recognises a held package as installed" '[[ ${status} -eq 0 ]]'
 
 echo "an install that fails and is then repaired"
 INSTALLED="vlsm-interfacing=4.1.15 intelis-interfacing=4.3.0" HALF_CONFIGURED="" \

@@ -72,7 +72,16 @@ downloaded_package_is_installed() {
   [[ -n "${name}" && -n "${version}" ]] || return 1
 
   record="$(installed_status_and_version "${name}")"
-  [[ "${record%%|*}" == "install ok installed" ]] || return 1
+
+  # dpkg reports three words: what is wanted for the package, whether it is in
+  # an error state, and what is actually there. Only the last two say whether
+  # the application will run. The first is an administrator's intent -- a
+  # package someone has pinned with `apt-mark hold` reads "hold ok installed"
+  # and works perfectly well -- and reading it as failure would tell a
+  # laboratory its upgrade had not happened when it had.
+  read -r _desired error_state current_state <<< "${record%%|*}"
+  [[ "${error_state}" == "ok" && "${current_state}" == "installed" ]] || return 1
+
   [[ "${record#*|}" == "${version}" ]]
 }
 
