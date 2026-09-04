@@ -10,13 +10,23 @@
 #
 # Neither is visible by reading it. Both are one stubbed command away from
 # being demonstrated.
+#
+# Nothing here runs in a subshell. An earlier version put each case in one, so
+# a failed assertion incremented a copy of the count and the script exited 0
+# with FAILED printed above it: a test that reports and does not fail is worse
+# than no test, because the build stays green and someone has read the word
+# "test" and stopped worrying.
 set -uo pipefail
 
 root="$(cd "$(dirname "$0")/.." && pwd)"
 failures=0
+fake_dir=""
+calls=""
+output=""
+status=0
 
-# Builds a PATH of fakes: each records what it was called with, and exits with
-# the code the case under test asks for.
+# Builds a PATH of stand-ins: each records how it was called, and exits with the
+# code the case under test asks for.
 setup_fakes() {
   fake_dir="$(mktemp -d)"
   calls="${fake_dir}/calls"
@@ -30,7 +40,6 @@ FAKE
   cat > "${fake_dir}/curl" <<'FAKE'
 #!/usr/bin/env bash
 echo "curl $*" >> "$CALLS"
-# -o <path> is the last argument pair; write something that looks like a package.
 target=""
 while [[ $# -gt 0 ]]; do
   [[ "$1" == "-o" ]] && target="$2"
@@ -39,8 +48,7 @@ done
 if [[ -n "$target" ]]; then
   printf 'not really a deb' > "$target"
 else
-  # The release lookup: answer with a release carrying one .deb asset.
-  printf '{"browser_download_url": "https://example.test/intelis-interfacing_9.9.9_amd64.deb"}'
+  printf '{"browser_download_url": "https://example.test/intelis-interfacing_4.3.0_amd64.deb"}'
 fi
 FAKE
 
@@ -62,90 +70,91 @@ echo "dpkg $*" >> "$CALLS"
 exit "${DPKG_INSTALL_EXIT:-0}"
 FAKE
 
+  # INSTALLED is a list of "name=version" pairs describing the machine.
   cat > "${fake_dir}/dpkg-query" <<'FAKE'
 #!/usr/bin/env bash
 echo "dpkg-query $*" >> "$CALLS"
 requested="${!#}"
-for name in ${INSTALLED_PACKAGES:-}; do
-  if [[ "$name" == "$requested" ]]; then
-    echo "install ok installed"
+wants_version=0
+[[ "$*" == *'${Version}'* ]] && wants_version=1
+for entry in ${INSTALLED:-}; do
+  if [[ "${entry%%=*}" == "$requested" ]]; then
+    if [[ $wants_version -eq 1 ]]; then printf '%s' "${entry#*=}"; else echo "install ok installed"; fi
     exit 0
   fi
 done
 exit 1
 FAKE
 
+  # The package as downloaded, read the way dpkg-deb is really called:
+  # `dpkg-deb -f <path> <field>`, so the field is the third argument.
   cat > "${fake_dir}/dpkg-deb" <<'FAKE'
 #!/usr/bin/env bash
-echo "intelis-interfacing"
+echo "dpkg-deb $*" >> "$CALLS"
+case "${3:-}" in
+  Package) echo "intelis-interfacing" ;;
+  Version) echo "4.3.0" ;;
+esac
 FAKE
 
   chmod +x "${fake_dir}"/*
 }
 
-# Runs install.sh with the fakes in front of the real tools.
-# Usage: run_install <description>; environment variables set by the caller
-# decide how each fake behaves.
+# Runs install.sh with the stand-ins in front of the real tools.
 run_install() {
   setup_fakes
   output="$(CALLS="${calls}" PATH="${fake_dir}:${PATH}" bash "${root}/scripts/install.sh" 2>&1)"
   status=$?
-  calls_made="$(cat "${calls}")"
 }
 
 expect() {
   local description="$1" condition="$2"
   if eval "${condition}"; then
     echo "  ok  ${description}"
-  else
-    echo "  FAILED  ${description}"
-    echo "----- exit ${status}; output -----"
-    echo "${output}"
-    echo "----- calls -----"
-    echo "${calls_made}"
-    echo "---------------------------------"
-    failures=$((failures + 1))
+    return 0
   fi
+  echo "  FAILED  ${description}"
+  echo "----- exit ${status}; output -----"
+  echo "${output}"
+  echo "----- calls -----"
+  cat "${calls}"
+  echo "---------------------------------"
+  failures=$((failures + 1))
 }
 
 echo "a machine with nothing installed yet"
-(
-  export INSTALLED_PACKAGES="" APT_INSTALL_EXIT=0
-  run_install
-  expect "installs and reports success" '[[ ${status} -eq 0 ]]'
-  expect "goes through apt in one transaction" 'grep -q "apt-get install -y" <<< "${calls_made}"'
-  expect "removes nothing" '! grep -q "dpkg --remove" <<< "${calls_made}"'
-) || failures=$((failures + 1))
+INSTALLED="" APT_INSTALL_EXIT=0 APT_FIX_EXIT=0 run_install
+expect "installs and reports success" '[[ ${status} -eq 0 ]]'
+expect "goes through apt in one transaction" 'grep -q "apt-get install -y" "${calls}"'
+expect "removes nothing" '! grep -q "dpkg --remove" "${calls}"'
 
 echo "a machine still carrying the package the tool shipped under before"
-(
-  export INSTALLED_PACKAGES="vlsm-interfacing" APT_INSTALL_EXIT=0
-  run_install
-  expect "installs and reports success" '[[ ${status} -eq 0 ]]'
-  expect "leaves the removal to apt rather than doing it first" '! grep -q "dpkg --remove" <<< "${calls_made}"'
-) || failures=$((failures + 1))
+INSTALLED="vlsm-interfacing=4.1.15" APT_INSTALL_EXIT=0 APT_FIX_EXIT=0 run_install
+expect "installs and reports success" '[[ ${status} -eq 0 ]]'
+expect "leaves the removal to apt rather than doing it first" '! grep -q "dpkg --remove" "${calls}"'
 
 echo "an install that fails, with nothing broken for the repair to fix"
-(
-  export INSTALLED_PACKAGES="vlsm-interfacing" APT_INSTALL_EXIT=100 APT_FIX_EXIT=0
-  run_install
-  # The expensive lie: the repair exits 0 because there is nothing to repair.
-  expect "does not report success" '[[ ${status} -ne 0 ]]'
-  expect "says the machine was not changed" 'grep -q "has not been changed" <<< "${output}"'
-  expect "never removed what the laboratory was running" '! grep -q "dpkg --remove" <<< "${calls_made}"'
-) || failures=$((failures + 1))
+INSTALLED="vlsm-interfacing=4.1.15" APT_INSTALL_EXIT=100 APT_FIX_EXIT=0 run_install
+# The expensive lie: the repair exits 0 because there is nothing to repair.
+expect "does not report success" '[[ ${status} -ne 0 ]]'
+expect "says the requested version is not installed" 'grep -q "requested version is not installed" <<< "${output}"'
+expect "never removed what the laboratory was running" '! grep -q "dpkg --remove" "${calls}"'
+
+echo "an upgrade of this same package that fails"
+# The name is installed either way, so only the version tells the truth.
+INSTALLED="intelis-interfacing=4.2.1" APT_INSTALL_EXIT=100 APT_FIX_EXIT=0 run_install
+expect "does not mistake the older version for the new one" '[[ ${status} -ne 0 ]]'
+expect "tells the operator how to check the machine" 'grep -q "apt-get -f install" <<< "${output}"'
+expect "promises nothing about what was left behind" '! grep -q "has not been changed" <<< "${output}"'
 
 echo "an install that fails and is then repaired"
-(
-  export INSTALLED_PACKAGES="vlsm-interfacing intelis-interfacing" APT_INSTALL_EXIT=100 APT_FIX_EXIT=0
-  run_install
-  expect "reports success once the package is really there" '[[ ${status} -eq 0 ]]'
-  expect "says so plainly" 'grep -q "after dependency repair" <<< "${output}"'
-) || failures=$((failures + 1))
+INSTALLED="vlsm-interfacing=4.1.15 intelis-interfacing=4.3.0" APT_INSTALL_EXIT=100 APT_FIX_EXIT=0 run_install
+expect "reports success once the requested version is really there" '[[ ${status} -eq 0 ]]'
+expect "says so plainly" 'grep -q "after dependency repair" <<< "${output}"'
 
 if [[ ${failures} -ne 0 ]]; then
   echo "install script: ${failures} case(s) failed."
   exit 1
 fi
 
-echo "install script: an upgrade that cannot proceed leaves the laboratory as it was."
+echo "install script: an upgrade that cannot proceed is never reported as one that did."

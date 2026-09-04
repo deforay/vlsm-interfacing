@@ -37,11 +37,31 @@ legacy_package_installed() {
   package_installed "${LEGACY_PACKAGE_NAME}"
 }
 
-# The package name as the .deb itself declares it, so what gets checked
-# afterwards is what was actually meant to be installed rather than a name
-# assumed from the file.
-package_name_from_deb() {
-  dpkg-deb -f "$1" Package 2>/dev/null || true
+# What the .deb itself declares, so what gets checked afterwards is what was
+# actually meant to be installed rather than anything assumed from the filename.
+field_from_deb() {
+  dpkg-deb -f "$2" "$1" 2>/dev/null || true
+}
+
+installed_version_of() {
+  dpkg-query -W -f='${Version}' "$1" 2>/dev/null || true
+}
+
+# True only when the machine is running the exact package that was downloaded.
+#
+# WHY the version and not just the name: upgrading a machine that already has
+# this package leaves the name installed whatever happens. An install that was
+# rejected before it changed anything would look identical to one that
+# succeeded, and the laboratory would be told it had upgraded while still
+# running the version it had.
+downloaded_package_is_installed() {
+  local package_path="$1" name version
+
+  name="$(field_from_deb Package "${package_path}")"
+  version="$(field_from_deb Version "${package_path}")"
+  [[ -n "${name}" && -n "${version}" ]] || return 1
+
+  [[ "$(installed_version_of "${name}")" == "${version}" ]]
 }
 
 # Takes the machine off the package the tool shipped under before the rename.
@@ -186,7 +206,6 @@ install_latest() {
   local asset_url
   local package_name
   local package_path
-  local installed_name
 
   while [[ $# -gt 0 ]]; do
     case "$1" in
@@ -245,17 +264,25 @@ install_latest() {
   # download, the wrong architecture. Reporting that as a completed
   # installation would leave a laboratory believing it had upgraded while it
   # carried on running the version it had.
-  installed_name="$(package_name_from_deb "${package_path}")"
-  if [[ -n "${installed_name}" ]] && package_installed "${installed_name}"; then
+  if downloaded_package_is_installed "${package_path}"; then
     echo "Installation completed after dependency repair."
     return
   fi
 
+  # WHY no reassurance here: an install can fail before it touched anything, or
+  # after unpacking and before configuring. From outside there is no telling
+  # which, and promising a laboratory that nothing changed when the package
+  # manager is half way through would send them back to work on a machine
+  # nobody has checked.
   echo "" >&2
-  echo "The package was not installed, and this machine has not been changed." >&2
-  echo "The application you had, if any, is still there and still working." >&2
-  echo "Check the messages above: the usual causes are a download that did not" >&2
-  echo "complete, a package built for another architecture, or a full disk." >&2
+  echo "The requested version is not installed." >&2
+  echo "The usual causes are a download that did not complete, a package built" >&2
+  echo "for another architecture, or a full disk." >&2
+  echo "" >&2
+  echo "Before using this machine again, check what state it is in:" >&2
+  echo "  dpkg -l | grep -E 'intelis-interfacing|vlsm-interfacing'" >&2
+  echo "A package listed as anything other than 'ii' is half installed. Finish" >&2
+  echo "or undo it with:  sudo apt-get -f install" >&2
   exit 1
 }
 
