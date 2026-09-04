@@ -29,8 +29,19 @@ cleanup_temp_download_dir() {
   fi
 }
 
+package_installed() {
+  dpkg-query -W -f='${Status}' "$1" 2>/dev/null | grep -q 'install ok installed'
+}
+
 legacy_package_installed() {
-  dpkg-query -W -f='${Status}' "${LEGACY_PACKAGE_NAME}" 2>/dev/null | grep -q 'install ok installed'
+  package_installed "${LEGACY_PACKAGE_NAME}"
+}
+
+# The package name as the .deb itself declares it, so what gets checked
+# afterwards is what was actually meant to be installed rather than a name
+# assumed from the file.
+package_name_from_deb() {
+  dpkg-deb -f "$1" Package 2>/dev/null || true
 }
 
 # Takes the machine off the package the tool shipped under before the rename.
@@ -175,6 +186,7 @@ install_latest() {
   local asset_url
   local package_name
   local package_path
+  local installed_name
 
   while [[ $# -gt 0 ]]; do
     case "$1" in
@@ -224,9 +236,27 @@ install_latest() {
 
   # WHY: dpkg can leave dependency resolution incomplete for local .deb files.
   # apt-get -f install repairs dependencies and finishes package configuration.
-  echo "The install reported dependency issues. Repairing with apt-get -f install..."
-  sudo apt-get install -f -y
-  echo "Installation completed after dependency repair."
+  echo "The install reported a problem. Repairing dependencies with apt-get -f install..."
+  sudo apt-get install -f -y || true
+
+  # WHY this is checked rather than assumed: repairing dependencies succeeds
+  # and exits 0 when there are no broken dependencies to repair, which is
+  # exactly the case when the install failed for some other reason -- a damaged
+  # download, the wrong architecture. Reporting that as a completed
+  # installation would leave a laboratory believing it had upgraded while it
+  # carried on running the version it had.
+  installed_name="$(package_name_from_deb "${package_path}")"
+  if [[ -n "${installed_name}" ]] && package_installed "${installed_name}"; then
+    echo "Installation completed after dependency repair."
+    return
+  fi
+
+  echo "" >&2
+  echo "The package was not installed, and this machine has not been changed." >&2
+  echo "The application you had, if any, is still there and still working." >&2
+  echo "Check the messages above: the usual causes are a download that did not" >&2
+  echo "complete, a package built for another architecture, or a full disk." >&2
+  exit 1
 }
 
 install_latest "$@"
