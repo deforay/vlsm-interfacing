@@ -107,12 +107,15 @@ describe('ASTM over the wire (with checksum)', () => {
 
     it('handles the same session delivered one byte at a time', () => {
       const wire = harness();
+      const frames = astmFrames(ABBOTT_M2000_HIV_VL);
 
-      wire.receiveInChunks(astmSession(astmFrames(ABBOTT_M2000_HIV_VL)), 1);
+      wire.receiveInChunks(astmSession(frames), 1);
 
       expect(wire.sent()).toEqual(Array(ABBOTT_M2000_HIV_VL.length + 2).fill(ACK));
       expect(wire.saved()).toHaveLength(1);
       expect(wire.saved()[0].results).toBe('1250');
+      // Byte by byte or all at once, the transmission stored is the same one.
+      expect(wire.raw()[0]).toBe(wire.astmHelper.getStartMarker() + frames.join(''));
     });
 
     it('handles the whole session arriving in a single chunk and in odd-sized chunks', () => {
@@ -221,6 +224,32 @@ describe('ASTM over the wire (with checksum)', () => {
       expect(wire.sent()).toEqual([ACK, ACK, ACK, NAK, ACK, ACK, ACK, ACK]);
       expect(wire.saved()).toHaveLength(1);
       expect(wire.saved()[0].order_id).toBe('SAMPLE-M2000-001');
+      expect(wire.raw()[0].match(/SAMPLE-M2000-001/g)).toHaveLength(1);
+    });
+
+    it('acknowledges a frame the instrument sends again without storing it twice', () => {
+      const wire = harness();
+      const [header, patient, order, result, terminator] = ABBOTT_M2000_HIV_VL;
+      const orderFrame = astmFrame(3, order + CR);
+
+      wire.receive(ENQ);
+      wire.receive(astmFrames([header, patient]).join(''));
+      // The frame arrives, our ACK does not reach the instrument, and it sends
+      // the same frame again (E1381 section 6.3).
+      wire.receive(orderFrame);
+      wire.receive(orderFrame);
+      wire.receive(astmFrames([result, terminator], 4).join(''));
+      wire.receive(EOT);
+
+      // Eight acknowledgements for eight things received, the repeat included:
+      // ENQ, four frames, the frame again, the terminator frame, EOT.
+      expect(wire.sent()).toEqual(Array(8).fill(ACK));
+      expect(wire.sent()).not.toContain(NAK);
+      // One order record means one order: a second copy of it would be an
+      // order with no result records behind it, saved as a failure against a
+      // sample that has a result.
+      expect(wire.saved()).toHaveLength(1);
+      expect(wire.saved()[0]).toMatchObject({ order_id: 'SAMPLE-M2000-001', results: '1250' });
       expect(wire.raw()[0].match(/SAMPLE-M2000-001/g)).toHaveLength(1);
     });
 

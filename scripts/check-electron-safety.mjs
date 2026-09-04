@@ -28,6 +28,7 @@
 
 import { execFileSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
+import { pathToFileURL } from 'node:url';
 
 const WAIVER = /electron-safety-ok:\s*\S+/;
 
@@ -83,50 +84,98 @@ const SCANNABLE = /\.(ts|js|mjs|cjs|html)$/;
 // Tests drive the app deliberately, including the unsafe shapes above.
 const EXCLUDED = /(^|\/)(node_modules|dist|release)\/|\.spec\.ts$|^e2e\//;
 
-const files = execFileSync('git', ['ls-files', '-z'], { encoding: 'utf8' })
-  .split('\0')
-  .filter(f => f && SCANNABLE.test(f) && !EXCLUDED.test(f));
+// Matched against the whole file rather than line by line. The patterns already
+// allow whitespace between their parts, and in a file that whitespace includes
+// newlines: a call the formatter wrapped --
+//
+//   window.loadURL(
+//     'https://example.com/app');
+//
+// -- is on no single line, so a line-at-a-time scan reports nothing and the
+// check passes on the one change it exists to catch.
+export function scan(file, source, rules = RULES) {
+  const applicable = rules.filter(rule => rule.where.test(file));
+  if (applicable.length === 0) return { findings: [], waived: [] };
 
-const findings = [];
-const waived = [];
+  const lines = source.split('\n');
+  const lineStarts = [];
+  let offset = 0;
+  for (const line of lines) {
+    lineStarts.push(offset);
+    offset += line.length + 1;
+  }
+  const lineOf = index => {
+    let line = 0;
+    while (line + 1 < lineStarts.length && lineStarts[line + 1] <= index) line++;
+    return line;
+  };
 
-for (const file of files) {
-  const applicable = RULES.filter(rule => rule.where.test(file));
-  if (applicable.length === 0) continue;
+  const findings = [];
+  const waived = [];
 
-  const lines = readFileSync(file, 'utf8').split('\n');
-  lines.forEach((line, index) => {
-    for (const rule of applicable) {
-      if (!rule.pattern.test(line)) continue;
-      // A waiver on the line itself, or on the line above for wrapped statements.
-      const waiver = WAIVER.test(line) || WAIVER.test(lines[index - 1] ?? '');
-      (waiver ? waived : findings).push({ rule, file, line: index + 1, text: line.trim() });
+  for (const rule of applicable) {
+    const pattern = new RegExp(rule.pattern.source, rule.pattern.flags.includes('g')
+      ? rule.pattern.flags
+      : rule.pattern.flags + 'g');
+    for (const match of source.matchAll(pattern)) {
+      const first = lineOf(match.index);
+      const last = lineOf(match.index + match[0].length - 1);
+      // A waiver on any line the statement occupies, or on the line above it.
+      const scope = lines.slice(Math.max(first - 1, 0), last + 1);
+      const waiver = scope.some(line => WAIVER.test(line));
+      const text = first === last
+        ? lines[first].trim()
+        : match[0].replace(/\s+/g, ' ').trim();
+      (waiver ? waived : findings).push({ rule, file, line: first + 1, text });
     }
-  });
+  }
+
+  return { findings, waived };
 }
 
-for (const w of waived) {
-  console.log(`  waived  ${w.file}:${w.line}  ${w.rule.id}`);
+// Imported by scripts/test-electron-safety.mjs, which drives scan() over sources
+// it writes itself; only a direct run scans the repository.
+if (import.meta.url === pathToFileURL(process.argv[1] ?? '').href) {
+  checkRepository();
 }
 
-if (findings.length === 0) {
-  console.log(`electron safety: ${files.length} files scanned, nothing to report`
-    + `${waived.length ? ` (${waived.length} waived)` : ''}.`);
-  process.exit(0);
+function checkRepository() {
+  const files = execFileSync('git', ['ls-files', '-z'], { encoding: 'utf8' })
+    .split('\0')
+    .filter(f => f && SCANNABLE.test(f) && !EXCLUDED.test(f));
+
+  const findings = [];
+  const waived = [];
+
+  for (const file of files) {
+    const result = scan(file, readFileSync(file, 'utf8'));
+    findings.push(...result.findings);
+    waived.push(...result.waived);
+  }
+
+  for (const w of waived) {
+    console.log(`  waived  ${w.file}:${w.line}  ${w.rule.id}`);
+  }
+
+  if (findings.length === 0) {
+    console.log(`electron safety: ${files.length} files scanned, nothing to report`
+      + `${waived.length ? ` (${waived.length} waived)` : ''}.`);
+    process.exit(0);
+  }
+
+  console.error('\nelectron safety: this change would weaken what keeps the privileged'
+    + ' renderer safe.\n');
+
+  for (const rule of RULES) {
+    const hits = findings.filter(f => f.rule.id === rule.id);
+    if (hits.length === 0) continue;
+    console.error(`${rule.id}`);
+    for (const hit of hits) console.error(`  ${hit.file}:${hit.line}  ${hit.text}`);
+    console.error(`  why:     ${rule.why}`);
+    console.error(`  instead: ${rule.instead}\n`);
+  }
+
+  console.error('If one of these is genuinely safe, say why on the line (or the one above):');
+  console.error('  // electron-safety-ok: <reason>\n');
+  process.exit(1);
 }
-
-console.error('\nelectron safety: this change would weaken what keeps the privileged'
-  + ' renderer safe.\n');
-
-for (const rule of RULES) {
-  const hits = findings.filter(f => f.rule.id === rule.id);
-  if (hits.length === 0) continue;
-  console.error(`${rule.id}`);
-  for (const hit of hits) console.error(`  ${hit.file}:${hit.line}  ${hit.text}`);
-  console.error(`  why:     ${rule.why}`);
-  console.error(`  instead: ${rule.instead}\n`);
-}
-
-console.error('If one of these is genuinely safe, say why on the line (or the one above):');
-console.error('  // electron-safety-ok: <reason>\n');
-process.exit(1);

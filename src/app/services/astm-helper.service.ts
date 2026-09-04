@@ -17,12 +17,15 @@ export interface ASTMProcessingResult {
  * - `control`: a single ENQ, EOT, ACK or NAK byte.
  * - `frame`: a complete <STX>...<ETX|ETB>cc[<CR><LF>] frame. `valid` says
  *   whether the two checksum characters matched the frame contents.
+ * - `trailer`: the CR/LF that follow a frame and arrived after it. Framing
+ *   only: kept so the stored transmission is what was received, never
+ *   acknowledged and never parsed.
  * - `unframed`: text that is not inside a frame. Some analyzers do not frame
  *   every byte, so this is passed through the way every chunk was before
  *   frame validation existed.
  */
 export interface ASTMFrameToken {
-  kind: 'control' | 'frame' | 'unframed';
+  kind: 'control' | 'frame' | 'unframed' | 'trailer';
   text: string;
   valid?: boolean;
   expected?: string;
@@ -62,6 +65,9 @@ export class ASTMHelperService {
   // Bytes of a frame that has not finished arriving yet (checksum mode only)
   private astmFrameBuffers: Map<string, string> = new Map();
   private astmBufferExpiryTimers: Map<string, ReturnType<typeof setTimeout>> = new Map();
+  // Frame number of the last frame accepted from each instrument, so a frame
+  // the instrument sends again is recognised as the same one
+  private lastAcceptedFrameNumbers: Map<string, string> = new Map();
 
   constructor(private utilitiesService: UtilitiesService) { }
 
@@ -168,10 +174,18 @@ export class ASTMHelperService {
         continue;
       }
 
-      // CR/LF that trail a frame may arrive in a later chunk. Outside a frame
-      // they carry no meaning.
+      // CR/LF that trail a frame may arrive in a later chunk, once the frame
+      // itself has been handed on. They carry no records and are not a frame
+      // to acknowledge, but they are bytes the instrument sent: kept apart as
+      // a trailer so the stored transmission reads the same however the TCP
+      // chunks happened to fall.
       if (first === this.CR || first === this.LF) {
-        buffer = buffer.slice(1);
+        let end = 1;
+        while (end < buffer.length && (buffer.charAt(end) === this.CR || buffer.charAt(end) === this.LF)) {
+          end++;
+        }
+        tokens.push({ kind: 'trailer', text: buffer.slice(0, end) });
+        buffer = buffer.slice(end);
         continue;
       }
 
@@ -212,6 +226,62 @@ export class ASTMHelperService {
     }
 
     return { tokens, remainder: buffer };
+  }
+
+  /**
+   * True when this frame repeats the one accepted before it.
+   *
+   * E1381 numbers frames 1..7 then 0, so consecutive frames never carry the
+   * same number: a repeat means our ACK did not reach the instrument and it
+   * sent the frame again (section 6.3). The frame must still be acknowledged,
+   * but appending it a second time duplicates its records — and a duplicated
+   * O record becomes a second order with no result records behind it, saved
+   * as a failure against a sample that in fact has a result.
+   *
+   * Call once per accepted frame: it records the number as it answers.
+   * @param instrumentId Instrument the frame came from
+   * @param frameText The complete frame, starting with STX
+   */
+  isRepeatedFrame(instrumentId: string, frameText: string): boolean {
+    if (!instrumentId || frameText.charAt(0) !== this.STX) {
+      return false;
+    }
+
+    const frameNumber = frameText.charAt(1);
+    if (!/^[0-7]$/.test(frameNumber)) {
+      return false;
+    }
+
+    if (this.lastAcceptedFrameNumbers.get(instrumentId) === frameNumber) {
+      return true;
+    }
+
+    this.lastAcceptedFrameNumbers.set(instrumentId, frameNumber);
+    return false;
+  }
+
+  /**
+   * Keeps the CR/LF that followed a frame with the transmission being
+   * accumulated. Only while one is open: a stray CR between sessions is not
+   * the start of a transmission and must not turn an empty session into a
+   * non-empty one.
+   * @param instrumentId Instrument the bytes came from
+   * @param trailer The CR/LF bytes
+   */
+  appendFrameTrailer(instrumentId: string, trailer: string): void {
+    const buffered = this.astmBuffers.get(instrumentId);
+    if (!instrumentId || !buffered) {
+      return;
+    }
+    this.astmBuffers.set(instrumentId, buffered + trailer);
+  }
+
+  /**
+   * Forgets the last accepted frame number, so the next frame is judged on its
+   * own. Used when a session opens: the instrument restarts at frame 1.
+   */
+  resetInboundFrameSequence(instrumentId: string): void {
+    this.lastAcceptedFrameNumbers.delete(instrumentId);
   }
 
   private findFrameTerminator(buffer: string, fromIndex: number): number {
@@ -337,6 +407,7 @@ export class ASTMHelperService {
   clearInstrumentBuffer(instrumentId: string): void {
     this.astmBuffers.delete(instrumentId);
     this.astmFrameBuffers.delete(instrumentId);
+    this.lastAcceptedFrameNumbers.delete(instrumentId);
     const expiryTimer = this.astmBufferExpiryTimers.get(instrumentId);
     if (expiryTimer) {
       clearTimeout(expiryTimer);

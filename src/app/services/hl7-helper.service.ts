@@ -281,9 +281,11 @@ export class HL7HelperService {
       singleObx.get('OBX.6')?.toString()
     ];
     for (const candidate of candidates) {
-      const trimmed = (candidate ?? '').trim();
-      if (trimmed && !trimmed.startsWith('^')) {
-        return trimmed;
+      // Trimmed only to decide whether the component says anything. The unit
+      // that is stored is the field as the analyzer wrote it.
+      const inspected = (candidate ?? '').trim();
+      if (inspected && !inspected.startsWith('^')) {
+        return candidate;
       }
     }
     return '';
@@ -448,16 +450,32 @@ export class HL7HelperService {
   }
 
   /**
+   * True when these bytes hold a block that is complete but for its <CR>, the
+   * one case extractMLLPMessages holds back.
+   * @param buffered Bytes received so far that have not been consumed
+   */
+  endsAtFrameSeparator(buffered: string): boolean {
+    return buffered.endsWith('\x1C');
+  }
+
+  /**
    * Splits buffered MLLP bytes into complete messages.
    *
    * A block is <VT> ... <FS> <CR>. The <FS> is what marks a message complete;
    * the <VT> and trailing <CR> are tolerated when missing because some
    * analyzers omit them, and the <CR> may arrive in a later TCP chunk.
    * Bytes before a <VT> that follow an earlier block are dropped as noise.
+   *
+   * When the bytes end at the <FS>, the block is held back rather than
+   * returned: its <CR> may be in the chunk still to come, and a block emitted
+   * without it is stored as something other than what the analyzer sent. The
+   * caller decides how long to wait — `awaitTerminator: false` takes the block
+   * as it stands, which is what an analyzer that omits the <CR> needs.
    * @param buffered Bytes received so far that have not been consumed
+   * @param awaitTerminator Hold a block whose <CR> could still arrive
    * @returns Each complete block (with its own framing bytes) and the unconsumed tail
    */
-  extractMLLPMessages(buffered: string): { messages: string[]; remainder: string } {
+  extractMLLPMessages(buffered: string, awaitTerminator = false): { messages: string[]; remainder: string } {
     const VT = '\x0B';
     const FS = '\x1C';
     const messages: string[] = [];
@@ -466,6 +484,11 @@ export class HL7HelperService {
     for (;;) {
       const fsIndex = buffer.indexOf(FS);
       if (fsIndex === -1) {
+        break;
+      }
+
+      // Nothing after the <FS> yet: the <CR> may be in the next chunk.
+      if (awaitTerminator && fsIndex === buffer.length - 1) {
         break;
       }
 

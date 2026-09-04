@@ -17,12 +17,17 @@ import { COMMUNICATION_PROTOCOL, LIMS_SYNC_STATUS } from '../constants/domain.co
 export class InstrumentInterfaceService {
   static readonly MAX_INCOMPLETE_HL7_BYTES = 32 * 1024 * 1024;
   static readonly HL7_BUFFER_INACTIVITY_TIMEOUT_MS = 30 * 60 * 1000;
+  // How long a block that is complete but for its <CR> waits for it. The rest
+  // of a segment arrives in a fraction of this; an analyzer that never sends a
+  // <CR> gives up this much before its result is taken as it stands.
+  static readonly MLLP_TERMINATOR_GRACE_MS = 50;
 
   // WHY: TCP chunks from different analyzers can arrive concurrently. A shared
   // buffer can merge two patients' messages, so each configured instrument owns
   // its incomplete HL7 transmission until the frame separator arrives.
   private readonly hl7ReceiveBuffers = new Map<string, string>();
   private readonly hl7BufferExpiryTimers = new Map<string, ReturnType<typeof setTimeout>>();
+  private readonly hl7TerminatorTimers = new Map<string, ReturnType<typeof setTimeout>>();
   private connectedInstruments = new Map<string, BehaviorSubject<boolean>>();
   private readonly connectionStatusSubscriptions = new Map<string, Subscription>();
   private readonly resultSavedSubject = new Subject<{ sampleResult: any; instrumentId: string }>();
@@ -88,12 +93,7 @@ export class InstrumentInterfaceService {
   }
 
   private clearInstrumentReceiveState(instrumentId: string): void {
-    this.hl7ReceiveBuffers.delete(instrumentId);
-    const expiryTimer = this.hl7BufferExpiryTimers.get(instrumentId);
-    if (expiryTimer) {
-      clearTimeout(expiryTimer);
-      this.hl7BufferExpiryTimers.delete(instrumentId);
-    }
+    this.clearHL7Buffer(instrumentId);
     this.astmHelper.clearInstrumentBuffer(instrumentId);
   }
 
@@ -471,7 +471,16 @@ export class InstrumentInterfaceService {
       if (token.kind === 'control' && (token.text === '\x05' || token.text === '\x06')) {
         // ENQ opens a session and ACK answers our own frames: acknowledge,
         // but neither belongs in the stored transmission.
+        if (token.text === '\x05') {
+          that.astmHelper.resetInboundFrameSequence(instrumentConnectionData.instrumentId);
+        }
         that.astmHelper.sendACK(instrumentConnectionData, 'Sending ACK');
+        continue;
+      }
+      if (token.kind === 'trailer') {
+        // Framing bytes that arrived after their frame: kept with the stored
+        // transmission, not acknowledged and not parsed.
+        that.astmHelper.appendFrameTrailer(instrumentConnectionData.instrumentId, token.text);
         continue;
       }
       if (token.kind === 'frame' && !token.valid) {
@@ -480,6 +489,13 @@ export class InstrumentInterfaceService {
           `ASTM checksum mismatch (expected ${token.expected}, received ${token.received}). Sending NAK`
         );
         that.recordProcessingFailure('checksum_mismatch', instrumentConnectionData);
+        continue;
+      }
+      // A frame the instrument sends again because our ACK did not reach it
+      // is answered, but must not be added to the transmission twice.
+      if (token.kind === 'frame' && that.astmHelper.isRepeatedFrame(instrumentConnectionData.instrumentId, token.text)) {
+        that.astmHelper.sendACK(instrumentConnectionData, 'Sending ACK');
+        that.utilitiesService.logger('warn', 'Ignored a repeated ASTM frame', instrumentConnectionData.instrumentId);
         continue;
       }
       that.handleASTMChunk(astmProtocolType, instrumentConnectionData, token.text);
@@ -578,17 +594,32 @@ export class InstrumentInterfaceService {
 
     // MLLP wraps each message as <VT>...<FS><CR>. One chunk may hold several
     // messages, or the tail of one, so take every complete block and keep
-    // whatever follows the last <FS> for the next chunk.
-    const { messages, remainder } = that.hl7Helper.extractMLLPMessages(bufferedData);
+    // whatever follows the last <FS> for the next chunk. A block whose <CR>
+    // has not arrived waits briefly for it rather than being stored short.
+    const { messages, remainder } = that.hl7Helper.extractMLLPMessages(bufferedData, true);
+    that.clearHL7TerminatorTimer(bufferKey);
 
     if (remainder) {
       that.hl7ReceiveBuffers.set(bufferKey, remainder);
-      that.scheduleHL7BufferExpiry(instrumentConnectionData);
+      if (that.hl7Helper.endsAtFrameSeparator(remainder)) {
+        that.scheduleMLLPTerminatorFlush(instrumentConnectionData);
+      } else {
+        that.scheduleHL7BufferExpiry(instrumentConnectionData);
+      }
     } else {
       // Every received byte belongs to a complete block. Clear before parsing
       // so a parser exception cannot contaminate the next transmission.
       that.clearHL7Buffer(bufferKey);
     }
+
+    that.deliverHL7Messages(instrumentConnectionData, messages);
+  }
+
+  /**
+   * Stores and parses complete MLLP blocks, in the order they arrived.
+   */
+  private deliverHL7Messages(instrumentConnectionData: InstrumentConnectionStack, messages: string[]) {
+    const that = this;
 
     if (messages.length === 0) {
       return;
@@ -643,6 +674,45 @@ export class InstrumentInterfaceService {
       clearTimeout(expiryTimer);
       this.hl7BufferExpiryTimers.delete(instrumentId);
     }
+    this.clearHL7TerminatorTimer(instrumentId);
+  }
+
+  private clearHL7TerminatorTimer(instrumentId: string): void {
+    const terminatorTimer = this.hl7TerminatorTimers.get(instrumentId);
+    if (terminatorTimer) {
+      clearTimeout(terminatorTimer);
+      this.hl7TerminatorTimers.delete(instrumentId);
+    }
+  }
+
+  /**
+   * Takes a block that is complete but for its <CR> when the <CR> does not
+   * come. The block is never discarded: an analyzer that omits the terminator
+   * still sent a result, and waiting for a byte it will not send would lose it.
+   */
+  private scheduleMLLPTerminatorFlush(instrumentConnectionData: InstrumentConnectionStack): void {
+    const instrumentId = instrumentConnectionData.instrumentId;
+    this.clearHL7TerminatorTimer(instrumentId);
+
+    const terminatorTimer = setTimeout(() => {
+      this.hl7TerminatorTimers.delete(instrumentId);
+      const buffered = this.hl7ReceiveBuffers.get(instrumentId);
+      if (!buffered) {
+        return;
+      }
+
+      const { messages, remainder } = this.hl7Helper.extractMLLPMessages(buffered, false);
+      if (remainder) {
+        this.hl7ReceiveBuffers.set(instrumentId, remainder);
+        this.scheduleHL7BufferExpiry(instrumentConnectionData);
+      } else {
+        this.clearHL7Buffer(instrumentId);
+      }
+
+      this.deliverHL7Messages(instrumentConnectionData, messages);
+    }, InstrumentInterfaceService.MLLP_TERMINATOR_GRACE_MS);
+
+    this.hl7TerminatorTimers.set(instrumentId, terminatorTimer);
   }
 
   private scheduleHL7BufferExpiry(instrumentConnectionData: InstrumentConnectionStack): void {

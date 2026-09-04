@@ -72,6 +72,7 @@ describe('InstrumentInterfaceService HL7 streams', () => {
   };
 
   it('does not mix fragmented HL7 messages from concurrent instruments', () => {
+    vi.useFakeTimers();
     const { service, dbService, tcpService } = createService();
     const keyA = '10.0.0.1:5001:tcpserver:hl7';
     const keyB = '10.0.0.2:5002:tcpserver:hl7';
@@ -82,6 +83,9 @@ describe('InstrumentInterfaceService HL7 streams', () => {
     service.handleTCPResponse(keyA, Buffer.from('MSH|^~\\&|A|LAB|'));
     service.handleTCPResponse(keyB, Buffer.from('MSH|^~\\&|B|LAB|RESULT-B\x1c'));
     service.handleTCPResponse(keyA, Buffer.from('RESULT-A\x1c'));
+    // Neither analyzer ends its block with <CR>, so both are taken once the
+    // grace for it has passed, in the order they arrived.
+    vi.advanceTimersByTime(InstrumentInterfaceService.MLLP_TERMINATOR_GRACE_MS);
 
     expect(processSpy).toHaveBeenCalledTimes(2);
     expect(processSpy.mock.calls[0][1]).toContain('RESULT-B');
@@ -109,6 +113,7 @@ describe('InstrumentInterfaceService HL7 streams', () => {
   });
 
   it('isolates a malformed completed frame from the following transmission', () => {
+    vi.useFakeTimers();
     const { service, tcpService } = createService();
     const key = '10.0.0.1:5001:tcpserver:hl7';
     tcpService.connectionStack.set(key, createConnection('ANALYZER-A'));
@@ -116,6 +121,9 @@ describe('InstrumentInterfaceService HL7 streams', () => {
 
     service.handleTCPResponse(key, Buffer.from('NOT-HL7\x1c'));
     service.handleTCPResponse(key, Buffer.from('MSH|^~\\&|A|LAB|VALID\x1c'));
+    // Neither block carries the <CR> that ends an MLLP block, so the last one
+    // is taken once the grace for it has passed.
+    vi.advanceTimersByTime(InstrumentInterfaceService.MLLP_TERMINATOR_GRACE_MS);
 
     expect(processSpy).toHaveBeenCalledTimes(2);
     expect(processSpy.mock.calls[1][1]).not.toContain('NOT-HL7');

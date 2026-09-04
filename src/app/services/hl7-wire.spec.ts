@@ -109,6 +109,33 @@ describe('HL7 over the wire', () => {
 
       expect(wire.saved()).toHaveLength(4);
       expect((wire.service as any).hl7ReceiveBuffers.has('ANALYZER-1')).toBe(false);
+      // The block waited for its terminator, so what is stored is the block
+      // the analyzer sent and not one byte less.
+      expect(wire.raw()[0]).toBe(mllp(GENERIC_HIV_VL));
+    });
+
+    it('stores a block whose analyzer never sends the trailing CR', () => {
+      vi.useFakeTimers();
+      const wire = harness();
+
+      wire.receive(VT + GENERIC_HIV_VL + FS);
+      expect(wire.saved()).toHaveLength(0);
+
+      // Waiting for a byte the analyzer does not send must not cost a result.
+      vi.advanceTimersByTime(InstrumentInterfaceService.MLLP_TERMINATOR_GRACE_MS);
+
+      expect(wire.saved()).toHaveLength(1);
+      expect(wire.raw()[0]).toBe(mllp(GENERIC_HIV_VL, { cr: false }));
+    });
+
+    it('stores the unit as the analyzer wrote it, padding included', () => {
+      const wire = harness();
+      const padded = GENERIC_HIV_VL.replace('|copies/mL|', '| copies/mL |');
+
+      wire.receive(mllp(padded));
+
+      expect(wire.saved()).toHaveLength(1);
+      expect(wire.saved()[0].test_unit).toBe(' copies/mL ');
     });
 
     it('accepts a block without a start byte and CR LF segment endings', () => {
