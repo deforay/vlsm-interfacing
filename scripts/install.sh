@@ -43,25 +43,37 @@ field_from_deb() {
   dpkg-deb -f "$2" "$1" 2>/dev/null || true
 }
 
-installed_version_of() {
-  dpkg-query -W -f='${Version}' "$1" 2>/dev/null || true
+# Status and version together, because either alone can mislead: the version is
+# reported for a package that is only unpacked, and the status is reported for
+# whatever version happens to be there.
+installed_status_and_version() {
+  dpkg-query -W -f='${Status}|${Version}' "$1" 2>/dev/null || true
 }
 
-# True only when the machine is running the exact package that was downloaded.
+# True only when the machine is running the exact package that was downloaded,
+# and running it rather than merely holding it.
 #
 # WHY the version and not just the name: upgrading a machine that already has
 # this package leaves the name installed whatever happens. An install that was
 # rejected before it changed anything would look identical to one that
 # succeeded, and the laboratory would be told it had upgraded while still
 # running the version it had.
+#
+# WHY the status as well as the version: a package can be unpacked and then
+# fail to configure. dpkg reports the new version for it either way, so the
+# version alone would call a half-installed application a working one -- which
+# is the state a laboratory is least able to diagnose and most likely to be
+# sent back to work on.
 downloaded_package_is_installed() {
-  local package_path="$1" name version
+  local package_path="$1" name version record
 
   name="$(field_from_deb Package "${package_path}")"
   version="$(field_from_deb Version "${package_path}")"
   [[ -n "${name}" && -n "${version}" ]] || return 1
 
-  [[ "$(installed_version_of "${name}")" == "${version}" ]]
+  record="$(installed_status_and_version "${name}")"
+  [[ "${record%%|*}" == "install ok installed" ]] || return 1
+  [[ "${record#*|}" == "${version}" ]]
 }
 
 # Takes the machine off the package the tool shipped under before the rename.

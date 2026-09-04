@@ -71,15 +71,27 @@ exit "${DPKG_INSTALL_EXIT:-0}"
 FAKE
 
   # INSTALLED is a list of "name=version" pairs describing the machine.
+  # HALF_CONFIGURED names packages dpkg has unpacked but not configured, which
+  # it still reports a version for -- the case a version check alone misreads.
+  # The format string is rendered the way dpkg-query renders it, so the script
+  # can ask for status and version in whichever shape it likes.
   cat > "${fake_dir}/dpkg-query" <<'FAKE'
 #!/usr/bin/env bash
 echo "dpkg-query $*" >> "$CALLS"
 requested="${!#}"
-wants_version=0
-[[ "$*" == *'${Version}'* ]] && wants_version=1
+format=""
+for argument in "$@"; do
+  [[ "$argument" == -f=* ]] && format="${argument#-f=}"
+done
 for entry in ${INSTALLED:-}; do
   if [[ "${entry%%=*}" == "$requested" ]]; then
-    if [[ $wants_version -eq 1 ]]; then printf '%s' "${entry#*=}"; else echo "install ok installed"; fi
+    status="install ok installed"
+    for unpacked in ${HALF_CONFIGURED:-}; do
+      [[ "$unpacked" == "$requested" ]] && status="install ok unpacked"
+    done
+    rendered="${format//\$\{Status\}/$status}"
+    rendered="${rendered//\$\{Version\}/${entry#*=}}"
+    printf '%s' "$rendered"
     exit 0
   fi
 done
@@ -147,8 +159,17 @@ expect "does not mistake the older version for the new one" '[[ ${status} -ne 0 
 expect "tells the operator how to check the machine" 'grep -q "apt-get -f install" <<< "${output}"'
 expect "promises nothing about what was left behind" '! grep -q "has not been changed" <<< "${output}"'
 
+echo "an install that unpacked the package but could not configure it"
+# dpkg reports the new version for a package it has only unpacked, so the
+# version alone would call a half-installed application a working one.
+INSTALLED="intelis-interfacing=4.3.0" HALF_CONFIGURED="intelis-interfacing" \
+  APT_INSTALL_EXIT=100 APT_FIX_EXIT=100 run_install
+expect "does not call a half-installed package a working one" '[[ ${status} -ne 0 ]]'
+expect "says the requested version is not installed" 'grep -q "requested version is not installed" <<< "${output}"'
+
 echo "an install that fails and is then repaired"
-INSTALLED="vlsm-interfacing=4.1.15 intelis-interfacing=4.3.0" APT_INSTALL_EXIT=100 APT_FIX_EXIT=0 run_install
+INSTALLED="vlsm-interfacing=4.1.15 intelis-interfacing=4.3.0" HALF_CONFIGURED="" \
+  APT_INSTALL_EXIT=100 APT_FIX_EXIT=0 run_install
 expect "reports success once the requested version is really there" '[[ ${status} -eq 0 ]]'
 expect "says so plainly" 'grep -q "after dependency repair" <<< "${output}"'
 
