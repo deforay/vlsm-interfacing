@@ -11,9 +11,11 @@ If you are installing for the first time, read in order:
    instruments the tool will listen to.
 3. **[The console](console.md)** — connecting an instrument and watching results
    arrive.
-4. **[Backup and restore](backup-restore.md)** — keeping a copy of the
+4. **[Raw data and recovery](raw-data.md)** — what the tool keeps of every
+   transmission, and how to recover results it once read wrongly.
+5. **[Backup and restore](backup-restore.md)** — keeping a copy of the
    configuration, and moving it to another machine.
-5. **[When something is wrong](troubleshooting.md)** — what the messages mean
+6. **[When something is wrong](troubleshooting.md)** — what the messages mean
    and what to do about them.
 
 ## Quick reference

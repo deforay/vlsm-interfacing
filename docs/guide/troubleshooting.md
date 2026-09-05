@@ -34,7 +34,9 @@ configuration screen.
 - **Truncated results, or a result with odd characters in it** — this was a
   defect in versions before 4.2.0 affecting analyzers that split records across
   frames, the Cepheid GeneXpert in particular. Upgrade. Nothing is lost: the raw
-  transmissions were stored intact, and re-processing them recovers the results.
+  transmissions were stored intact, and reprocessing them recovers the results —
+  see [raw data and recovery](raw-data.md), including what reprocessing does to
+  results the LIS has already taken.
 - **A result that looks like a foreign number** — `1420403,41` is a French
   analyzer's way of writing 1420403.41. It is stored as sent, deliberately. See
   [why](console.md#received-results).

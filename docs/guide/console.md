@@ -79,5 +79,6 @@ analyzer and the tool.
 
 **View Raw Data** shows the transmissions themselves, as received. It is the
 record of what the analyzer actually said, kept so that a result can be
-re-derived if the tool ever read one wrongly. When reporting a problem with a
-result, this is the useful thing to send.
+re-derived if the tool ever read one wrongly — see
+[raw data and recovery](raw-data.md). When reporting a problem with a result,
+this is the useful thing to send.

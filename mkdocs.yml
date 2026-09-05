@@ -84,6 +84,7 @@ nav:
       - Installing: guide/install.md
       - Settings: guide/settings.md
       - The console: guide/console.md
+      - Raw data and recovery: guide/raw-data.md
       - Backup and restore: guide/backup-restore.md
       - When something is wrong: guide/troubleshooting.md
   - Technical guide:
