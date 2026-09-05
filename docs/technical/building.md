@@ -55,9 +55,9 @@ Pushing a `v*` tag is what cuts the release. The workflow re-runs the full gate,
 refuses to continue if the tag and `package.json` disagree, then builds and
 publishes a Debian package and the Windows installer and portable build.
 
-macOS is configured in `electron-builder.json` and can be built locally with
-`npm run electron:build`, but no release job produces a `.dmg`: adding one means
-a macOS runner and, to be worth downloading, a signing certificate.
+Those two are the platforms this tool ships for: a machine beside an analyzer in
+a laboratory is a Windows box or a Debian one. macOS is not a target and is not
+configured — it is useful for development, and nothing more.
 
 `npm run bump` exists because the version lives in four files, and a partial
 bump ships installers labelled differently from the release they land on.

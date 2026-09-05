@@ -20,10 +20,9 @@ const DISMISSED_VERSION_KEY = 'dismissedUpdateVersion';
  * asking anyone's permission, and a laboratory with no LIS connection
  * configured at all is told just the same.
  *
- * WHY not automatic updates: the Windows and macOS builds would need signing
- * certificates for an unattended install to be anything but alarming, the
- * portable build cannot be updated in place at all, and on Debian the package
- * is the distribution's to manage. More to the point, a machine sitting between
+ * WHY not automatic updates: an unattended Windows install would need a signing
+ * certificate to be anything but alarming, the portable build cannot be updated
+ * in place at all, and on Debian the package is the distribution's to manage. More to the point, a machine sitting between
  * an analyzer and a laboratory information system should not restart itself
  * mid-run because a release happened. So this says there is one, and leaves the
  * decision with the laboratory.

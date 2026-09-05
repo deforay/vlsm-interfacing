@@ -31,12 +31,6 @@ Download the installer for your architecture from the
 it. A portable build is published alongside it for machines where you would
 rather not install anything.
 
-## macOS
-
-There is no published macOS build. The application can be built from source on
-a Mac — see [building and releasing](../technical/building.md) — but releases
-carry Windows and Debian packages only.
-
 ## Upgrading
 
 Install the newer version the same way you installed the current one. Your
