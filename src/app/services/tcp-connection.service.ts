@@ -65,7 +65,7 @@ export class TcpConnectionService implements OnDestroy {
 
     return {
       host: parts[0],
-      port: parseInt(parts[1]),
+      port: Number.parseInt(parts[1], 10),
       connectionMode: parts[2] as any,
       connectionProtocol: parts[3]
     } as ConnectionParams;
