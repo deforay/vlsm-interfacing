@@ -9,11 +9,12 @@
 #   bin/review --uncommitted    the working tree, before committing
 #   bin/review --help           this text
 #
-# REVIEWED, at the repository root, is the mark: one line per finished review,
-# the reviewed-up-to commit first. The last line is where the next run starts,
-# so nobody has to remember which commits a reader has already seen. It moves
-# only when a review ends at HEAD and the reader exits clean; a single-commit
-# or working-tree review leaves it where it was.
+# The mark is kept in the clone's git directory (.git/reviewed), never in a
+# commit: one line per finished review, the reviewed-up-to commit first. The
+# last line is where the next run starts, so nobody has to remember which
+# commits a reader has already seen. It moves only when a review ends at HEAD
+# and the reader exits clean. A single-commit or working-tree review leaves it
+# where it was.
 #
 # The reviewing CLI is named by $REVIEW_AGENT rather than written down here, so
 # the repository carries no vendor name and the reader can be swapped without
@@ -75,7 +76,11 @@ $BRIEF"
 # The scope travels inside the prompt rather than as a flag: the built-in review
 # modes are mutually exclusive with custom instructions, and the instructions are
 # the entire point of this script.
-MARK_FILE="REVIEWED"
+MARK_FILE="$(git rev-parse --git-common-dir)/reviewed"
+# The mark was once a tracked REVIEWED file. Its history seeds the local one.
+if [ ! -f "$MARK_FILE" ] && [ -f REVIEWED ]; then
+    cp REVIEWED "$MARK_FILE"
+fi
 MARK="$( [ -f "$MARK_FILE" ] && awk 'NF && $1 !~ /^#/ {last=$1} END {print last}' "$MARK_FILE" || true )"
 RANGE=""
 END=""
@@ -91,6 +96,13 @@ case "${1:-}" in
         if [ "$(git rev-parse "$MARK")" = "$(git rev-parse HEAD)" ]; then
             echo "Nothing to review: HEAD is the last reviewed commit ($(git rev-parse --short "$MARK"))."
             exit 0
+        fi
+        # A rebase-merge gives the reviewed commits new identities on master,
+        # so the mark can stop being an ancestor. Guessing a range would skip
+        # commits or re-read them, so ask for one instead.
+        if ! git merge-base --is-ancestor "$MARK" HEAD 2>/dev/null; then
+            echo "The last mark ($(git rev-parse --short "$MARK" 2>/dev/null || echo "$MARK")) is not an ancestor of HEAD. Name a range: bin/review <a>..<b>" >&2
+            exit 1
         fi
         RANGE="$MARK..HEAD"
         END="HEAD"
@@ -119,7 +131,7 @@ STATUS=$?
 if [ "$STATUS" -eq 0 ] && [ -n "$END" ] && [ "$(git rev-parse "$END")" = "$(git rev-parse HEAD)" ]; then
     printf '%s  %s  %s..%s\n' "$(git rev-parse --short HEAD)" "$(date +%Y-%m-%d)" "$(git rev-parse --short "${RANGE%%..*}")" "$(git rev-parse --short "$END")" >> "$MARK_FILE"
     echo
-    echo "Marked $(git rev-parse --short HEAD) as reviewed in $MARK_FILE."
+    echo "Marked $(git rev-parse --short HEAD) as reviewed in .git/reviewed."
 fi
 
 exit "$STATUS"
