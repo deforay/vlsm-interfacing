@@ -78,17 +78,17 @@ export class ASTMHelperService {
   private static readonly FRAME_NUMBER_MODULUS = 8;
 
   // Track sequence numbers for different instruments
-  private astmSequenceNumbers: Map<string, number> = new Map();
+  private readonly astmSequenceNumbers: Map<string, number> = new Map();
   // Buffer ASTM payloads per instrument until we receive EOT
-  private astmBuffers: Map<string, string> = new Map();
+  private readonly astmBuffers: Map<string, string> = new Map();
   // Bytes of a frame that has not finished arriving yet (checksum mode only)
-  private astmFrameBuffers: Map<string, string> = new Map();
-  private astmBufferExpiryTimers: Map<string, ReturnType<typeof setTimeout>> = new Map();
+  private readonly astmFrameBuffers: Map<string, string> = new Map();
+  private readonly astmBufferExpiryTimers: Map<string, ReturnType<typeof setTimeout>> = new Map();
   // Frame number of the last frame accepted from each instrument, so a frame
   // the instrument sends again is recognised as the same one
-  private lastAcceptedFrameNumbers: Map<string, string> = new Map();
+  private readonly lastAcceptedFrameNumbers: Map<string, string> = new Map();
 
-  constructor(private utilitiesService: UtilitiesService) { }
+  constructor(private readonly utilitiesService: UtilitiesService) { }
 
   /**
  * Gets the START marker for ASTM message processing

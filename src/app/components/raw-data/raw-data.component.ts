@@ -78,13 +78,13 @@ export class RawDataComponent implements OnInit, OnDestroy {
   @ViewChild(MatPaginator, { static: true }) paginator: MatPaginator;
 
   constructor(
-    private utilitiesService: UtilitiesService,
-    private connectionManagerService: ConnectionManagerService,
-    private rawDataProcessor: RawDataProcessorService,
-    private databaseService: DatabaseService,
-    private cdRef: ChangeDetectorRef,
-    private router: Router,
-    private electronStoreService: ElectronStoreService
+    private readonly utilitiesService: UtilitiesService,
+    private readonly connectionManagerService: ConnectionManagerService,
+    private readonly rawDataProcessor: RawDataProcessorService,
+    private readonly databaseService: DatabaseService,
+    private readonly cdRef: ChangeDetectorRef,
+    private readonly router: Router,
+    private readonly electronStoreService: ElectronStoreService
   ) { }
 
   /** The Display Date Format, shown as the date fields' placeholder. */

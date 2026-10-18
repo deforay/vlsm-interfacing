@@ -5,8 +5,8 @@ import { BehaviorSubject, Observable } from 'rxjs';
   providedIn: 'root'
 })
 export class ElectronStoreService {
-  private store: any;
-  private electronStoreSubject: BehaviorSubject<any>;
+  private readonly store: any;
+  private readonly electronStoreSubject: BehaviorSubject<any>;
 
   constructor() {
     if (window.require) {

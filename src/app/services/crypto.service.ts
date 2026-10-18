@@ -5,7 +5,7 @@ import { ElectronStoreService } from './electron-store.service';
 })
 export class CryptoService {
 
-  private nodeCrypto: any = (window as any).require('crypto');
+  private readonly nodeCrypto: any = (window as any).require('crypto');
   private readonly keyLength = 32; // Key length should be 32 bytes for AES-256
   private readonly prefix = 'ENC(';
   private readonly suffix = ')';

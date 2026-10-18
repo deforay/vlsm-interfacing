@@ -10,7 +10,7 @@ import { LisApiConfig, LisApiResponse } from '../interfaces/lis-api-config.inter
   providedIn: 'root'
 })
 export class LisApiService {
-  private instrumentNames$ = new BehaviorSubject<string[]>([]);
+  private readonly instrumentNames$ = new BehaviorSubject<string[]>([]);
 
   constructor(
     private readonly http: HttpClient,

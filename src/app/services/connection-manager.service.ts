@@ -20,19 +20,19 @@ import {
 })
 export class ConnectionManagerService implements OnDestroy {
   // Store the instruments and their connection status
-  private activeInstruments: Map<string, any> = new Map();
+  private readonly activeInstruments: Map<string, any> = new Map();
   private commonSettings: any = null;
   private instrumentsSettings: any = null;
-  private activeInstrumentsSubject = new BehaviorSubject<any[]>([]);
-  private storeSubscription: Subscription;
+  private readonly activeInstrumentsSubject = new BehaviorSubject<any[]>([]);
+  private readonly storeSubscription: Subscription;
   private statusSyncSubscription: Subscription;
   private readonly instrumentStatusSubscriptions = new Map<string, Subscription>();
   private readonly pendingInstrumentTimers = new Map<string, Set<ReturnType<typeof setTimeout>>>();
 
   constructor(
-    private instrumentInterfaceService: InstrumentInterfaceService,
-    private tcpService: TcpConnectionService,
-    private store: ElectronStoreService
+    private readonly instrumentInterfaceService: InstrumentInterfaceService,
+    private readonly tcpService: TcpConnectionService,
+    private readonly store: ElectronStoreService
   ) {
     // Load the settings initially
     this.loadSettings();

@@ -16,7 +16,7 @@ export class HomeComponent {
     login: '',
     password: ''
   };
-  constructor(private router: Router, private store: ElectronStoreService) {
+  constructor(private readonly router: Router, private readonly store: ElectronStoreService) {
     this.settings = this.store.get('commonConfig');
     //console.info(this.settings);
     this.appVersion = this.store.get('appVersion');

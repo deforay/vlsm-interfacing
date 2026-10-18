@@ -16,7 +16,7 @@ export class HL7HelperService {
     ND: 'Target Not Detected'
   };
 
-  constructor(private utilitiesService: UtilitiesService) { }
+  constructor(private readonly utilitiesService: UtilitiesService) { }
 
   /**
    * Generates an HL7 ACK (acknowledgment) message
