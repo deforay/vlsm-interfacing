@@ -280,7 +280,7 @@ export class RawDataProcessorService {
       return RawDataProcessorService.idleStatus();
     }
     const entries = [...rawDataEntries];
-    return this.runReprocessing(entries.length, async () => entries.splice(0, RawDataProcessorService.BATCH_SIZE));
+    return this.runReprocessing(entries.length, () => Promise.resolve(entries.splice(0, RawDataProcessorService.BATCH_SIZE)));
   }
 
   /**

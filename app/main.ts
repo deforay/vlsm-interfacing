@@ -549,12 +549,12 @@ function createWindow(): BrowserWindow {
   if (serve) {
     import('electron-debug').then(debug => {
       debug.default({ isEnabled: true, showDevTools: true });
-    });
+    }).catch(error => log.warn(`Could not load electron-debug: ${formatUnknownError(error)}`));
 
     import('electron-reloader').then(reloader => {
       const reloaderFn = (reloader as any).default || reloader;
       reloaderFn(module, { watchRenderer: false });
-    });
+    }).catch(error => log.warn(`Could not load electron-reloader: ${formatUnknownError(error)}`));
     win.loadURL('http://localhost:4200');
   } else {
     let pathIndex = './browser/index.html';
@@ -892,7 +892,7 @@ try {
       return { success: true };
     });
 
-    ipcMain.handle('show-confirm-dialog', async (event, options) => {
+    ipcMain.handle('show-confirm-dialog', (event, options) => {
       const focusedWindow = BrowserWindow.getFocusedWindow();
       if (focusedWindow) {
         return dialog.showMessageBox(focusedWindow, options);

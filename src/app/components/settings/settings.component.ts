@@ -1109,6 +1109,9 @@ export class SettingsComponent implements OnInit, OnDestroy {
             state: { returnFromSettings: true }
           });
         }, 500);
+      }).catch(error => {
+        savingNotification.remove();
+        console.error('Could not save settings:', error);
       });
     } else {
       console.error('Unable to update settings.');

@@ -196,17 +196,17 @@ export function createWireHarness(options: WireHarnessOptions): WireHarness {
       savedResults.push(data);
       success({ lastID: savedResults.length });
     }),
-    recordTelemetryEvent: vi.fn(async (event: any) => {
+    recordTelemetryEvent: vi.fn((event: any) => {
       telemetry.push(event);
-      return true;
+      return Promise.resolve(true);
     }),
     // The same comparison the database makes, over the results saved here.
-    findIdenticalResult: vi.fn(async (record: any) => savedResults.some(saved =>
+    findIdenticalResult: vi.fn((record: any) => Promise.resolve(savedResults.some(saved =>
       IDENTICAL_FIELDS.every(field => (saved[field] ?? '') === (record[field] ?? ''))
-    )),
-    hasEarlierResult: vi.fn(async (record: any) => savedResults.some(saved =>
+    ))),
+    hasEarlierResult: vi.fn((record: any) => Promise.resolve(savedResults.some(saved =>
       saved.order_id === record.order_id && (saved.test_type ?? '') === (record.test_type ?? '')
-    ))
+    )))
   };
   const tcpService = {
     connectionStack: new Map<string, any>(),

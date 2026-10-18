@@ -560,8 +560,9 @@ export class InstrumentInterfaceService {
         return;
       }
 
+      // Not awaited, and cannot reject: a failed save resolves false.
       for (const sampleResult of sampleResults) {
-        this.saveASTMResult(sampleResult, instrumentConnectionData, { transmissionId });
+        void this.saveASTMResult(sampleResult, instrumentConnectionData, { transmissionId });
       }
     } else {
       this.utilitiesService.logger('info', astmProtocolType.toUpperCase() + ' | Receiving....' + astmText, instrumentConnectionData.instrumentId);
@@ -666,7 +667,7 @@ export class InstrumentInterfaceService {
       // this catches. They are not awaited: the promise each returns cannot
       // reject, because saveResult reports a failed save by resolving false.
       try {
-        this.processHL7Message(instrumentConnectionData, completeMessage, { transmissionId });
+        void this.processHL7Message(instrumentConnectionData, completeMessage, { transmissionId });
       } catch (error) {
         this.utilitiesService.logger('error', 'Failed to parse HL7 message: ' + error, instrumentConnectionData.instrumentId);
         this.recordProcessingFailure('hl7_parse_failed', instrumentConnectionData);
