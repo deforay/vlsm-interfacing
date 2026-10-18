@@ -6,8 +6,8 @@
 // back a status; it never handles the plaintext payload.
 
 import { ipcMain, dialog, shell, BrowserWindow } from 'electron';
-import * as fs from 'fs';
-import * as path from 'path';
+import * as fs from 'node:fs';
+import * as path from 'node:path';
 import * as log from 'electron-log/main';
 
 import {

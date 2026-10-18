@@ -5,7 +5,7 @@
 // point the original machine is usually gone. Imports node crypto only — no
 // Electron, no fs.
 
-import * as crypto from 'crypto';
+import * as crypto from 'node:crypto';
 
 import {
   EncryptedSettingsExport,
