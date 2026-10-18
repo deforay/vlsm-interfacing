@@ -136,4 +136,29 @@ describe('HL7HelperService', () => {
 
     expect(service.isValidHL7Message(message)).toBe(false);
   });
+
+  describe('the ACK\'s MSA-2', () => {
+    beforeEach(() => {
+      const globalObject = globalThis as any;
+      globalObject.window = globalObject.window ?? {};
+      if (typeof globalObject.window.require !== 'function') {
+        globalObject.window.require = (moduleName: string) => require(moduleName);
+      }
+    });
+
+    const msa2 = (ack: string) => ack.split('\r').find(segment => segment.startsWith('MSA|'))?.split('|')[2];
+
+    it('echoes the received message\'s control ID', () => {
+      expect(msa2(service.generateHL7ACK('MSG00042', '', ''))).toBe('MSG00042');
+    });
+
+    it('fills a missing control ID with a random value that fits v2.5.1\'s 20 characters', () => {
+      const first = msa2(service.generateHL7ACK('', '', ''));
+      const second = msa2(service.generateHL7ACK('', '', ''));
+
+      expect(first).toMatch(/^[0-9a-f]{20}$/);
+      expect(second).toMatch(/^[0-9a-f]{20}$/);
+      expect(first).not.toBe(second);
+    });
+  });
 });

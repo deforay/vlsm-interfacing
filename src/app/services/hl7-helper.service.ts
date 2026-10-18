@@ -19,25 +19,19 @@ export class HL7HelperService {
   constructor(private readonly utilitiesService: UtilitiesService) { }
 
   /**
-   * Generates an HL7 ACK (acknowledgment) message
-   * @param messageID Message ID to acknowledge
-   * @param characterSet Character set to use in response
-   * @param messageProfileIdentifier Message profile identifier
-   * @param hl7Version HL7 version to use (default: 2.5.1)
-   * @returns Formatted HL7 ACK message
+   * Builds the HL7 ACK for a received message.
+   * @param messageID The received message's control ID (its MSH-10), echoed in MSA-2
+   * @param characterSet Character set for MSH-18
+   * @param messageProfileIdentifier Message profile identifier for MSH-21
+   * @param hl7Version HL7 version for MSH-12 (default: 2.5.1)
+   * @returns The ACK, framed for MLLP
    */
-  /**
- * Generates an optimized HL7 ACK (acknowledgment) message with detailed field mapping
- * @param messageID Message ID to acknowledge (goes to MSH-10 in response, MSA-2 for original msg)
- * @param characterSet Character set to use in response (MSH-18)
- * @param messageProfileIdentifier Message profile identifier (MSH-21)
- * @param hl7Version HL7 version to use (MSH-12, default: 2.5.1)
- * @returns Formatted HL7 ACK message
- */
   generateHL7ACK(messageID: string | number, characterSet: string, messageProfileIdentifier: string, hl7Version = '2.5.1'): string {
     // Handle empty/null parameters
     if (!messageID || messageID === '') {
-      messageID = Math.random().toString();
+      // The message had no control ID to echo. MSA-2 is required and holds at
+      // most 20 characters in v2.5.1, so a random 20-character value stands in.
+      messageID = randomUUID().replaceAll('-', '').slice(0, 20);
     }
     if (!characterSet || characterSet === '') {
       characterSet = 'UNICODE UTF-8';
