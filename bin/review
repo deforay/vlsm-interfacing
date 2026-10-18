@@ -70,11 +70,12 @@ is_recorded() {
     [ -n "$id" ] && awk -F'\t' -v id="$id" '$2 == id {found=1} END {exit !found}' "$LEDGER"
 }
 
-# The newest commit on HEAD that the ledger names by its own identity. Read
-# bottom-up, and only an ancestor of HEAD counts: an amend or a rebase leaves
-# the recorded object behind, and `thatSha..HEAD` would not be a range of
-# anything.
-last_reviewed() {
+# The oldest commit on HEAD that the ledger names by its own identity: where
+# the ledger began on this branch. Commits after it are each checked against
+# the ledger, so a commit recorded out of order (with --mark, or a range that
+# skipped some) never hides the unread ones before it. Only an ancestor of
+# HEAD counts: an amend or a rebase leaves the recorded object behind.
+ledger_start() {
     [ -f "$LEDGER" ] || return 0
     local sha
     while IFS=$'\t' read -r sha _; do
@@ -83,13 +84,13 @@ last_reviewed() {
             echo "$sha"
             return 0
         fi
-    done < <(tail -r "$LEDGER" 2>/dev/null || tac "$LEDGER")
+    done < "$LEDGER"
 }
 
 # The commits on HEAD that the ledger does not account for, oldest first.
 pending_commits() {
     local base sha
-    base="$(last_reviewed)"
+    base="$(ledger_start)"
     [ -n "$base" ] || base="$(git rev-parse "HEAD~$BOOTSTRAP_COMMITS" 2>/dev/null || true)"
     for sha in $(git rev-list --reverse "${base:+$base..}HEAD"); do
         is_recorded "$sha" || echo "$sha"
@@ -97,8 +98,14 @@ pending_commits() {
 }
 
 mark_reviewed() {
-    local sha
+    local sha start
     sha="$(git rev-parse "${1:-HEAD}")"
+    # A new ledger first records where it starts, so the first commit marked
+    # cannot stand in for the unread ones before it.
+    if [ ! -s "$LEDGER" ] && start="$(git rev-parse "$sha~$BOOTSTRAP_COMMITS" 2>/dev/null)"; then
+        printf '%s\t-\t%s\t%s\n' "$start" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+            "start of the ledger: older commits are deemed shipped" >> "$LEDGER"
+    fi
     if is_recorded "$sha"; then
         echo "Already recorded: $(git log -1 --format='%h %s' "$sha")"
         return 0
