@@ -138,7 +138,7 @@ export class ElectronService {
 
   execSqliteQuery(sql: any, args?: any): Promise<any> {
     return new Promise((resolve, reject) => {
-      const uniqueEvent = `sqlite3-reply-${Date.now()}-${Math.random()}`;
+      const uniqueEvent = `sqlite3-reply-${window.require('crypto').randomUUID()}`;
 
       // WHY: a reply that never arrives (main process restarted, renderer
       // reloaded mid-query, reply send threw) would otherwise leave both this
