@@ -21,6 +21,8 @@ REPO_NAME="intelis-interfacing"
 # package after the product, so the rename would otherwise leave two
 # applications, two menu entries and two services on the same machine.
 LEGACY_PACKAGE_NAME="vlsm-interfacing"
+# curl refuses anything but HTTPS, for the first request and for every redirect.
+HTTPS_ONLY="=https"
 TEMP_DOWNLOAD_DIR=""
 
 cleanup_temp_download_dir() {
@@ -30,7 +32,8 @@ cleanup_temp_download_dir() {
 }
 
 package_installed() {
-  dpkg-query -W -f='${Status}' "$1" 2>/dev/null | grep -q 'install ok installed'
+  local package="$1"
+  dpkg-query -W -f='${Status}' "${package}" 2>/dev/null | grep -q 'install ok installed'
 }
 
 legacy_package_installed() {
@@ -40,14 +43,17 @@ legacy_package_installed() {
 # What the .deb itself declares, so what gets checked afterwards is what was
 # actually meant to be installed rather than anything assumed from the filename.
 field_from_deb() {
-  dpkg-deb -f "$2" "$1" 2>/dev/null || true
+  local field="$1"
+  local deb_path="$2"
+  dpkg-deb -f "${deb_path}" "${field}" 2>/dev/null || true
 }
 
 # Status and version together, because either alone can mislead: the version is
 # reported for a package that is only unpacked, and the status is reported for
 # whatever version happens to be there.
 installed_status_and_version() {
-  dpkg-query -W -f='${Status}|${Version}' "$1" 2>/dev/null || true
+  local package="$1"
+  dpkg-query -W -f='${Status}|${Version}' "${package}" 2>/dev/null || true
 }
 
 # True only when the machine is running the exact package that was downloaded,
@@ -160,8 +166,9 @@ EOF
 }
 
 require_command() {
-  if ! command -v "$1" >/dev/null 2>&1; then
-    echo "Required command not found: $1" >&2
+  local command_name="$1"
+  if ! command -v "${command_name}" >/dev/null 2>&1; then
+    echo "Required command not found: ${command_name}" >&2
     exit 1
   fi
 }
@@ -195,7 +202,7 @@ find_release_asset_url() {
     api_url="https://api.github.com/repos/${REPO_OWNER}/${REPO_NAME}/releases/latest"
   fi
 
-  release_json="$(curl --proto '=https' --proto-redir '=https' -fsSL "${api_url}")"
+  release_json="$(curl --proto "${HTTPS_ONLY}" --proto-redir "${HTTPS_ONLY}" -fsSL "${api_url}")"
 
   if [[ -n "$arch_pattern" ]]; then
     asset_url="$(printf '%s\n' "${release_json}" \
@@ -227,9 +234,11 @@ install_latest() {
   local asset_url
   local package_name
   local package_path
+  local option
 
   while [[ $# -gt 0 ]]; do
-    case "$1" in
+    option="$1"
+    case "${option}" in
       --download-dir)
         download_dir="$2"
         shift 2
@@ -243,7 +252,7 @@ install_latest() {
         exit 0
         ;;
       *)
-        echo "Unknown option: $1" >&2
+        echo "Unknown option: ${option}" >&2
         usage
         exit 1
         ;;
@@ -268,7 +277,7 @@ install_latest() {
   package_path="${download_dir}/${package_name}"
 
   echo "Downloading ${asset_url}"
-  curl --proto '=https' --proto-redir '=https' -fL "${asset_url}" -o "${package_path}"
+  curl --proto "${HTTPS_ONLY}" --proto-redir "${HTTPS_ONLY}" -fL "${asset_url}" -o "${package_path}"
 
   if install_package "${package_path}"; then
     return
