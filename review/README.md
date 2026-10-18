@@ -16,8 +16,9 @@ bin/review --uncommitted    # the working tree, before committing
 
 ## The mark
 
-`REVIEWED`, at the repository root, records what has already been read: one line
-per finished review, the reviewed-up-to commit first.
+The mark records what has already been read. It lives in the clone's git
+directory, at `.git/reviewed`, so recording a read never adds a commit. Each
+line is one finished review, the reviewed-up-to commit first.
 
 ```
 991e072  2026-08-13  release 4.1.15, the version in the field when this record began
@@ -27,8 +28,17 @@ per finished review, the reviewed-up-to commit first.
 
 A bare `bin/review` starts from the last line, so nobody has to remember where
 the previous read stopped. The mark moves only when a review ends at `HEAD` and
-the reader exits cleanly — a single-commit or working-tree read is a re-read and
-leaves it alone. Lines are append-only: correct a mistake by adding one.
+the reader exits cleanly. A single-commit or working-tree read is a re-read and
+leaves it alone. Lines are append-only. Correct a mistake by adding one.
+
+The mark is local to each clone. `git land` rebase-merges, so commits get new
+identities on master and a mark taken on a branch is not an ancestor of master.
+When the mark is not an ancestor of `HEAD`, a bare `bin/review` stops and asks
+for a range.
+
+The mark used to be a tracked `REVIEWED` file. Its last version is in git
+history, and the first run in a clone that still has it copies it to
+`.git/reviewed`.
 
 ## Naming the reader
 
