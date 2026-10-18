@@ -696,33 +696,6 @@ try {
       });
     });
 
-    ipcMain.handle('mysql-test-connection', (event, config) => {
-      return new Promise((resolve, reject) => {
-        const universalConfig = createUniversalMySQLConfig(config);
-        const testConnection = mysql.createConnection(universalConfig);
-        testConnection.connect((err: any) => {
-          if (err) {
-            testConnection.destroy();
-            reject({ success: false, error: err.message, code: err.code, version: 'unknown' });
-          } else {
-            testConnection.query('SELECT VERSION() as version', (versionErr: any, results: any) => {
-              const version = results?.[0] ? results[0].version : 'unknown';
-              testConnection.destroy();
-              if (versionErr) {
-                reject({ success: false, error: versionErr.message, version: version });
-              } else {
-                resolve({ success: true, message: 'Connection successful', version: version });
-              }
-            });
-          }
-        });
-        setTimeout(() => {
-          testConnection.destroy();
-          reject({ success: false, error: 'Connection test timeout', code: 'TIMEOUT' });
-        }, 15000);
-      });
-    });
-
     ipcMain.handle('dialog', (event, method, params) => {
       return dialog[method](params);
     });
