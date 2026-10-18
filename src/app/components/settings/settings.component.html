@@ -45,24 +45,23 @@
           <span>Menu</span>
         </button>
         <ul class="sidebar-nav">
-          <li *ngFor="let section of sections"
+          <li *ngFor="let section of sections">
+            <button type="button"
               [class.active]="activeSection === section.id"
-              role="button" tabindex="0"
-              (click)="setActiveSection(section.id)"
-              (keydown.enter)="setActiveSection(section.id)"
-              (keydown.space)="$event.preventDefault(); setActiveSection(section.id)">
-            <i [class]="section.icon"></i>
-            <span>{{ section.label }}</span>
-            <span class="setup-indicator not-configured"
-              *ngIf="sectionSetupStatus[section.id] === false"
-              title="Not configured">
-              <i class="fas fa-exclamation-circle"></i>
-            </span>
-            <span class="setup-indicator configured"
-              *ngIf="sectionSetupStatus[section.id] === true"
-              title="Configured">
-              <i class="fas fa-check-circle"></i>
-            </span>
+              (click)="setActiveSection(section.id)">
+              <i [class]="section.icon"></i>
+              <span>{{ section.label }}</span>
+              <span class="setup-indicator not-configured"
+                *ngIf="sectionSetupStatus[section.id] === false"
+                title="Not configured">
+                <i class="fas fa-exclamation-circle"></i>
+              </span>
+              <span class="setup-indicator configured"
+                *ngIf="sectionSetupStatus[section.id] === true"
+                title="Configured">
+                <i class="fas fa-check-circle"></i>
+              </span>
+            </button>
           </li>
         </ul>
         <div class="sidebar-version" *ngIf="appVersion">
@@ -1119,7 +1118,7 @@
   <!-- Passphrase entry. Deliberately outside the settings form so that pressing
        Enter confirms the passphrase instead of saving settings. -->
   <div class="passphrase-backdrop" *ngIf="passphrasePrompt">
-    <div class="passphrase-modal" role="dialog" aria-modal="true" aria-labelledby="passphraseTitle">
+    <dialog class="passphrase-modal" open aria-modal="true" aria-labelledby="passphraseTitle">
       <h3 id="passphraseTitle">
         {{ passphrasePrompt.mode === 'export' ? 'Choose a Passphrase' : 'Enter the Passphrase' }}
       </h3>
@@ -1163,6 +1162,6 @@
           <span>{{ passphrasePrompt.mode === 'export' ? 'Export' : 'Import' }}</span>
         </button>
       </div>
-    </div>
+    </dialog>
   </div>
 </div>
