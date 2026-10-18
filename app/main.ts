@@ -57,7 +57,11 @@ let win: BrowserWindow = null;
 let store = new Store();
 let sqlite3Obj: sqlite3.Database = null;
 let sqliteDbName: string = 'interface.db';
+// Set by Repair Database. Each database clears its own flag once it has
+// replayed, so a MySQL server that is down does not make SQLite replay at
+// every start. The MySQL key keeps its old name because the renderer reads it.
 const FORCE_MIGRATION_REPLAY_KEY = 'forceMigrationReplayRequested';
+const SQLITE_MIGRATION_REPLAY_KEY = 'sqliteMigrationReplayRequested';
 // Set by the background storage compaction when it freed space worth a rewrite.
 const STORAGE_RECLAIM_PENDING_KEY = 'storageReclaimPending';
 let tray: Tray = null;
@@ -867,6 +871,7 @@ try {
 
     ipcMain.handle('force-rerun-migrations', async () => {
       store.set(FORCE_MIGRATION_REPLAY_KEY, true);
+      store.set(SQLITE_MIGRATION_REPLAY_KEY, true);
       // Read by the restart notice, so a repair that does not fix the schema
       // is reported instead of restarting again.
       store.set('databaseRepairStartedAt', Date.now());
@@ -1008,16 +1013,31 @@ try {
 
       // Then, copy and run the migrations
       const migrationsPath = path.join(app.getPath('userData'), 'sqlite-migrations');
-      const forceMigrationReplay = store.get(FORCE_MIGRATION_REPLAY_KEY) === true;
+      // A build before the split set only the shared key. Its request still
+      // counts once for SQLite; false afterwards means SQLite has replayed.
+      const sqliteReplayFlag = store.get(SQLITE_MIGRATION_REPLAY_KEY);
+      const sqliteReplay = sqliteReplayFlag === true
+        || (sqliteReplayFlag === undefined && store.get(FORCE_MIGRATION_REPLAY_KEY) === true);
       await copySqliteMigrationFiles();
       await copyMySQLMigrationFiles();
-      const updateNotice = forceMigrationReplay
+      const updateNotice = sqliteReplay
         ? await showStartupNotice(
           'Finishing the update',
           'Applying database updates. This takes a few seconds, and the Interface Tool opens when it is done.'
         )
         : null;
-      await runSqliteMigrations(sqlite3Obj, migrationsPath, forceMigrationReplay);
+      const failedSqliteMigrations = await runSqliteMigrations(sqlite3Obj, migrationsPath, sqliteReplay);
+      if (sqliteReplay && failedSqliteMigrations === 0) {
+        store.set(SQLITE_MIGRATION_REPLAY_KEY, false);
+      }
+      // With no MySQL configured, nothing would ever clear MySQL's flag. A
+      // MySQL server added later applies every pending update on its first
+      // connection anyway.
+      const commonConfig = store.get('commonConfig');
+      const mysqlConfigured = Boolean(commonConfig?.mysqlHost && commonConfig?.mysqlUser && commonConfig?.mysqlDb);
+      if (!mysqlConfigured) {
+        store.delete(FORCE_MIGRATION_REPLAY_KEY);
+      }
       const startupNotice = await reclaimSpaceIfRequested(sqlite3Obj);
 
       // IMPORTANT: Register all IPC handlers BEFORE creating the window
