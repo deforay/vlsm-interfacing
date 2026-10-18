@@ -770,6 +770,9 @@ export class SettingsComponent implements OnInit, OnDestroy {
       });
     } finally {
       this.logCleanupBusy = false;
+      // The message is set after IPC replies, which resolve outside Angular's
+      // zone, so it is not drawn until something else happens.
+      this.cdRef.detectChanges();
     }
   }
 
