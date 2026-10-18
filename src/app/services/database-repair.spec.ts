@@ -87,7 +87,8 @@ describe('repairing database schema drift', () => {
 
     await expect(service.execSqlite('SELECT lis_status FROM orders', [])).rejects.toThrow();
     await vi.waitFor(() => expect(invoke).toHaveBeenCalledWith('show-confirm-dialog', expect.objectContaining({
-      title: 'Database Needs Attention'
+      title: 'Database Needs Attention',
+      detail: expect.stringContaining('Open Logs Folder')
     })));
 
     expect(service.restartRequiredSubject.value).toBe(false);

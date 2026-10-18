@@ -825,7 +825,7 @@ export class DatabaseService {
         defaultId: 0,
         title: 'Database Needs Attention',
         message: 'The Interface Tool could not finish updating its database.',
-        detail: `A restart did not fix it. Contact support and send them the log from Settings, Troubleshooting.\n\nDetails: ${error?.message ?? error}`
+        detail: `A restart did not fix it. Contact support and send them the log files. To find them, press Open Logs Folder in Settings, under Troubleshooting.\n\nDetails: ${error?.message ?? error}`
       });
     } catch (dialogErr) {
       console.error('Failed to show the database notice:', dialogErr);

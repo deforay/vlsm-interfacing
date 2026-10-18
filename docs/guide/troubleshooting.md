@@ -86,7 +86,11 @@ If results stop saving and no notice appears, open
 
 ## Where the log files are
 
-Log files sit beside the database, in the tool's data directory:
+Open **Settings → Troubleshooting** and press **Open Logs Folder**. Each log
+file is named by the date the tool started.
+
+If the tool does not open, find the folder beside the database, in the tool's
+data directory:
 
 | Platform | Location |
 |----------|----------|

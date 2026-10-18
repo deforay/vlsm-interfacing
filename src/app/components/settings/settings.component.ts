@@ -100,6 +100,7 @@ export class SettingsComponent implements OnInit, OnDestroy {
   public backupCount: number = 0;
   public backupBusy: boolean = false;
   public backupMessage: string = '';
+  public logsFolderMessage: string = '';
   public lastCheckedAt: string = null;
   public readonly backupIntervals: { value: SettingsBackupInterval; label: string }[] = [
     { value: 'daily', label: 'Check daily' },
@@ -709,6 +710,19 @@ export class SettingsComponent implements OnInit, OnDestroy {
     } catch (error) {
       console.error('Error showing confirmation dialog:', error);
     }
+  }
+
+  public async openLogsFolder(): Promise<void> {
+    try {
+      const result = await this.electronService.ipcRenderer.invoke('open-logs-folder');
+      this.logsFolderMessage = result?.status === 'error'
+        ? `The logs folder could not be opened: ${result.message}`
+        : '';
+    } catch (error) {
+      this.logsFolderMessage = 'The logs folder could not be opened.';
+      console.error('Error opening the logs folder:', error);
+    }
+    this.cdRef.detectChanges();
   }
 
   public async reviewApplicationLogCleanup(): Promise<void> {

@@ -1095,6 +1095,17 @@
                   <span>Repair and Restart</span>
                 </button>
               </div>
+              <div class="form-group">
+                <label for="openLogsFolder">Log Files</label>
+                <p class="help-text">
+                  Each file is named by the date the Interface Tool started. Send these to support when they ask for the log.
+                </p>
+                <button id="openLogsFolder" type="button" class="btn btn-outline-secondary" (click)="openLogsFolder()">
+                  <i class="fas fa-folder-open"></i>
+                  <span>Open Logs Folder</span>
+                </button>
+                <p class="housekeeping-status" *ngIf="logsFolderMessage">{{ logsFolderMessage }}</p>
+              </div>
             </div>
           </div>
         </div>
