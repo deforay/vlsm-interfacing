@@ -36,17 +36,16 @@ export class ElectronService {
   net: any;
 
   constructor() {
-    const that = this;
 
-    if (that.isElectron) {
-      that.ipcRenderer = window.require('electron').ipcRenderer;
-      that.webFrame = window.require('electron').webFrame;
-      that.childProcess = window.require('child_process');
-      that.fs = window.require('fs');
-      that.net = window.require('net');
+    if (this.isElectron) {
+      this.ipcRenderer = window.require('electron').ipcRenderer;
+      this.webFrame = window.require('electron').webFrame;
+      this.childProcess = window.require('child_process');
+      this.fs = window.require('fs');
+      this.net = window.require('net');
 
       // Simplified MySQL implementation
-      that.mysql = {
+      this.mysql = {
         createPool: (config) => ({
           on: () => { },
           query: (q, args, cb) => this.executeQuery(config, q, args, cb),

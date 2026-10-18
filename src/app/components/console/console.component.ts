@@ -164,15 +164,14 @@ export class ConsoleComponent implements OnInit, AfterViewInit, OnDestroy {
   }
 
   selectHandler(row: any, event: MatCheckboxChange) {
-    const that = this;
     if (row === null) {
       if (event.checked) {
-        that.dataSource.data.forEach(row => that.selection.select(row));
+        this.dataSource.data.forEach(row => this.selection.select(row));
       } else {
-        that.selection.clear();
+        this.selection.clear();
       }
     } else {
-      that.selection.toggle(row);
+      this.selection.toggle(row);
     }
   }
 
@@ -198,27 +197,26 @@ export class ConsoleComponent implements OnInit, AfterViewInit, OnDestroy {
   }
 
   ngOnInit() {
-    const that = this;
     // Received On sorts by row id, the order results arrived. The stored time
     // has no zone, so it can run backwards across a time zone change.
-    const sortValue = that.dataSource.sortingDataAccessor;
-    that.dataSource.sortingDataAccessor = (row, column) =>
+    const sortValue = this.dataSource.sortingDataAccessor;
+    this.dataSource.sortingDataAccessor = (row, column) =>
       column === 'added_on' && row?.id != null ? Number(row.id) : sortValue(row, column);
-    that.visibleColumnsSubscription = that.dataSource.connect().subscribe(rows => {
+    this.visibleColumnsSubscription = this.dataSource.connect().subscribe(rows => {
       const hasNotes = rows.some(row => typeof row?.notes === 'string' && row.notes.trim() !== '');
-      const columns = that.displayedColumns.filter(column => hasNotes || column !== 'notes');
-      if (columns.length !== that.visibleColumns.length) {
-        that.visibleColumns = columns;
+      const columns = this.displayedColumns.filter(column => hasNotes || column !== 'notes');
+      if (columns.length !== this.visibleColumns.length) {
+        this.visibleColumns = columns;
       }
     });
-    that.loadSettings();
-    that.checkMysqlConnection();
+    this.loadSettings();
+    this.checkMysqlConnection();
 
-    that.updateSubscription = that.updateCheckService.availableUpdate().subscribe(update => {
-      that.availableUpdate = update;
-      that.cdRef.detectChanges();
+    this.updateSubscription = this.updateCheckService.availableUpdate().subscribe(update => {
+      this.availableUpdate = update;
+      this.cdRef.detectChanges();
     });
-    that.updateCheckService.start();
+    this.updateCheckService.start();
 
     // Scroll to the top of the page when the component initializes
     window.scrollTo(0, 0);
@@ -226,61 +224,61 @@ export class ConsoleComponent implements OnInit, AfterViewInit, OnDestroy {
     document.addEventListener('visibilitychange', this.visibilityChangeHandler);
 
     // Subscribe to available instruments from the connection manager
-    that.instrumentsSubscription = that.connectionManagerService.getActiveInstruments()
+    this.instrumentsSubscription = this.connectionManagerService.getActiveInstruments()
       .subscribe(instruments => {
-        that._ngZone.run(() => {
-          that.availableInstruments = instruments;
+        this._ngZone.run(() => {
+          this.availableInstruments = instruments;
 
           // pick first connected tab once (or first item if none connected)
-          if (!that.pickedInitialTab && that.availableInstruments?.length) {
-            const idx = that.availableInstruments.findIndex(i => i?.isConnected === true);
+          if (!this.pickedInitialTab && this.availableInstruments?.length) {
+            const idx = this.availableInstruments.findIndex(i => i?.isConnected === true);
             if (idx >= 0) {
-              that.selectTab(idx);
-              that.pickedInitialTab = true;
-            } else if (that.selectedTabIndex >= that.availableInstruments.length) {
+              this.selectTab(idx);
+              this.pickedInitialTab = true;
+            } else if (this.selectedTabIndex >= this.availableInstruments.length) {
               // still ensure a valid tab if array changed
-              that.selectTab(0);
+              this.selectTab(0);
             }
           }
 
 
           // Check if we should auto-reconnect instruments
-          that.checkForAutoReconnect();
+          this.checkForAutoReconnect();
 
           // Load persisted logs only once per instrument. Re-loading on every
           // status tick can overwrite in-memory live HL7 logs before they persist.
-          that.loadRecentLogsForNewInstruments(instruments);
-          that.cdRef.detectChanges();
+          this.loadRecentLogsForNewInstruments(instruments);
+          this.cdRef.detectChanges();
         });
       });
 
     // Fetch last few orders on load
     this.initialResultsTimeout = setTimeout(() => {
-      that.fetchRecentResults();
+      this.fetchRecentResults();
     }, 600);
 
     // Refresh recent results when new samples are saved
-    that.resultSavedSubscription = that.instrumentInterfaceService.resultSaved$
+    this.resultSavedSubscription = this.instrumentInterfaceService.resultSaved$
       .pipe(debounceTime(250))
       .subscribe(() => {
-        that._ngZone.run(() => {
-          that.refreshRecentResultsAfterSave();
+        this._ngZone.run(() => {
+          this.refreshRecentResultsAfterSave();
         });
       });
 
     // Check MySQL connection on regular intervals
-    that.mysqlCheckInterval = setInterval(() => {
-      that.checkMysqlConnection();
+    this.mysqlCheckInterval = setInterval(() => {
+      this.checkMysqlConnection();
     }, BACKGROUND_INTERVAL_MS.MYSQL_HEALTH);
 
     // Background refresh + MySQL resync every 5 minutes. New results trigger
     // an immediate refresh via resultSaved$, and the user can hit the refresh
     // button — this tick is just a safety net for idle periods.
-    that.recentResultsInterval = setInterval(() => {
-      that.fetchRecentResults();
-      that.resyncTestResultsToMySQL();
-      that.resyncTelemetryToMySQL();
-      that.resyncIntelisStatusesToMySQL();
+    this.recentResultsInterval = setInterval(() => {
+      this.fetchRecentResults();
+      this.resyncTestResultsToMySQL();
+      this.resyncTelemetryToMySQL();
+      this.resyncIntelisStatusesToMySQL();
     }, BACKGROUND_INTERVAL_MS.RESULT_REFRESH);
 
     // Pull LIMS sync status from MySQL into SQLite every 30s. Any external
@@ -288,48 +286,48 @@ export class ConsoleComponent implements OnInit, AfterViewInit, OnDestroy {
     // writes lims_sync_status + lims_sync_date_time to the shared MySQL
     // orders table; this watermark sync surfaces those updates in the
     // console UI quickly. Cost when idle: two small indexed queries.
-    that.limsSyncPullInterval = setInterval(() => {
-      if (that.mysqlConnected) {
-        that.utilitiesService.syncLimsStatusToSQLite(
-          (result) => that._refreshOrdersDisplayAfterLimsPull(result),
+    this.limsSyncPullInterval = setInterval(() => {
+      if (this.mysqlConnected) {
+        this.utilitiesService.syncLimsStatusToSQLite(
+          (result) => this._refreshOrdersDisplayAfterLimsPull(result),
           () => { }
         );
       }
     }, BACKGROUND_INTERVAL_MS.LIMS_STATUS_PULL);
 
     // SQLite WAL checkpoint every 30 minutes
-    that.walCheckpointInterval = setInterval(() => {
-      that.runSQLiteWalCheckpoint();
+    this.walCheckpointInterval = setInterval(() => {
+      this.runSQLiteWalCheckpoint();
     }, BACKGROUND_INTERVAL_MS.WAL_CHECKPOINT);
 
     // Subscribe to logs from the display service
-    that.logSubscription = that.logDisplayService.log$.subscribe(logEntry => {
-      that._ngZone.run(() => {
-        that.updateLogUI(logEntry);
+    this.logSubscription = this.logDisplayService.log$.subscribe(logEntry => {
+      this._ngZone.run(() => {
+        this.updateLogUI(logEntry);
       });
     });
 
     // Subscribe to clear events
-    that.logClearSubscription = that.logDisplayService.clear$.subscribe(instrumentId => {
-      that._ngZone.run(() => {
+    this.logClearSubscription = this.logDisplayService.clear$.subscribe(instrumentId => {
+      this._ngZone.run(() => {
         if (instrumentId) {
           // Clear logs for a specific instrument
-          if (that.instrumentLogs[instrumentId]) {
-            that.instrumentLogs[instrumentId].logs = [];
-            that.instrumentLogs[instrumentId].filteredLogs = [];
+          if (this.instrumentLogs[instrumentId]) {
+            this.instrumentLogs[instrumentId].logs = [];
+            this.instrumentLogs[instrumentId].filteredLogs = [];
           }
         } else {
           // Clear all logs if no ID is specified
-          Object.keys(that.instrumentLogs).forEach(id => {
-            that.instrumentLogs[id].logs = [];
-            that.instrumentLogs[id].filteredLogs = [];
+          Object.keys(this.instrumentLogs).forEach(id => {
+            this.instrumentLogs[id].logs = [];
+            this.instrumentLogs[id].filteredLogs = [];
           });
         }
-        that.cdRef.detectChanges();
+        this.cdRef.detectChanges();
       });
     });
 
-    that.loadRecentSystemLogs();
+    this.loadRecentSystemLogs();
   }
 
   @HostListener('window:scroll')
@@ -535,13 +533,12 @@ export class ConsoleComponent implements OnInit, AfterViewInit, OnDestroy {
   }
 
   loadSettings() {
-    const that = this;
-    that.electronStoreSubscription = that.store.electronStoreObservable().subscribe(electronStoreObject => {
-      that._ngZone.run(() => {
-        that.commonSettings = electronStoreObject.commonConfig;
-        that.instrumentsSettings = electronStoreObject.instrumentsConfig;
-        that.appVersion = electronStoreObject.appVersion;
-        that.cdRef.detectChanges();
+    this.electronStoreSubscription = this.store.electronStoreObservable().subscribe(electronStoreObject => {
+      this._ngZone.run(() => {
+        this.commonSettings = electronStoreObject.commonConfig;
+        this.instrumentsSettings = electronStoreObject.instrumentsConfig;
+        this.appVersion = electronStoreObject.appVersion;
+        this.cdRef.detectChanges();
       });
     });
   }
@@ -553,15 +550,14 @@ export class ConsoleComponent implements OnInit, AfterViewInit, OnDestroy {
   }
 
   reSyncSelectedRecords() {
-    const that = this;
-    that.selection.selected.forEach(selectedRow => {
-      if (that.utilitiesService) {
-        that.utilitiesService.reSyncRecord(selectedRow.order_id).subscribe({
+    this.selection.selected.forEach(selectedRow => {
+      if (this.utilitiesService) {
+        this.utilitiesService.reSyncRecord(selectedRow.order_id).subscribe({
           next: () => {
             selectedRow.lims_sync_status = '0';
-            that.dataSource.data = [...that.dataSource.data];
+            this.dataSource.data = [...this.dataSource.data];
             // Clear selection after re-sync
-            that.selection.clear();
+            this.selection.clear();
           },
           error: (error) => {
             console.error('Error during re-sync:', error);
@@ -574,31 +570,30 @@ export class ConsoleComponent implements OnInit, AfterViewInit, OnDestroy {
   }
 
   fetchRecentResults(searchTerm?: string) {
-    const that = this;
     const trimmedTerm = (searchTerm || '').trim();
 
     // Only sync when NOT searching (i.e., when getting all results)
     if (trimmedTerm === '') {
       console.log('Fetching all results with sync');
-      that.resyncTestResultsToMySQL();
+      this.resyncTestResultsToMySQL();
     } else {
       console.log('Fetching search results without sync');
     }
 
-    that.utilitiesService.fetchRecentResults(trimmedTerm).subscribe({
+    this.utilitiesService.fetchRecentResults(trimmedTerm).subscribe({
       next: lastFewOrders => {
-        that._ngZone.run(() => {
-          that.lastOrders = lastFewOrders;
-          that.data = lastFewOrders;
-          that.dataSource.data = that.lastOrders;
-          that.dataSource.paginator = that.paginator;
-          that.dataSource.sort = that.sort;
+        this._ngZone.run(() => {
+          this.lastOrders = lastFewOrders;
+          this.data = lastFewOrders;
+          this.dataSource.data = this.lastOrders;
+          this.dataSource.paginator = this.paginator;
+          this.dataSource.sort = this.sort;
 
-          that.sort.active = 'added_on';
-          that.sort.direction = 'desc';
-          that.sort.sortChange.emit({ active: that.sort.active, direction: that.sort.direction });
+          this.sort.active = 'added_on';
+          this.sort.direction = 'desc';
+          this.sort.sortChange.emit({ active: this.sort.active, direction: this.sort.direction });
 
-          that.cdRef.detectChanges();
+          this.cdRef.detectChanges();
         });
       },
       error: error => {
@@ -606,10 +601,10 @@ export class ConsoleComponent implements OnInit, AfterViewInit, OnDestroy {
       }
     });
 
-    that.utilitiesService.fetchLastSyncTimes().subscribe({
+    this.utilitiesService.fetchLastSyncTimes().subscribe({
       next: (data) => {
-        that.lastLimsSync = that.utilitiesService.humanReadableDateTime(data.lastLimsSync);
-        that.lastResultReceived = that.utilitiesService.humanReadableDateTime(data.lastResultReceived);
+        this.lastLimsSync = this.utilitiesService.humanReadableDateTime(data.lastLimsSync);
+        this.lastResultReceived = this.utilitiesService.humanReadableDateTime(data.lastResultReceived);
       },
       error: (err) => console.error('Error fetching last sync times:', err)
     });
@@ -637,28 +632,27 @@ export class ConsoleComponent implements OnInit, AfterViewInit, OnDestroy {
    * Search method - ONLY searches, no syncing
    */
   searchResults(searchTerm: string) {
-    const that = this;
     const trimmedTerm = (searchTerm || '').trim();
 
     console.log('Searching with trimmed term:', `"${trimmedTerm}"`);
 
     // Pass the trimmed term to the service
-    that.utilitiesService.fetchRecentResults(trimmedTerm).subscribe({
+    this.utilitiesService.fetchRecentResults(trimmedTerm).subscribe({
       next: (results) => {
-        that._ngZone.run(() => {
-          that.lastOrders = results;
-          that.data = results;
-          that.dataSource.data = that.lastOrders;
-          that.dataSource.paginator = that.paginator;
-          that.dataSource.sort = that.sort;
+        this._ngZone.run(() => {
+          this.lastOrders = results;
+          this.data = results;
+          this.dataSource.data = this.lastOrders;
+          this.dataSource.paginator = this.paginator;
+          this.dataSource.sort = this.sort;
 
-          that.sort.active = 'added_on';
-          that.sort.direction = 'desc';
-          that.sort.sortChange.emit({ active: that.sort.active, direction: that.sort.direction });
+          this.sort.active = 'added_on';
+          this.sort.direction = 'desc';
+          this.sort.sortChange.emit({ active: this.sort.active, direction: this.sort.direction });
 
-          that.cdRef.detectChanges();
+          this.cdRef.detectChanges();
 
-          console.log(`Search completed: ${that.lastOrders?.length || 0} results for "${trimmedTerm}"`);
+          console.log(`Search completed: ${this.lastOrders?.length || 0} results for "${trimmedTerm}"`);
         });
       },
       error: (error) => console.error('Error fetching search results:', error)
@@ -669,34 +663,33 @@ export class ConsoleComponent implements OnInit, AfterViewInit, OnDestroy {
    * Refresh method - Syncs AND fetches all results
    */
   refreshResults() {
-    const that = this;
     console.log('Refreshing all results with sync');
 
     // Do the sync first, then fetch all results
-    that.resyncTestResultsToMySQL();
-    that.utilitiesService.fetchRecentResults('').subscribe({
+    this.resyncTestResultsToMySQL();
+    this.utilitiesService.fetchRecentResults('').subscribe({
       next: (results) => {
-        that._ngZone.run(() => {
-          that.lastOrders = results;
-          that.data = results;
-          that.dataSource.data = that.lastOrders;
-          that.dataSource.paginator = that.paginator;
-          that.dataSource.sort = that.sort;
+        this._ngZone.run(() => {
+          this.lastOrders = results;
+          this.data = results;
+          this.dataSource.data = this.lastOrders;
+          this.dataSource.paginator = this.paginator;
+          this.dataSource.sort = this.sort;
 
-          that.sort.active = 'added_on';
-          that.sort.direction = 'desc';
-          that.sort.sortChange.emit({ active: that.sort.active, direction: that.sort.direction });
+          this.sort.active = 'added_on';
+          this.sort.direction = 'desc';
+          this.sort.sortChange.emit({ active: this.sort.active, direction: this.sort.direction });
 
-          that.cdRef.detectChanges();
+          this.cdRef.detectChanges();
         });
       },
       error: (error) => console.error('Error fetching refreshed results:', error)
     });
 
-    that.utilitiesService.fetchLastSyncTimes().subscribe({
+    this.utilitiesService.fetchLastSyncTimes().subscribe({
       next: (data) => {
-        that.lastLimsSync = that.utilitiesService.humanReadableDateTime(data.lastLimsSync);
-        that.lastResultReceived = that.utilitiesService.humanReadableDateTime(data.lastResultReceived);
+        this.lastLimsSync = this.utilitiesService.humanReadableDateTime(data.lastLimsSync);
+        this.lastResultReceived = this.utilitiesService.humanReadableDateTime(data.lastResultReceived);
       },
       error: (err) => console.error('Error fetching last sync times:', err)
     });
@@ -765,18 +758,17 @@ export class ConsoleComponent implements OnInit, AfterViewInit, OnDestroy {
   }
 
   private loadRecentLogsForNewInstruments(instruments: any[]) {
-    const that = this;
     instruments.forEach(instrument => {
       const instrumentId = instrument?.connectionParams?.instrumentId;
-      if (!instrumentId || that.loadedLogInstrumentIds.has(instrumentId)) {
+      if (!instrumentId || this.loadedLogInstrumentIds.has(instrumentId)) {
         return;
       }
 
-      that.loadedLogInstrumentIds.add(instrumentId);
-      that.utilitiesService.fetchRecentLogs(instrumentId)
+      this.loadedLogInstrumentIds.add(instrumentId);
+      this.utilitiesService.fetchRecentLogs(instrumentId)
         .subscribe(logs => {
-          that._ngZone.run(() => {
-            that.updateLogsForInstrument(instrumentId, logs);
+          this._ngZone.run(() => {
+            this.updateLogsForInstrument(instrumentId, logs);
           });
         });
     });
@@ -825,16 +817,15 @@ export class ConsoleComponent implements OnInit, AfterViewInit, OnDestroy {
   }
 
   filterInstrumentLogs(instrument: any) {
-    const that = this;
-    if (!that.instrumentLogs[instrument.connectionParams.instrumentId]) {
+    if (!this.instrumentLogs[instrument.connectionParams.instrumentId]) {
       // Initialize the logs structure for the instrument if not already done
-      that.instrumentLogs[instrument.connectionParams.instrumentId] = {
+      this.instrumentLogs[instrument.connectionParams.instrumentId] = {
         logs: [],
         filteredLogs: []
       };
     }
 
-    const bucket = that.instrumentLogs[instrument.connectionParams.instrumentId];
+    const bucket = this.instrumentLogs[instrument.connectionParams.instrumentId];
     const searchText = (instrument.searchText || '').trim();
     const logLevel: LogLevelFilter = instrument.logLevel || 'all';
     if (searchText || logLevel !== 'all') {
@@ -846,7 +837,7 @@ export class ConsoleComponent implements OnInit, AfterViewInit, OnDestroy {
       bucket.filteredLogs = bucket.logs;
     }
 
-    that.cdRef.detectChanges(); // Trigger change detection if needed
+    this.cdRef.detectChanges(); // Trigger change detection if needed
   }
 
   setLogLevel(instrument: any, logLevel: LogLevelFilter): void {
@@ -943,8 +934,7 @@ export class ConsoleComponent implements OnInit, AfterViewInit, OnDestroy {
   }
 
   checkMysqlConnection() {
-    const that = this;
-    const commonSettings = that.store.get('commonConfig');
+    const commonSettings = this.store.get('commonConfig');
     const mysqlParams = {
       host: commonSettings.mysqlHost,
       user: commonSettings.mysqlUser,
@@ -952,23 +942,22 @@ export class ConsoleComponent implements OnInit, AfterViewInit, OnDestroy {
       port: commonSettings.mysqlPort
     };
 
-    that.utilitiesService.checkMysqlConnection(
+    this.utilitiesService.checkMysqlConnection(
       mysqlParams,
       () => {
-        that.mysqlConnected = true;
-        that.cdRef.detectChanges();
+        this.mysqlConnected = true;
+        this.cdRef.detectChanges();
       },
       (err) => {
-        that.mysqlConnected = false;
-        that.cdRef.detectChanges();
+        this.mysqlConnected = false;
+        this.cdRef.detectChanges();
       }
     );
   }
 
   runSQLiteWalCheckpoint(): void {
-    const that = this;
-    that.utilitiesService.sqlite3WalCheckpoint();
-    that.utilitiesService.logger('info', 'SQLite WAL checkpoint scheduled and executed', null);
+    this.utilitiesService.sqlite3WalCheckpoint();
+    this.utilitiesService.logger('info', 'SQLite WAL checkpoint scheduled and executed', null);
   }
 
   cancelConnection(instrument: any) {

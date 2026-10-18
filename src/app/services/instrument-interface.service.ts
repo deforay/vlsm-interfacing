@@ -99,51 +99,48 @@ export class InstrumentInterfaceService {
 
   // Method used to connect to the Testing Machine
   connect(instrument: any) {
-    const that = this;
     if (instrument?.connectionParams) {
-      that.clearInstrumentReceiveState(instrument.connectionParams.instrumentId);
+      this.clearInstrumentReceiveState(instrument.connectionParams.instrumentId);
       // Bind 'this' explicitly to handleTCPResponse
-      const boundHandleTCPResponse = that.handleTCPResponse.bind(that);
-      that.tcpService.connect(instrument.connectionParams, boundHandleTCPResponse);
+      const boundHandleTCPResponse = this.handleTCPResponse.bind(this);
+      this.tcpService.connect(instrument.connectionParams, boundHandleTCPResponse);
 
       // Update instrument status based on TCP connection status
-      that.connectionStatusSubscriptions.get(instrument.connectionParams.instrumentId)?.unsubscribe();
-      const statusObservable = that.tcpService.getStatusObservable(instrument.connectionParams);
+      this.connectionStatusSubscriptions.get(instrument.connectionParams.instrumentId)?.unsubscribe();
+      const statusObservable = this.tcpService.getStatusObservable(instrument.connectionParams);
       if (statusObservable) {
-        that.connectionStatusSubscriptions.set(instrument.connectionParams.instrumentId, statusObservable.subscribe(status => {
-          that.updateInstrumentStatus(instrument.connectionParams.instrumentId, status);
+        this.connectionStatusSubscriptions.set(instrument.connectionParams.instrumentId, statusObservable.subscribe(status => {
+          this.updateInstrumentStatus(instrument.connectionParams.instrumentId, status);
         }));
       }
     }
   }
 
   reconnect(instrument: any) {
-    const that = this;
     if (instrument?.connectionParams) {
-      that.clearInstrumentReceiveState(instrument.connectionParams.instrumentId);
+      this.clearInstrumentReceiveState(instrument.connectionParams.instrumentId);
       // Bind 'this' explicitly to handleTCPResponse
-      const boundHandleTCPResponse = that.handleTCPResponse.bind(that);
-      that.tcpService.reconnect(instrument.connectionParams, boundHandleTCPResponse);
+      const boundHandleTCPResponse = this.handleTCPResponse.bind(this);
+      this.tcpService.reconnect(instrument.connectionParams, boundHandleTCPResponse);
 
       // Update instrument status based on TCP connection status
-      that.connectionStatusSubscriptions.get(instrument.connectionParams.instrumentId)?.unsubscribe();
-      const statusObservable = that.tcpService.getStatusObservable(instrument.connectionParams);
+      this.connectionStatusSubscriptions.get(instrument.connectionParams.instrumentId)?.unsubscribe();
+      const statusObservable = this.tcpService.getStatusObservable(instrument.connectionParams);
       if (statusObservable) {
-        that.connectionStatusSubscriptions.set(instrument.connectionParams.instrumentId, statusObservable.subscribe(status => {
-          that.updateInstrumentStatus(instrument.connectionParams.instrumentId, status);
+        this.connectionStatusSubscriptions.set(instrument.connectionParams.instrumentId, statusObservable.subscribe(status => {
+          this.updateInstrumentStatus(instrument.connectionParams.instrumentId, status);
         }));
       }
     }
   }
 
   disconnect(instrument: any) {
-    const that = this;
     if (instrument?.connectionParams?.host && instrument.connectionParams.port) {
-      that.clearInstrumentReceiveState(instrument.connectionParams.instrumentId);
-      that.connectionStatusSubscriptions.get(instrument.connectionParams.instrumentId)?.unsubscribe();
-      that.connectionStatusSubscriptions.delete(instrument.connectionParams.instrumentId);
-      that.tcpService.disconnect(instrument.connectionParams);
-      that.updateInstrumentStatus(instrument.connectionParams.instrumentId, false);
+      this.clearInstrumentReceiveState(instrument.connectionParams.instrumentId);
+      this.connectionStatusSubscriptions.get(instrument.connectionParams.instrumentId)?.unsubscribe();
+      this.connectionStatusSubscriptions.delete(instrument.connectionParams.instrumentId);
+      this.tcpService.disconnect(instrument.connectionParams);
+      this.updateInstrumentStatus(instrument.connectionParams.instrumentId, false);
     }
   }
 
@@ -415,9 +412,8 @@ export class InstrumentInterfaceService {
   }
 
   private receiveASTM(astmProtocolType: string, instrumentConnectionData: InstrumentConnectionStack, data: Buffer) {
-    const that = this;
     instrumentConnectionData.transmissionStatusSubject.next(true);
-    const astmText = that.utilitiesService.hex2ascii(data.toString('hex'));
+    const astmText = this.utilitiesService.hex2ascii(data.toString('hex'));
 
     if (astmProtocolType !== COMMUNICATION_PROTOCOL.ASTM_CHECKSUM) {
       // Without checksums there is nothing to verify, but a read can still
@@ -434,70 +430,69 @@ export class InstrumentInterfaceService {
           // ENQ opens a session: acknowledge it, as in checksum mode, but it
           // is not part of the transmission. Buffering it made an empty
           // session look like one that carried data.
-          that.astmHelper.sendACK(instrumentConnectionData, 'Sending ACK');
+          this.astmHelper.sendACK(instrumentConnectionData, 'Sending ACK');
           continue;
         }
-        that.handleASTMChunk(astmProtocolType, instrumentConnectionData, piece);
+        this.handleASTMChunk(astmProtocolType, instrumentConnectionData, piece);
       }
       return;
     }
 
     // With checksums, act on whole frames. A frame whose checksum does not
     // match is NAKed so the instrument retransmits it (E1381 section 6.3).
-    const tokens = that.astmHelper.assembleASTMFrames(instrumentConnectionData, astmText);
+    const tokens = this.astmHelper.assembleASTMFrames(instrumentConnectionData, astmText);
     for (const token of tokens) {
       if (token.kind === 'control' && (token.text === '\x05' || token.text === '\x06')) {
         // ENQ opens a session and ACK answers our own frames: acknowledge,
         // but neither belongs in the stored transmission.
         if (token.text === '\x05') {
-          that.astmHelper.resetInboundFrameSequence(instrumentConnectionData.instrumentId);
+          this.astmHelper.resetInboundFrameSequence(instrumentConnectionData.instrumentId);
         }
-        that.astmHelper.sendACK(instrumentConnectionData, 'Sending ACK');
+        this.astmHelper.sendACK(instrumentConnectionData, 'Sending ACK');
         continue;
       }
       if (token.kind === 'trailer') {
         // Framing bytes that arrived after their frame: kept with the stored
         // transmission, not acknowledged and not parsed.
-        that.astmHelper.appendFrameTrailer(instrumentConnectionData.instrumentId, token.text);
+        this.astmHelper.appendFrameTrailer(instrumentConnectionData.instrumentId, token.text);
         continue;
       }
       if (token.kind === 'frame' && !token.valid) {
-        that.astmHelper.sendNAK(
+        this.astmHelper.sendNAK(
           instrumentConnectionData,
           `ASTM checksum mismatch (expected ${token.expected}, received ${token.received}). Sending NAK`
         );
-        that.recordProcessingFailure('checksum_mismatch', instrumentConnectionData);
+        this.recordProcessingFailure('checksum_mismatch', instrumentConnectionData);
         continue;
       }
       // A frame the instrument sends again because our ACK did not reach it
       // is answered, but must not be added to the transmission twice.
-      if (token.kind === 'frame' && that.astmHelper.isRepeatedFrame(instrumentConnectionData.instrumentId, token.text)) {
-        that.astmHelper.sendACK(instrumentConnectionData, 'Sending ACK');
-        that.utilitiesService.logger('warn', 'Ignored a repeated ASTM frame', instrumentConnectionData.instrumentId);
+      if (token.kind === 'frame' && this.astmHelper.isRepeatedFrame(instrumentConnectionData.instrumentId, token.text)) {
+        this.astmHelper.sendACK(instrumentConnectionData, 'Sending ACK');
+        this.utilitiesService.logger('warn', 'Ignored a repeated ASTM frame', instrumentConnectionData.instrumentId);
         continue;
       }
-      that.handleASTMChunk(astmProtocolType, instrumentConnectionData, token.text);
+      this.handleASTMChunk(astmProtocolType, instrumentConnectionData, token.text);
     }
   }
 
   private handleASTMChunk(astmProtocolType: string, instrumentConnectionData: InstrumentConnectionStack, astmText: string) {
-    const that = this;
 
     // Inspect the chunk so we know how to handle it
-    const processedInfo = that.astmHelper.processASTMText(astmText);
+    const processedInfo = this.astmHelper.processASTMText(astmText);
 
     if (processedInfo.isNAK) {
-      that.astmHelper.sendACK(instrumentConnectionData, 'Sending ACK');
-      that.utilitiesService.logger('error', 'NAK Received', instrumentConnectionData.instrumentId);
-      that.recordProcessingFailure('instrument_nak', instrumentConnectionData);
+      this.astmHelper.sendACK(instrumentConnectionData, 'Sending ACK');
+      this.utilitiesService.logger('error', 'NAK Received', instrumentConnectionData.instrumentId);
+      this.recordProcessingFailure('instrument_nak', instrumentConnectionData);
       return;
     }
 
     // ACK before we do any heavy work
-    that.astmHelper.sendACK(instrumentConnectionData, 'Sending ACK');
+    this.astmHelper.sendACK(instrumentConnectionData, 'Sending ACK');
 
     // Append payload or finalise the transmission via the helper
-    const parsingResult = that.astmHelper.appendASTMChunk(instrumentConnectionData, astmText, astmProtocolType, processedInfo);
+    const parsingResult = this.astmHelper.appendASTMChunk(instrumentConnectionData, astmText, astmProtocolType, processedInfo);
 
     if (parsingResult.discarded) {
       return;
@@ -509,12 +504,12 @@ export class InstrumentInterfaceService {
 
       if (!rawDataPayload) {
         // Abbott m2000 opens and closes empty sessions between runs
-        that.utilitiesService.logger('info', 'Empty ASTM session closed', instrumentConnectionData.instrumentId);
+        this.utilitiesService.logger('info', 'Empty ASTM session closed', instrumentConnectionData.instrumentId);
         return;
       }
 
-      that.utilitiesService.logger('info', 'Received EOT. ASTM payload length: ' + rawDataPayload.length, instrumentConnectionData.instrumentId);
-      that.utilitiesService.logger('info', 'Processing ' + astmProtocolType, instrumentConnectionData.instrumentId);
+      this.utilitiesService.logger('info', 'Received EOT. ASTM payload length: ' + rawDataPayload.length, instrumentConnectionData.instrumentId);
+      this.utilitiesService.logger('info', 'Processing ' + astmProtocolType, instrumentConnectionData.instrumentId);
 
       const transmissionId = uuidv4();
       if (rawDataPayload) {
@@ -525,10 +520,10 @@ export class InstrumentInterfaceService {
           transmission_id: transmissionId
         };
 
-        that.dbService.recordRawData(rawData, () => {
-          that.utilitiesService.logger('success', 'Successfully saved raw ASTM data', instrumentConnectionData.instrumentId);
+        this.dbService.recordRawData(rawData, () => {
+          this.utilitiesService.logger('success', 'Successfully saved raw ASTM data', instrumentConnectionData.instrumentId);
         }, (err: any) => {
-          that.utilitiesService.logger('error', 'Failed to save raw data : ' + JSON.stringify(err), instrumentConnectionData.instrumentId);
+          this.utilitiesService.logger('error', 'Failed to save raw data : ' + JSON.stringify(err), instrumentConnectionData.instrumentId);
         });
       }
 
@@ -536,21 +531,21 @@ export class InstrumentInterfaceService {
         // Acknowledged frame by frame before the content could be seen, so
         // the instrument will not send these again: the raw data saved above
         // is the only copy.
-        that.utilitiesService.logger(
+        this.utilitiesService.logger(
           'error',
           `Received ${parsingResult.hl7Messages} HL7 message(s) but this instrument is set to ASTM here. ` +
           'No results were stored from them; the raw data is kept. Set the instrument and this interface to the same protocol.',
           instrumentConnectionData.instrumentId
         );
-        that.recordProcessingFailure('protocol_mismatch_hl7_on_astm', instrumentConnectionData);
+        this.recordProcessingFailure('protocol_mismatch_hl7_on_astm', instrumentConnectionData);
       }
 
       const sampleResults = parsingResult.sampleResults ?? [];
       for (let unreadable = 0; unreadable < (parsingResult.unreadableOrders ?? 0); unreadable++) {
-        that.recordProcessingFailure('result_parsing_failed', instrumentConnectionData);
+        this.recordProcessingFailure('result_parsing_failed', instrumentConnectionData);
       }
       if (parsingResult.unreadableOrders) {
-        that.utilitiesService.logger(
+        this.utilitiesService.logger(
           'error',
           `${parsingResult.unreadableOrders} order(s) in the ASTM transmission could not be read; the raw data is kept`,
           instrumentConnectionData.instrumentId
@@ -560,24 +555,23 @@ export class InstrumentInterfaceService {
         if (parsingResult.hl7Messages) {
           return;
         }
-        that.utilitiesService.logger('warn', 'No ASTM results extracted from transmission', instrumentConnectionData.instrumentId);
-        that.recordProcessingFailure('no_results_extracted', instrumentConnectionData);
+        this.utilitiesService.logger('warn', 'No ASTM results extracted from transmission', instrumentConnectionData.instrumentId);
+        this.recordProcessingFailure('no_results_extracted', instrumentConnectionData);
         return;
       }
 
       for (const sampleResult of sampleResults) {
-        that.saveASTMResult(sampleResult, instrumentConnectionData, { transmissionId });
+        this.saveASTMResult(sampleResult, instrumentConnectionData, { transmissionId });
       }
     } else {
-      that.utilitiesService.logger('info', astmProtocolType.toUpperCase() + ' | Receiving....' + astmText, instrumentConnectionData.instrumentId);
+      this.utilitiesService.logger('info', astmProtocolType.toUpperCase() + ' | Receiving....' + astmText, instrumentConnectionData.instrumentId);
     }
   }
 
   private receiveHL7(instrumentConnectionData: InstrumentConnectionStack, data: Buffer) {
-    let that = this;
     instrumentConnectionData.transmissionStatusSubject.next(true);
-    that.utilitiesService.logger('info', 'Receiving HL7 data', instrumentConnectionData.instrumentId);
-    const receivedText = that.utilitiesService.hex2ascii(data.toString('hex'));
+    this.utilitiesService.logger('info', 'Receiving HL7 data', instrumentConnectionData.instrumentId);
+    const receivedText = this.utilitiesService.hex2ascii(data.toString('hex'));
     const bufferKey = instrumentConnectionData.instrumentId;
 
     // ENQ, EOT and STX-framed frames are an instrument speaking ASTM; none of
@@ -586,9 +580,9 @@ export class InstrumentInterfaceService {
     // once the protocols agree. Only they are taken out, because TCP can
     // deliver them in the same read as a complete HL7 message, which is
     // still read as usual.
-    const hl7Text = that.withoutASTMTraffic(receivedText);
+    const hl7Text = this.withoutASTMTraffic(receivedText);
     if (hl7Text !== receivedText) {
-      that.reportProtocolMismatch(
+      this.reportProtocolMismatch(
         instrumentConnectionData,
         'protocol_mismatch_astm_on_hl7',
         'Received ASTM but this instrument is set to HL7 here. Nothing was acknowledged, so the instrument keeps its results. ' +
@@ -599,58 +593,57 @@ export class InstrumentInterfaceService {
         return;
       }
     }
-    const bufferedData = (that.hl7ReceiveBuffers.get(bufferKey) ?? '') + hl7Text;
+    const bufferedData = (this.hl7ReceiveBuffers.get(bufferKey) ?? '') + hl7Text;
 
     const bufferedBytes = Buffer.byteLength(bufferedData, 'utf8');
     if (bufferedBytes > InstrumentInterfaceService.MAX_INCOMPLETE_HL7_BYTES) {
-      that.clearHL7Buffer(bufferKey);
+      this.clearHL7Buffer(bufferKey);
       instrumentConnectionData.transmissionStatusSubject.next(false);
-      that.utilitiesService.logger(
+      this.utilitiesService.logger(
         'warn',
         `Discarded incomplete HL7 transmission after ${bufferedBytes} bytes`,
         instrumentConnectionData.instrumentId
       );
-      that.recordProcessingFailure('incomplete_transmission_too_large', instrumentConnectionData);
+      this.recordProcessingFailure('incomplete_transmission_too_large', instrumentConnectionData);
       return;
     }
 
-    that.utilitiesService.logger('info', hl7Text, instrumentConnectionData.instrumentId);
+    this.utilitiesService.logger('info', hl7Text, instrumentConnectionData.instrumentId);
 
     // MLLP wraps each message as <VT>...<FS><CR>. One chunk may hold several
     // messages, or the tail of one, so take every complete block and keep
     // whatever follows the last <FS> for the next chunk. A block whose <CR>
     // has not arrived waits briefly for it rather than being stored short.
-    const { messages, remainder } = that.hl7Helper.extractMLLPMessages(bufferedData, true);
-    that.clearHL7TerminatorTimer(bufferKey);
+    const { messages, remainder } = this.hl7Helper.extractMLLPMessages(bufferedData, true);
+    this.clearHL7TerminatorTimer(bufferKey);
 
     if (remainder) {
-      that.hl7ReceiveBuffers.set(bufferKey, remainder);
-      if (that.hl7Helper.endsAtFrameSeparator(remainder)) {
-        that.scheduleMLLPTerminatorFlush(instrumentConnectionData);
+      this.hl7ReceiveBuffers.set(bufferKey, remainder);
+      if (this.hl7Helper.endsAtFrameSeparator(remainder)) {
+        this.scheduleMLLPTerminatorFlush(instrumentConnectionData);
       } else {
-        that.scheduleHL7BufferExpiry(instrumentConnectionData);
+        this.scheduleHL7BufferExpiry(instrumentConnectionData);
       }
     } else {
       // Every received byte belongs to a complete block. Clear before parsing
       // so a parser exception cannot contaminate the next transmission.
-      that.clearHL7Buffer(bufferKey);
+      this.clearHL7Buffer(bufferKey);
     }
 
-    that.deliverHL7Messages(instrumentConnectionData, messages);
+    this.deliverHL7Messages(instrumentConnectionData, messages);
   }
 
   /**
    * Stores and parses complete MLLP blocks, in the order they arrived.
    */
   private deliverHL7Messages(instrumentConnectionData: InstrumentConnectionStack, messages: string[]) {
-    const that = this;
 
     if (messages.length === 0) {
       return;
     }
 
     instrumentConnectionData.transmissionStatusSubject.next(false);
-    that.utilitiesService.logger('info', 'Received File Separator Character. Ready to process HL7 data', instrumentConnectionData.instrumentId);
+    this.utilitiesService.logger('info', 'Received File Separator Character. Ready to process HL7 data', instrumentConnectionData.instrumentId);
 
     for (const message of messages) {
       const transmissionId = uuidv4();
@@ -660,23 +653,23 @@ export class InstrumentInterfaceService {
         instrument_id: instrumentConnectionData.instrumentId,
         transmission_id: transmissionId
       };
-      that.dbService.recordRawData(rawData, () => {
-        that.utilitiesService.logger('success', 'Successfully saved raw HL7 data', instrumentConnectionData.instrumentId);
+      this.dbService.recordRawData(rawData, () => {
+        this.utilitiesService.logger('success', 'Successfully saved raw HL7 data', instrumentConnectionData.instrumentId);
       }, (err: any) => {
-        that.utilitiesService.logger('error', 'Failed to save raw data ' + JSON.stringify(err), instrumentConnectionData.instrumentId);
+        this.utilitiesService.logger('error', 'Failed to save raw data ' + JSON.stringify(err), instrumentConnectionData.instrumentId);
       });
 
-      const completeMessage = that.hl7Helper.unwrapMLLPBlock(message);
+      const completeMessage = this.hl7Helper.unwrapMLLPBlock(message);
 
       // A block that is not HL7 must not take the socket handler down with it.
       // The processors throw synchronously on a parse failure, which is what
       // this catches. They are not awaited: the promise each returns cannot
       // reject, because saveResult reports a failed save by resolving false.
       try {
-        that.processHL7Message(instrumentConnectionData, completeMessage, { transmissionId });
+        this.processHL7Message(instrumentConnectionData, completeMessage, { transmissionId });
       } catch (error) {
-        that.utilitiesService.logger('error', 'Failed to parse HL7 message: ' + error, instrumentConnectionData.instrumentId);
-        that.recordProcessingFailure('hl7_parse_failed', instrumentConnectionData);
+        this.utilitiesService.logger('error', 'Failed to parse HL7 message: ' + error, instrumentConnectionData.instrumentId);
+        this.recordProcessingFailure('hl7_parse_failed', instrumentConnectionData);
       }
     }
 
@@ -813,10 +806,9 @@ export class InstrumentInterfaceService {
 
 
   handleTCPResponse(connectionIdentifierKey: string, data: Buffer) {
-    const that = this;
-    const instrumentConnectionData = that.tcpService.connectionStack.get(connectionIdentifierKey);
+    const instrumentConnectionData = this.tcpService.connectionStack.get(connectionIdentifierKey);
     if (!instrumentConnectionData) {
-      that.utilitiesService.logger('error', `Received data for unknown connection ${connectionIdentifierKey}`, null);
+      this.utilitiesService.logger('error', `Received data for unknown connection ${connectionIdentifierKey}`, null);
       return;
     }
     // First ensure the instrument is marked as connected
@@ -824,11 +816,11 @@ export class InstrumentInterfaceService {
 
     // Then process the data based on protocol
     if (instrumentConnectionData.connectionProtocol === COMMUNICATION_PROTOCOL.HL7) {
-      that.receiveHL7(instrumentConnectionData, data);
+      this.receiveHL7(instrumentConnectionData, data);
     } else if (instrumentConnectionData.connectionProtocol === COMMUNICATION_PROTOCOL.ASTM_NON_CHECKSUM) {
-      that.receiveASTM(COMMUNICATION_PROTOCOL.ASTM_NON_CHECKSUM, instrumentConnectionData, data);
+      this.receiveASTM(COMMUNICATION_PROTOCOL.ASTM_NON_CHECKSUM, instrumentConnectionData, data);
     } else if (instrumentConnectionData.connectionProtocol === COMMUNICATION_PROTOCOL.ASTM_CHECKSUM) {
-      that.receiveASTM(COMMUNICATION_PROTOCOL.ASTM_CHECKSUM, instrumentConnectionData, data);
+      this.receiveASTM(COMMUNICATION_PROTOCOL.ASTM_CHECKSUM, instrumentConnectionData, data);
     }
   }
 
@@ -920,28 +912,27 @@ export class InstrumentInterfaceService {
   }
 
   private recordResult(data: any, sampleResult: any, instrumentConnectionData: InstrumentConnectionStack, options: ResultSaveOptions): Promise<boolean> {
-    const that = this;
     return new Promise<boolean>((resolve) => {
       try {
-        that.dbService.recordTestResults(
+        this.dbService.recordTestResults(
           data,
           () => {
             if (options.stats) {
               options.stats.saved++;
             }
-            that.utilitiesService.logger('success', 'Successfully saved result : ' + sampleResult.test_id + '|' + sampleResult.order_id, instrumentConnectionData.instrumentId);
-            that.resultSavedSubject.next({ sampleResult: data, instrumentId: instrumentConnectionData.instrumentId });
+            this.utilitiesService.logger('success', 'Successfully saved result : ' + sampleResult.test_id + '|' + sampleResult.order_id, instrumentConnectionData.instrumentId);
+            this.resultSavedSubject.next({ sampleResult: data, instrumentId: instrumentConnectionData.instrumentId });
             resolve(true);
           },
           (err) => {
-            that.utilitiesService.logger('error', 'Failed to save result : ' + sampleResult.test_id + '|' + sampleResult.order_id + ' | ' + JSON.stringify(err), instrumentConnectionData.instrumentId);
-            that.recordProcessingFailure('result_persistence_failed', instrumentConnectionData, sampleResult.test_type);
+            this.utilitiesService.logger('error', 'Failed to save result : ' + sampleResult.test_id + '|' + sampleResult.order_id + ' | ' + JSON.stringify(err), instrumentConnectionData.instrumentId);
+            this.recordProcessingFailure('result_persistence_failed', instrumentConnectionData, sampleResult.test_type);
             resolve(false);
           }
         );
       } catch (error) {
-        that.utilitiesService.logger('error', 'Failed to start result persistence : ' + JSON.stringify(error), instrumentConnectionData.instrumentId);
-        that.recordProcessingFailure('result_persistence_failed', instrumentConnectionData, sampleResult.test_type);
+        this.utilitiesService.logger('error', 'Failed to start result persistence : ' + JSON.stringify(error), instrumentConnectionData.instrumentId);
+        this.recordProcessingFailure('result_persistence_failed', instrumentConnectionData, sampleResult.test_type);
         resolve(false);
       }
     });
@@ -991,25 +982,24 @@ export class InstrumentInterfaceService {
 
   // Method to fetch orders and send as ASTM messages
   fetchAndSendASTMOrders(instrument: any) {
-    let that = this;
     // Fetching orders from the database
-    that.dbService.getOrdersToSend(
+    this.dbService.getOrdersToSend(
       (orders: any[]) => { // Assuming getOrdersToSend now returns an array of orders
         if (!orders || orders.length === 0) {
-          that.utilitiesService.logger('error', "No orders to send for " + instrument.connectionParams.instrumentId, instrument.connectionParams.instrumentId);
+          this.utilitiesService.logger('error', "No orders to send for " + instrument.connectionParams.instrumentId, instrument.connectionParams.instrumentId);
           return;
         }
 
         orders.forEach(order => {
           // Generate the ASTM message for each order
-          const astmMessage = that.astmHelper.generateASTMMessageForOrder(order);
+          const astmMessage = this.astmHelper.generateASTMMessageForOrder(order);
 
           // Frame the ASTM message with control characters
-          const framedMessage = that.astmHelper.frameASTMMessage(astmMessage, instrument.connectionParams.instrumentId);
+          const framedMessage = this.astmHelper.frameASTMMessage(astmMessage, instrument.connectionParams.instrumentId);
 
           // Send the framed message over TCP
           // Assuming tcpService has a method like sendData that takes host, port, and the message
-          that.tcpService.sendData(instrument.connectionParams, framedMessage);
+          this.tcpService.sendData(instrument.connectionParams, framedMessage);
         });
       },
       (err: any) => {
@@ -1019,23 +1009,22 @@ export class InstrumentInterfaceService {
   }
 
   fetchAndSendHL7Orders(instrument: any) {
-    const that = this;
-    that.dbService.getOrdersToSend(
+    this.dbService.getOrdersToSend(
       (orders: any[]) => {
         if (!orders || orders.length === 0) {
-          that.utilitiesService.logger('error', 'No orders to send for ' + instrument.connectionParams.instrumentId, instrument.connectionParams.instrumentId);
+          this.utilitiesService.logger('error', 'No orders to send for ' + instrument.connectionParams.instrumentId, instrument.connectionParams.instrumentId);
           return;
         }
 
         orders.forEach(order => {
           // Generate HL7 message for each order
-          const hl7Message = that.hl7Helper.generateHL7MessageForOrder(order);
+          const hl7Message = this.hl7Helper.generateHL7MessageForOrder(order);
 
           // Frame the HL7 message with necessary control characters
-          const framedMessage = that.hl7Helper.frameHL7Message(hl7Message);
+          const framedMessage = this.hl7Helper.frameHL7Message(hl7Message);
 
           // Send the framed message over TCP
-          that.tcpService.sendData(instrument.connectionParams, framedMessage);
+          this.tcpService.sendData(instrument.connectionParams, framedMessage);
         });
       },
       (err: any) => {

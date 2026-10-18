@@ -1040,10 +1040,9 @@ export class SettingsComponent implements OnInit, OnDestroy {
   }
 
   updateSettings(): void {
-    const that = this;
-    if (that.settingsForm.valid) {
+    if (this.settingsForm.valid) {
       // Store the form values before disconnecting instruments
-      const updatedSettings = structuredClone(that.settingsForm.value);
+      const updatedSettings = structuredClone(this.settingsForm.value);
 
       // Encrypt the MySQL password before saving
       updatedSettings.commonSettings.mysqlPassword = this.cryptoService.encrypt(updatedSettings.commonSettings.mysqlPassword);
@@ -1092,9 +1091,9 @@ export class SettingsComponent implements OnInit, OnDestroy {
       // Wait for all disconnections to complete
       Promise.all(disconnectPromises).then(() => {
         // Save settings to electron store
-        that.electronStoreService.set('commonConfig', updatedSettings.commonSettings);
-        that.electronStoreService.set('instrumentsConfig', updatedSettings.instrumentsSettings);
-        that.electronStoreService.set('lisApiConfig', lisApiConfig);
+        this.electronStoreService.set('commonConfig', updatedSettings.commonSettings);
+        this.electronStoreService.set('instrumentsConfig', updatedSettings.instrumentsSettings);
+        this.electronStoreService.set('lisApiConfig', lisApiConfig);
 
         // Remove the saving notification
         document.body.removeChild(savingNotification);
@@ -1116,7 +1115,7 @@ export class SettingsComponent implements OnInit, OnDestroy {
 
         // Navigate back to console after a brief delay to allow settings to take effect
         setTimeout(() => {
-          that.router.navigate(['/console'], {
+          this.router.navigate(['/console'], {
             state: { returnFromSettings: true }
           });
         }, 500);
@@ -1186,8 +1185,7 @@ export class SettingsComponent implements OnInit, OnDestroy {
   }
 
   checkMysqlConnection() {
-    const that = this;
-    const commonSettings = that.settingsForm.get('commonSettings').value;
+    const commonSettings = this.settingsForm.get('commonSettings').value;
     const mysqlParams = {
       host: commonSettings.mysqlHost,
       user: commonSettings.mysqlUser,
@@ -1195,16 +1193,16 @@ export class SettingsComponent implements OnInit, OnDestroy {
       port: commonSettings.mysqlPort
     };
 
-    that.utilitiesService.checkMysqlConnection(
+    this.utilitiesService.checkMysqlConnection(
       mysqlParams,
       () => {
-        that.electronService.openDialog('showMessageBox', {
+        this.electronService.openDialog('showMessageBox', {
           type: 'info',
           message: 'MySQL Connected successfully. Please click on SAVE SETTINGS to update these settings.'
         });
       },
       (err: string) => {
-        that.electronService.openDialog('showMessageBox', {
+        this.electronService.openDialog('showMessageBox', {
           type: 'error',
           message: `Unable to connect to MySQL database on host ${commonSettings.mysqlHost}`,
           detail: `${err}\n\nPlease check if all the database connection settings are correct and MySQL server is running.`
