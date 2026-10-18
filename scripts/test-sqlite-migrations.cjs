@@ -65,12 +65,12 @@ function testFreshInstallation(migrations, temporaryDirectory) {
   try {
     applyMigrations(database, migrations);
     const tables = all(database, "SELECT name FROM sqlite_master WHERE type = 'table'");
-    const tableNames = tables.map(row => row.name);
-    assert(tableNames.includes('orders'));
-    assert(tableNames.includes('raw_data'));
-    assert(tableNames.includes('app_log'));
-    assert(tableNames.includes('telemetry_events'));
-    assert(tableNames.includes('usage_statistics_daily'));
+    const tableNames = new Set(tables.map(row => row.name));
+    assert(tableNames.has('orders'));
+    assert(tableNames.has('raw_data'));
+    assert(tableNames.has('app_log'));
+    assert(tableNames.has('telemetry_events'));
+    assert(tableNames.has('usage_statistics_daily'));
 
     const orderColumns = all(database, 'PRAGMA table_info(orders)');
     const rawDataColumns = all(database, 'PRAGMA table_info(raw_data)');
