@@ -74,15 +74,14 @@ export class TcpConnectionService implements OnDestroy {
   // Method used to connect to the Testing Machine
   connect(connectionParams: ConnectionParams, handleTCPCallback: (connectionIdentifierKey: string, data: any) => void) {
 
-    const that = this;
-    that.handleTCPCallback = handleTCPCallback;
+    this.handleTCPCallback = handleTCPCallback;
     let instrumentConnectionData: InstrumentConnectionStack = null;
 
-    const connectionIdentifierKey = that._generateConnectionIdentifierKey(connectionParams);
+    const connectionIdentifierKey = this._generateConnectionIdentifierKey(connectionParams);
 
     // Initialize connection health tracking
-    if (!that.connectionHealth.has(connectionIdentifierKey)) {
-      that.connectionHealth.set(connectionIdentifierKey, {
+    if (!this.connectionHealth.has(connectionIdentifierKey)) {
+      this.connectionHealth.set(connectionIdentifierKey, {
         lastDataReceived: new Date(),
         bytesReceived: 0,
         bytesSent: 0,
@@ -91,8 +90,8 @@ export class TcpConnectionService implements OnDestroy {
       });
     }
 
-    if (that.connectionStack.has(connectionIdentifierKey)) {
-      instrumentConnectionData = that.connectionStack.get(connectionIdentifierKey);
+    if (this.connectionStack.has(connectionIdentifierKey)) {
+      instrumentConnectionData = this.connectionStack.get(connectionIdentifierKey);
     }
     else {
 
@@ -115,7 +114,7 @@ export class TcpConnectionService implements OnDestroy {
         reconnectAttempts: 0,
       };
 
-      that.connectionStack.set(connectionIdentifierKey, instrumentConnectionData);
+      this.connectionStack.set(connectionIdentifierKey, instrumentConnectionData);
     }
 
     instrumentConnectionData.connectionAttemptStatusSubject.next(true);
@@ -123,18 +122,18 @@ export class TcpConnectionService implements OnDestroy {
 
     if (connectionParams.connectionMode === 'tcpserver') {
       if (shouldLogConnectionAttempt) {
-        that.utilitiesService.logger('info', `Listening for connection on ${connectionParams.host}:${connectionParams.port}`, instrumentConnectionData.instrumentId);
+        this.utilitiesService.logger('info', `Listening for connection on ${connectionParams.host}:${connectionParams.port}`, instrumentConnectionData.instrumentId);
       }
-      instrumentConnectionData.connectionServer = that.net.createServer();
+      instrumentConnectionData.connectionServer = this.net.createServer();
 
       // Confirm the OS accepted our bind. The persistent UI state already shows
       // that we are waiting, so periodic messages would only grow the log.
-      instrumentConnectionData.connectionServer.on('listening', function () {
+      instrumentConnectionData.connectionServer.on('listening', () => {
         const addr = instrumentConnectionData.connectionServer.address();
         const boundAddress = addr && typeof addr === 'object'
           ? `${addr.address}:${addr.port}`
           : `${connectionParams.host}:${connectionParams.port}`;
-        that.utilitiesService.logger('success', `Server bound and listening on ${boundAddress}. Waiting for a client to connect…`, instrumentConnectionData.instrumentId);
+        this.utilitiesService.logger('success', `Server bound and listening on ${boundAddress}. Waiting for a client to connect…`, instrumentConnectionData.instrumentId);
       });
 
       instrumentConnectionData.connectionServer.listen({
@@ -144,13 +143,13 @@ export class TcpConnectionService implements OnDestroy {
       });
 
       const sockets = [];
-      instrumentConnectionData.connectionServer.on('connection', function (socket) {
+      instrumentConnectionData.connectionServer.on('connection', (socket) => {
         const clientAddress = socket.remoteAddress;
-        that.utilitiesService.logger('info', `Client ${clientAddress} has connected to the Interfacing Server ${connectionParams.host}:${connectionParams.port}`, instrumentConnectionData.instrumentId);
+        this.utilitiesService.logger('info', `Client ${clientAddress} has connected to the Interfacing Server ${connectionParams.host}:${connectionParams.port}`, instrumentConnectionData.instrumentId);
 
         // Reset retry attempts once a client has successfully connected
         instrumentConnectionData.reconnectAttempts = 0;
-        that.recordConnectionSuccess(connectionParams);
+        this.recordConnectionSuccess(connectionParams);
 
         // confirm socket connection from client
         sockets.push(socket);
@@ -165,23 +164,23 @@ export class TcpConnectionService implements OnDestroy {
 
         socket.on('timeout', () => {
           // This should never fire now with setTimeout(0), but keep for safety
-          that.utilitiesService.logger('warn', 'Unexpected socket timeout event', instrumentConnectionData.instrumentId);
+          this.utilitiesService.logger('warn', 'Unexpected socket timeout event', instrumentConnectionData.instrumentId);
         });
 
-        socket.on('data', function (data: any) {
+        socket.on('data', (data: any) => {
           // Only update status to true if it's currently false (connection recovery)
           if (!instrumentConnectionData.statusSubject.value) {
             instrumentConnectionData.statusSubject.next(true);
           }
 
           // Update connection health
-          const health = that.connectionHealth.get(connectionIdentifierKey);
+          const health = this.connectionHealth.get(connectionIdentifierKey);
           if (health) {
             health.lastDataReceived = new Date();
             health.bytesReceived += data.length;
           }
 
-          that.handleTCPCallback(connectionIdentifierKey, data);
+          this.handleTCPCallback(connectionIdentifierKey, data);
           // No need to reset timeout since we're using infinite timeout
         });
 
@@ -189,7 +188,7 @@ export class TcpConnectionService implements OnDestroy {
 
 
         // Add a 'close' event handler to this instance of socket
-        socket.on('close', function (hadError) {
+        socket.on('close', (hadError) => {
           if (instrumentConnectionData.errorOccurred) {
             instrumentConnectionData.errorOccurred = false;
             return;
@@ -205,27 +204,27 @@ export class TcpConnectionService implements OnDestroy {
             : `Client ${socket.remoteAddress}:${socket.remotePort} disconnected normally`;
 
           const logType = hadError ? 'error' : 'info';
-          that.utilitiesService.logger(logType, msg, instrumentConnectionData.instrumentId);
+          this.utilitiesService.logger(logType, msg, instrumentConnectionData.instrumentId);
 
         });
 
       });
 
       instrumentConnectionData.connectionServer.on('close', () => {
-        that.utilitiesService.logger('info', 'Server closed', instrumentConnectionData.instrumentId);
+        this.utilitiesService.logger('info', 'Server closed', instrumentConnectionData.instrumentId);
       });
 
-      instrumentConnectionData.connectionServer.on('error', function (e) {
+      instrumentConnectionData.connectionServer.on('error', (e) => {
         instrumentConnectionData.errorOccurred = true;
         const message = e.code === 'EADDRNOTAVAIL'
           ? `Cannot bind to ${connectionParams.host}:${connectionParams.port} — that address isn't currently assigned to any network interface on this machine. Check the machine's network configuration (static IP / DHCP reservation).`
           : 'Error while connecting ' + e.code;
-        that._handleClientConnectionIssue(instrumentConnectionData, connectionParams, message, true, e.code);
+        this._handleClientConnectionIssue(instrumentConnectionData, connectionParams, message, true, e.code);
       });
 
     } else if (connectionParams.connectionMode === 'tcpclient') {
-      instrumentConnectionData.connectionSocket = that.socketClient = new that.net.Socket();
-      that.clientConnectionOptions = {
+      instrumentConnectionData.connectionSocket = this.socketClient = new this.net.Socket();
+      this.clientConnectionOptions = {
         port: connectionParams.port,
         host: connectionParams.host,
         reuseAddress: true
@@ -235,11 +234,11 @@ export class TcpConnectionService implements OnDestroy {
       instrumentConnectionData.connectionServer = null;
 
       if (shouldLogConnectionAttempt) {
-        that.utilitiesService.logger('info', 'Trying to connect as client', instrumentConnectionData.instrumentId);
+        this.utilitiesService.logger('info', 'Trying to connect as client', instrumentConnectionData.instrumentId);
       }
 
       // Attempt to connect
-      instrumentConnectionData.connectionSocket.connect(that.clientConnectionOptions);
+      instrumentConnectionData.connectionSocket.connect(this.clientConnectionOptions);
 
       // Set connection timeout for client - disabled for medical devices
       instrumentConnectionData.connectionSocket.setTimeout(0); // Infinite timeout
@@ -249,37 +248,37 @@ export class TcpConnectionService implements OnDestroy {
 
       instrumentConnectionData.connectionSocket.on('timeout', () => {
         // This should never fire now with setTimeout(0), but keep for safety
-        that.utilitiesService.logger('warn', 'Unexpected client socket timeout event', instrumentConnectionData.instrumentId);
+        this.utilitiesService.logger('warn', 'Unexpected client socket timeout event', instrumentConnectionData.instrumentId);
       });
 
       // Successful connection
-      instrumentConnectionData.connectionSocket.on('connect', function () {
+      instrumentConnectionData.connectionSocket.on('connect', () => {
         instrumentConnectionData.statusSubject.next(true);
         instrumentConnectionData.reconnectAttempts = 0; // Reset retry attempts
-        that.utilitiesService.logger('success', 'Connected as client successfully', instrumentConnectionData.instrumentId);
-        that.recordConnectionSuccess(connectionParams);
+        this.utilitiesService.logger('success', 'Connected as client successfully', instrumentConnectionData.instrumentId);
+        this.recordConnectionSuccess(connectionParams);
       });
 
-      instrumentConnectionData.connectionSocket.on('data', function (data) {
+      instrumentConnectionData.connectionSocket.on('data', (data) => {
         // Only update status to true if it's currently false (connection recovery)
         if (!instrumentConnectionData.statusSubject.value) {
           instrumentConnectionData.statusSubject.next(true);
         }
 
         // Update connection health
-        const health = that.connectionHealth.get(connectionIdentifierKey);
+        const health = this.connectionHealth.get(connectionIdentifierKey);
         if (health) {
           health.lastDataReceived = new Date();
           health.bytesReceived += data.length;
         }
 
-        that.handleTCPCallback(connectionIdentifierKey, data);
+        this.handleTCPCallback(connectionIdentifierKey, data);
       });
 
       // Connection closed
       instrumentConnectionData.connectionSocket.on('error', (err) => {
         instrumentConnectionData.errorOccurred = true;
-        that._handleClientConnectionIssue(
+        this._handleClientConnectionIssue(
           instrumentConnectionData,
           connectionParams,
           `Connection error: ${err.message}`,
@@ -295,7 +294,7 @@ export class TcpConnectionService implements OnDestroy {
           return;
         }
         const message = hadError ? 'Connection closed due to a transmission error' : 'Connection closed';
-        that._handleClientConnectionIssue(instrumentConnectionData, connectionParams, message, hadError);
+        this._handleClientConnectionIssue(instrumentConnectionData, connectionParams, message, hadError);
       });
     } else {
       // handle other connection modes if any
@@ -303,15 +302,14 @@ export class TcpConnectionService implements OnDestroy {
   }
 
   private _handleClientConnectionIssue(instrumentConnectionData, connectionParams, message, isError, errorCode?: string) {
-    const that = this;
     instrumentConnectionData.statusSubject.next(false);
-    that.disconnect(connectionParams, { logStopped: false });
+    this.disconnect(connectionParams, { logStopped: false });
     let isNewOutage = false;
 
     if (isError) {
-      isNewOutage = that.recordConnectionFailure(connectionParams, errorCode || 'connection_error');
+      isNewOutage = this.recordConnectionFailure(connectionParams, errorCode || 'connection_error');
       if (isNewOutage) {
-        that.utilitiesService.logger('error', message, instrumentConnectionData.instrumentId);
+        this.utilitiesService.logger('error', message, instrumentConnectionData.instrumentId);
       }
     }
 
@@ -325,10 +323,10 @@ export class TcpConnectionService implements OnDestroy {
       // real client-disconnect retry afterwards isn't penalised.
       const isAddressUnavailable = errorCode === 'EADDRNOTAVAIL';
       const attempt = instrumentConnectionData.reconnectAttempts ?? 0;
-      const delay = isAddressUnavailable ? 30000 : that.getRetryDelay(attempt);
+      const delay = isAddressUnavailable ? 30000 : this.getRetryDelay(attempt);
 
       if (!isError || isNewOutage) {
-        that.utilitiesService.logger(
+        this.utilitiesService.logger(
           'info',
           `Will restart listening on ${connectionParams.host}:${connectionParams.port} in ${delay / 1000} seconds`,
           instrumentConnectionData.instrumentId
@@ -340,7 +338,7 @@ export class TcpConnectionService implements OnDestroy {
       }
       instrumentConnectionData.pendingReconnectTimer = setTimeout(() => {
         instrumentConnectionData.pendingReconnectTimer = null;
-        that.connect(connectionParams, that.handleTCPCallback);
+        this.connect(connectionParams, this.handleTCPCallback);
       }, delay);
     }
 
@@ -348,10 +346,10 @@ export class TcpConnectionService implements OnDestroy {
     if (connectionParams.connectionMode === 'tcpclient' && connectionParams.interfaceAutoConnect === 'yes') {
       instrumentConnectionData.connectionAttemptStatusSubject.next(true);
       const attempt = instrumentConnectionData.reconnectAttempts ?? 0;
-      const delay = that.getRetryDelay(attempt);
+      const delay = this.getRetryDelay(attempt);
 
       if (!isError || isNewOutage) {
-        that.utilitiesService.logger(
+        this.utilitiesService.logger(
           'info',
           `Will retry connection to ${connectionParams.host}:${connectionParams.port} in ${delay / 1000} seconds`,
           instrumentConnectionData.instrumentId
@@ -361,7 +359,7 @@ export class TcpConnectionService implements OnDestroy {
       instrumentConnectionData.reconnectAttempts = attempt + 1;
       instrumentConnectionData.pendingReconnectTimer = setTimeout(() => {
         instrumentConnectionData.pendingReconnectTimer = null;
-        that.connect(connectionParams, that.handleTCPCallback);
+        this.connect(connectionParams, this.handleTCPCallback);
       }, delay);
     }
   }
@@ -430,25 +428,23 @@ export class TcpConnectionService implements OnDestroy {
   }
 
   reconnect(connectionParams: ConnectionParams, handleTCPCallback: (connectionIdentifierKey: string, data: any) => void) {
-    let that = this;
-    const connectionIdentifierKey = that._generateConnectionIdentifierKey(connectionParams);
-    const instrumentConnectionData = that.connectionStack.get(connectionIdentifierKey);
+    const connectionIdentifierKey = this._generateConnectionIdentifierKey(connectionParams);
+    const instrumentConnectionData = this.connectionStack.get(connectionIdentifierKey);
 
     // Reset reconnect attempts on manual reconnection
     if (instrumentConnectionData) {
       instrumentConnectionData.reconnectAttempts = 0;
     }
 
-    that.disconnect(connectionParams);
-    that.connect(connectionParams, handleTCPCallback);
+    this.disconnect(connectionParams);
+    this.connect(connectionParams, handleTCPCallback);
   }
 
   // Simplified disconnect method - back to original approach
   disconnect(connectionParams: ConnectionParams, options: { logStopped?: boolean } = {}) {
-    const that = this;
-    const connectionIdentifierKey = that._generateConnectionIdentifierKey(connectionParams);
+    const connectionIdentifierKey = this._generateConnectionIdentifierKey(connectionParams);
 
-    const instrumentConnectionData = that.connectionStack.get(connectionIdentifierKey);
+    const instrumentConnectionData = this.connectionStack.get(connectionIdentifierKey);
     if (instrumentConnectionData) {
       try {
         // Cancel any pending auto-reconnect so a user-initiated stop isn't
@@ -474,7 +470,7 @@ export class TcpConnectionService implements OnDestroy {
 
           // Register an 'error' event listener
           instrumentConnectionData.connectionSocket.on('error', (error) => {
-            that.utilitiesService.logger('error', `Socket error: ${error}`, instrumentConnectionData.instrumentId);
+            this.utilitiesService.logger('error', `Socket error: ${error}`, instrumentConnectionData.instrumentId);
           });
 
           // End the socket connection
@@ -487,17 +483,17 @@ export class TcpConnectionService implements OnDestroy {
 
           instrumentConnectionData.connectionServer.close(() => {
             if (options.logStopped !== false) {
-              that.utilitiesService.logger('info', 'Server Stopped', instrumentConnectionData.instrumentId);
+              this.utilitiesService.logger('info', 'Server Stopped', instrumentConnectionData.instrumentId);
             }
           });
 
           // Handle errors during close
           instrumentConnectionData.connectionServer.on('error', (error) => {
-            that.utilitiesService.logger('error', `Error while closing server: ${error.message}`, instrumentConnectionData.instrumentId);
+            this.utilitiesService.logger('error', `Error while closing server: ${error.message}`, instrumentConnectionData.instrumentId);
           });
         }
       } catch (error) {
-        that.utilitiesService.logger('error', `Error during disconnection: ${error}`, instrumentConnectionData.instrumentId);
+        this.utilitiesService.logger('error', `Error during disconnection: ${error}`, instrumentConnectionData.instrumentId);
       } finally {
         // Clean up resources
         instrumentConnectionData.connectionSocket = null;
@@ -507,10 +503,9 @@ export class TcpConnectionService implements OnDestroy {
   }
 
   sendData(connectionParams: ConnectionParams, data: string) {
-    const that = this;
-    const connectionIdentifierKey = that._generateConnectionIdentifierKey(connectionParams);
+    const connectionIdentifierKey = this._generateConnectionIdentifierKey(connectionParams);
 
-    const instrumentConnectionData = that.connectionStack.get(connectionIdentifierKey);
+    const instrumentConnectionData = this.connectionStack.get(connectionIdentifierKey);
 
     if (instrumentConnectionData) {
       instrumentConnectionData.transmissionStatusSubject.next(true); // Set flag when transmission starts
@@ -524,7 +519,7 @@ export class TcpConnectionService implements OnDestroy {
           console.log('Data sent successfully');
 
           // Update connection health
-          const health = that.connectionHealth.get(connectionIdentifierKey);
+          const health = this.connectionHealth.get(connectionIdentifierKey);
           if (health) {
             health.bytesSent += Buffer.byteLength(data, 'utf8');
             health.lastDataSent = new Date();
