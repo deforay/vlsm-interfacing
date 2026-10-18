@@ -100,7 +100,7 @@ export class InstrumentInterfaceService {
   // Method used to connect to the Testing Machine
   connect(instrument: any) {
     const that = this;
-    if (instrument && instrument.connectionParams) {
+    if (instrument?.connectionParams) {
       that.clearInstrumentReceiveState(instrument.connectionParams.instrumentId);
       // Bind 'this' explicitly to handleTCPResponse
       const boundHandleTCPResponse = that.handleTCPResponse.bind(that);
@@ -119,7 +119,7 @@ export class InstrumentInterfaceService {
 
   reconnect(instrument: any) {
     const that = this;
-    if (instrument && instrument.connectionParams) {
+    if (instrument?.connectionParams) {
       that.clearInstrumentReceiveState(instrument.connectionParams.instrumentId);
       // Bind 'this' explicitly to handleTCPResponse
       const boundHandleTCPResponse = that.handleTCPResponse.bind(that);
@@ -138,7 +138,7 @@ export class InstrumentInterfaceService {
 
   disconnect(instrument: any) {
     const that = this;
-    if (instrument && instrument.connectionParams && instrument.connectionParams.host && instrument.connectionParams.port) {
+    if (instrument?.connectionParams?.host && instrument.connectionParams.port) {
       that.clearInstrumentReceiveState(instrument.connectionParams.instrumentId);
       that.connectionStatusSubscriptions.get(instrument.connectionParams.instrumentId)?.unsubscribe();
       that.connectionStatusSubscriptions.delete(instrument.connectionParams.instrumentId);

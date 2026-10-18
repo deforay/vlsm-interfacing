@@ -388,8 +388,7 @@ export class RawDataProcessorService {
 
     const instrumentSettings = this.instrumentsSettings.find(
       (inst: any) =>
-        inst.analyzerMachineName &&
-        inst.analyzerMachineName.toLowerCase() === analyzerMachineName.toLowerCase()
+        inst.analyzerMachineName?.toLowerCase() === analyzerMachineName.toLowerCase()
     );
 
     if (instrumentSettings) {

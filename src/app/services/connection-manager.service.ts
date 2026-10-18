@@ -196,7 +196,7 @@ export class ConnectionManagerService implements OnDestroy {
 
   private getStatusText(instrument: any): string {
     // First, check if the instrument is properly defined with all the properties we need
-    if (!instrument || !instrument.connectionParams) {
+    if (!instrument?.connectionParams) {
       return 'Unknown Status';
     }
 
@@ -253,7 +253,7 @@ export class ConnectionManagerService implements OnDestroy {
   }
 
   connect(instrument: any) {
-    if (!instrument || !instrument.connectionParams) return;
+    if (!instrument?.connectionParams) return;
 
     // Check if already connecting or connected
     const instrumentFromMap = this.activeInstruments.get(instrument.connectionParams.instrumentId);
@@ -294,7 +294,7 @@ export class ConnectionManagerService implements OnDestroy {
   }
 
   reconnect(instrument: any) {
-    if (!instrument || !instrument.connectionParams) return;
+    if (!instrument?.connectionParams) return;
 
     const connectionMode = instrument.connectionParams.instrumentId;
 
@@ -344,7 +344,7 @@ export class ConnectionManagerService implements OnDestroy {
   }
 
   disconnect(instrument: any) {
-    if (!instrument || !instrument.connectionParams) return;
+    if (!instrument?.connectionParams) return;
 
     const connectionMode = instrument.connectionParams.instrumentId;
     this.clearInstrumentTimers(connectionMode);
@@ -361,7 +361,7 @@ export class ConnectionManagerService implements OnDestroy {
   }
 
   sendASTMOrders(instrument: any) {
-    if (!instrument || !instrument.connectionParams) return;
+    if (!instrument?.connectionParams) return;
     this.instrumentInterfaceService.fetchAndSendASTMOrders(instrument);
   }
 
@@ -491,7 +491,7 @@ export class ConnectionManagerService implements OnDestroy {
   // Add this method to src/app/services/connection-manager.service.ts
 
   cancelConnection(instrument: any) {
-    if (!instrument || !instrument.connectionParams) return;
+    if (!instrument?.connectionParams) return;
 
     console.log(`Cancelling connection attempt for ${instrument.connectionParams.instrumentId}`);
     this.clearInstrumentTimers(instrument.connectionParams.instrumentId);
@@ -519,7 +519,7 @@ export class ConnectionManagerService implements OnDestroy {
 
 
   forceRestartConnection(instrument: any) {
-    if (!instrument || !instrument.connectionParams) return;
+    if (!instrument?.connectionParams) return;
 
     console.log(`Force restarting connection for ${instrument.connectionParams.instrumentId}`);
 
@@ -584,7 +584,7 @@ export class ConnectionManagerService implements OnDestroy {
   }
 
   refreshConnectionStatus(instrument: any) {
-    if (!instrument || !instrument.connectionParams) return;
+    if (!instrument?.connectionParams) return;
 
     //console.log(`Refreshing connection status for ${instrument.connectionParams.instrumentId}`);
 

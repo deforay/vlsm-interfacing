@@ -118,7 +118,7 @@ export class ElectronService {
   }
 
   get isElectron(): boolean {
-    return !!(window && window.process && window.process.type);
+    return !!window?.process?.type;
   }
 
   getUserDataPath(): Promise<string> {
@@ -162,7 +162,7 @@ export class ElectronService {
       }, ElectronService.SQLITE_QUERY_TIMEOUT_MS);
 
       this.ipcRenderer.once(uniqueEvent, (_, arg) => {
-        if (arg && arg.__sqliteError) {
+        if (arg?.__sqliteError) {
           finish(() => reject(new Error(arg.message || 'Unknown SQLite error')));
         } else {
           finish(() => resolve(arg));

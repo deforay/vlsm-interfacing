@@ -105,9 +105,7 @@ export class ASTMHelperService {
  */
   sendACK(instrumentConnectionData: any, logMessage?: string): void {
     try {
-      if (instrumentConnectionData &&
-        instrumentConnectionData.connectionSocket &&
-        instrumentConnectionData.connectionSocket.writable) {
+      if (instrumentConnectionData?.connectionSocket?.writable) {
 
         const startTime = Date.now();
         this.utilitiesService.logger('info', logMessage || 'Sending ASTM ACK', instrumentConnectionData.instrumentId);
@@ -129,9 +127,7 @@ export class ASTMHelperService {
    */
   sendNAK(instrumentConnectionData: any, logMessage?: string): void {
     try {
-      if (instrumentConnectionData &&
-        instrumentConnectionData.connectionSocket &&
-        instrumentConnectionData.connectionSocket.writable) {
+      if (instrumentConnectionData?.connectionSocket?.writable) {
         this.utilitiesService.logger('warn', logMessage || 'Sending ASTM NAK', instrumentConnectionData.instrumentId);
         instrumentConnectionData.connectionSocket.write(this.NAK_BUFFER, 'binary');
       }

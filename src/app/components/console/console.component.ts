@@ -183,7 +183,7 @@ export class ConsoleComponent implements OnInit, AfterViewInit, OnDestroy {
 
   ngAfterViewInit() {
     // Setup debounced search after view is initialized and input element is available
-    if (this.searchInput && this.searchInput.nativeElement) {
+    if (this.searchInput?.nativeElement) {
       this.searchSubscription = fromEvent(this.searchInput.nativeElement, 'input').pipe(
         map((event: any) => event.target.value),
         debounceTime(300), // Wait 300ms after last event
@@ -618,7 +618,7 @@ export class ConsoleComponent implements OnInit, AfterViewInit, OnDestroy {
   clearSearch() {
     console.log('Clearing search');
     this.searchTerm = '';
-    if (this.searchInput && this.searchInput.nativeElement) {
+    if (this.searchInput?.nativeElement) {
       this.searchInput.nativeElement.value = '';
     }
     // Get all results without syncing (since it's just clearing search)
