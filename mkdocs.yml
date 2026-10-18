@@ -14,11 +14,18 @@ theme:
   features:
     - navigation.instant
     - navigation.tracking
+    # Top tabs (Home, User guide, Technical guide) keep each sidebar to one
+    # audience. Section index pages open from the section name itself.
+    - navigation.tabs
     - navigation.sections
+    - navigation.indexes
+    - navigation.path
+    - navigation.footer
     - navigation.top
     - content.action.edit
     - content.code.copy
     - search.highlight
+    - search.share
     - search.suggest
     - toc.follow
   palette:
@@ -65,7 +72,10 @@ markdown_extensions:
   - pymdownx.snippets
 
 plugins:
-  - search
+  - search:
+      # Split words on underscores, hyphens, dots and camelCase too, so a
+      # search for "sync" finds lims_sync_status and "port" finds hostPort.
+      separator: '[\s\u200b\-_,:!=\[\]()"`/]+|\.(?!\d)|&[lg]t;|(?!\b)(?=[A-Z][a-z])'
 
 # A link that does not resolve is a broken instruction in a document someone is
 # following at a bench, so the build fails on one rather than shipping it.
@@ -74,6 +84,8 @@ validation:
   links:
     absolute_links: relative_to_docs
     unrecognized_links: warn
+    # A link to a heading that no longer exists fails the build too.
+    anchors: warn
   nav:
     omitted_files: warn
 
@@ -81,18 +93,18 @@ nav:
   - Home: index.md
   - User guide:
       - guide/index.md
-      - Installing: guide/install.md
+      - Install: guide/install.md
       - Settings: guide/settings.md
-      - The console: guide/console.md
+      - Console: guide/console.md
       - Raw data and recovery: guide/raw-data.md
       - Backup and restore: guide/backup-restore.md
-      - When something is wrong: guide/troubleshooting.md
+      - Troubleshooting: guide/troubleshooting.md
   - Technical guide:
       - technical/index.md
-      - How it is put together: technical/architecture.md
-      - Protocols on the wire: technical/protocols.md
-      - Analyzers as they behave: technical/analyzers.md
-      - What is stored, and where: technical/storage.md
+      - Architecture: technical/architecture.md
+      - Protocols: technical/protocols.md
+      - Analyzers: technical/analyzers.md
+      - Storage: technical/storage.md
       - Result webhook: technical/result-webhook.md
       - Usage statistics: technical/telemetry.md
       - Building and releasing: technical/building.md
