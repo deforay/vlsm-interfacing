@@ -19,7 +19,7 @@ const repoRoot = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
 const appDir = path.join(repoRoot, 'app');
 const builderConfig = JSON.parse(fs.readFileSync(path.join(repoRoot, 'electron-builder.json'), 'utf8'));
 
-const IMPORT_PATTERN = /(?:from\s+|require\()\s*['"](\.\.\/[^'"]+)['"]/g;
+const IMPORT_PATTERN = /(?:from\s+|require\(\s*)['"](\.\.\/[^'"]+)['"]/g;
 
 function mainProcessSources(dir) {
   return fs.readdirSync(dir, { withFileTypes: true }).flatMap(entry => {
@@ -80,7 +80,7 @@ for (const [root, importers] of roots) {
     + `and is not copied by extraResources. The packaged app will fail to start.\n`
     + `  Add to electron-builder.json:\n`
     + `    "extraResources": [{ "from": "${root}", "to": "${root}", "filter": ["**/*.js"] }]\n`
-    + `  Imports that need it:\n${importers.map(i => `    ${i}`).join('\n')}`
+    + `  Imports that need it:\n${importers.map(i => '    ' + i).join('\n')}`
   );
 
   // A .ts-only filter would package nothing useful: main requires compiled JS.

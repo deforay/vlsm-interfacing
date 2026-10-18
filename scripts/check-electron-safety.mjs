@@ -158,8 +158,8 @@ function checkRepository() {
   }
 
   if (findings.length === 0) {
-    console.log(`electron safety: ${files.length} files scanned, nothing to report`
-      + `${waived.length ? ` (${waived.length} waived)` : ''}.`);
+    const waivedNote = waived.length ? ` (${waived.length} waived)` : '';
+    console.log(`electron safety: ${files.length} files scanned, nothing to report${waivedNote}.`);
     process.exit(0);
   }
 

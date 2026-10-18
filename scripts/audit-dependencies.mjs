@@ -21,7 +21,7 @@ const ATTEMPTS = 3;
 const BACKOFF_MS = 5_000;
 // What we ship. Development dependencies are not in an installer.
 const AUDIT_ARGUMENTS = ['audit', '--omit=dev', '--json'];
-const FAILING_SEVERITIES = ['high', 'critical'];
+const FAILING_SEVERITIES = new Set(['high', 'critical']);
 
 function runAudit() {
   const result = spawnSync('npm', AUDIT_ARGUMENTS, {
@@ -53,7 +53,7 @@ function sleep(milliseconds) {
  */
 export function evaluateReport(report) {
   const vulnerabilities = Object.values(report?.vulnerabilities ?? {});
-  const failing = vulnerabilities.filter(entry => FAILING_SEVERITIES.includes(entry.severity));
+  const failing = vulnerabilities.filter(entry => FAILING_SEVERITIES.has(entry.severity));
 
   const counts = report?.metadata?.vulnerabilities ?? {};
   const remaining = Object.entries(counts)
@@ -64,34 +64,55 @@ export function evaluateReport(report) {
   return { ok: failing.length === 0, failing, remaining };
 }
 
-function audit() {
-  let report = null;
+// npm reports an audit it could not perform as JSON too, with the useful part
+// in any of three places depending on where it went wrong: a registry that
+// answered with an error fills summary or detail, and one that could not be
+// reached at all leaves both empty and explains itself in message.
+function unperformedReason(outcome) {
+  if (!outcome.ran) {
+    return outcome.reason;
+  }
+  return (outcome.report.error?.detail
+    || outcome.report.error?.summary
+    || outcome.report.message
+    || 'no reason given').trim();
+}
+
+function auditWithRetries() {
   let lastReason = 'no reason reported';
 
   for (let attempt = 1; attempt <= ATTEMPTS; attempt++) {
     const outcome = runAudit();
 
     if (outcome.ran && !outcome.report?.error) {
-      report = outcome.report;
-      break;
+      return { report: outcome.report, lastReason };
     }
 
-    // npm reports an audit it could not perform as JSON too, with the useful
-    // part in any of three places depending on where it went wrong: a registry
-    // that answered with an error fills summary or detail, and one that could
-    // not be reached at all leaves both empty and explains itself in message.
-    lastReason = outcome.ran
-      ? (outcome.report.error?.detail
-        || outcome.report.error?.summary
-        || outcome.report.message
-        || 'no reason given').trim()
-      : outcome.reason;
-
+    lastReason = unperformedReason(outcome);
     console.log(`  audit attempt ${attempt} of ${ATTEMPTS} could not be performed: ${lastReason.split('\n')[0]}`);
     if (attempt < ATTEMPTS) {
       sleep(BACKOFF_MS);
     }
   }
+
+  return { report: null, lastReason };
+}
+
+function printVulnerabilities(failing) {
+  console.error('\nProduction dependencies carry known vulnerabilities:\n');
+  for (const entry of failing) {
+    console.error(`  ${entry.severity.padEnd(8)} ${entry.name}`);
+    for (const via of entry.via ?? []) {
+      if (typeof via === 'object' && via.title) {
+        console.error(`           ${via.title} (${via.url})`);
+      }
+    }
+  }
+  console.error('\nUpgrade the dependency rather than lowering the threshold.\n');
+}
+
+function audit() {
+  const { report, lastReason } = auditWithRetries();
 
   if (!report) {
     console.error('\nThe dependency audit could not be performed, so nothing has been checked.');
@@ -104,20 +125,12 @@ function audit() {
   const { ok, failing, remaining } = evaluateReport(report);
 
   if (!ok) {
-    console.error('\nProduction dependencies carry known vulnerabilities:\n');
-    for (const entry of failing) {
-      console.error(`  ${entry.severity.padEnd(8)} ${entry.name}`);
-      for (const via of entry.via ?? []) {
-        if (typeof via === 'object' && via.title) {
-          console.error(`           ${via.title} (${via.url})`);
-        }
-      }
-    }
-    console.error('\nUpgrade the dependency rather than lowering the threshold.\n');
+    printVulnerabilities(failing);
     process.exit(1);
   }
 
-  console.log(`dependency audit: nothing at or above high${remaining ? ` (${remaining} below it)` : ''}.`);
+  const below = remaining ? ` (${remaining} below it)` : '';
+  console.log(`dependency audit: nothing at or above high${below}.`);
 }
 
 if (import.meta.url === pathToFileURL(process.argv[1] ?? '').href) {
