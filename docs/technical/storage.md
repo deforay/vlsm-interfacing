@@ -115,6 +115,27 @@ migration instead. `npm run test:migrations` applies the whole chain to an empty
 database and to a legacy schema, and fails when an expected table, column or
 index is missing.
 
+### Repair when the schema is behind the code
+
+Every migration statement can run twice safely. So when a SQLite query fails on
+a missing table or column, the main process re-applies the SQLite migrations on
+the open database, and the renderer runs the query again. The operator sees
+nothing. Each session allows two of these silent repairs. A third would mean
+the migrations cannot add what the code needs. If any migration fails during
+the replay, the query is not run again.
+
+MySQL is repaired from the renderer. It checks the MySQL schema and runs the
+query again once. Later failures re-run the MySQL migrations, up to twice,
+without running the query again.
+
+When the repair does not fix the query, a notice over every screen counts down
+30 seconds. The tool then restarts and replays every migration, in SQLite and
+in MySQL. The countdown waits up to two minutes for an instrument that is
+still receiving. A schema error within ten minutes of such a restart, or of a
+manual repair, shows **Database Needs Attention** and does not restart again.
+The tool cannot restart in a loop. **Settings → Troubleshooting → Repair and Restart** starts
+the same replay by hand.
+
 ## The rule that governs every value
 
 Stored exactly as the analyzer sent it. No rounding, no locale normalisation, no

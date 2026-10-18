@@ -65,6 +65,25 @@ configuration screen.
   receiver's answer, for example `http_422`.
 - Results already stored when the section was first saved are never sent.
 
+## The tool says a restart is required
+
+The tool repairs its own database without a message. When a repair is not
+enough, the tool comes to the front, shows **Restart required** on every
+screen, and counts down from 30 seconds. Stored results and settings are kept.
+
+- Press **Restart Now** to restart sooner. The restart cannot be put off.
+- If an analyzer is sending when the count ends, the tool waits for it to
+  finish, for up to two minutes.
+- After the restart, a small window says **Finishing the update** until the
+  tool opens.
+
+If the problem comes back within ten minutes of that restart, the tool shows
+**Database Needs Attention** and does not restart again. Contact support and
+send the [log files](#where-the-log-files-are).
+
+If results stop saving and no notice appears, open
+**Settings → Troubleshooting** and press **Repair and Restart**.
+
 ## Where the log files are
 
 Log files sit beside the database, in the tool's data directory:
