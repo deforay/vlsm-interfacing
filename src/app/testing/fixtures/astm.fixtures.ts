@@ -40,8 +40,8 @@ export function resultRecord(sequence: number, testId: string, value: string, un
   });
 }
 
-export const ABBOTT_M2000_HEADER = `H|\\^&|||m2000^8.20^Abbott|||||||P|1|${RUN_DATE}`;
-export const GENEXPERT_HEADER = `H|\\^&|||GeneXpert^6.4|||||LIS||P|1394-97|${RUN_DATE}`;
+export const ABBOTT_M2000_HEADER = String.raw`H|\^&|||m2000^8.20^Abbott|||||||P|1|${RUN_DATE}`;
+export const GENEXPERT_HEADER = String.raw`H|\^&|||GeneXpert^6.4|||||LIS||P|1394-97|${RUN_DATE}`;
 export const TERMINATOR = 'L|1|N';
 
 /** Abbott m2000 RealTime HIV-1 quantitative result. */

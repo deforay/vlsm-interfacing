@@ -15,7 +15,7 @@ export function msh(sendingApplication: string, messageId: string, options: {
   profile?: string;
 } = {}): string {
   return hl7Segment('MSH', {
-    1: '^~\\&',
+    1: String.raw`^~\&`,
     2: sendingApplication,
     3: 'LAB001',
     4: 'LIS',

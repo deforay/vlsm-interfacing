@@ -25,7 +25,7 @@ const DEVICE = 'C6800/8800^Roche^^~Unknown^Roche^^~ID_000000000000000001^IM300-0
 const CONTROLS = '592_neg^^99ROC~591_pos^^99ROC';
 
 function msh(messageId: string, type: string): string {
-  return `MSH|^~\\&|COBAS6800/8800||LIS||20260308152752||${type}|${messageId}|P|2.5||||||ASCII`;
+  return String.raw`MSH|^~\&|COBAS6800/8800||LIS||20260308152752||${type}|${messageId}|P|2.5||||||ASCII`;
 }
 
 function obx(setId: number, type: string, identifier: string, subId: string, value: string, unit: string, flag: string, status: string): string {

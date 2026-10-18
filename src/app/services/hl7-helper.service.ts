@@ -56,7 +56,7 @@ export class HL7HelperService {
     const date = moment().format('YYYYMMDDHHmmss');
 
     // Build optimized ACK message with field position comments
-    const ack = `${VT}MSH|^~\\&|InteLIS|InteLIS|InteLIS|InteLIS|${date}||ACK^R22^ACK|${randomUUID()}|P|${hl7Version}|||NE|AL||${characterSet}||${messageProfileIdentifier}${CR}MSA|AA|${messageID}${CR}${FS}${CR}`;
+    const ack = String.raw`${VT}MSH|^~\&|InteLIS|InteLIS|InteLIS|InteLIS|${date}||ACK^R22^ACK|${randomUUID()}|P|${hl7Version}|||NE|AL||${characterSet}||${messageProfileIdentifier}${CR}MSA|AA|${messageID}${CR}${FS}${CR}`;
 
     /*
     MSH Field Breakdown:
@@ -405,7 +405,7 @@ export class HL7HelperService {
     const moment = require('moment');
     const date = moment(new Date()).format('YYYYMMDDHHmmss');
 
-    let message = 'MSH|^~\\&|LIS|LISFacility|Roche|x800|' + date + '||ORM^O01|' + randomUUID() + '|P|2.3\r';
+    let message = String.raw`MSH|^~\&|LIS|LISFacility|Roche|x800|` + date + '||ORM^O01|' + randomUUID() + '|P|2.3\r';
     message += 'PID|||123456^^^LIS||Doe^John\r';
     message += 'ORC|NW|' + sampleResult.order_id + '|||' + date + '\r';
     message += 'OBR|1||' + sampleResult.order_id + '^LIS|' + sampleResult.test_id + '^' + sampleResult.test_type + '^L\r';
