@@ -848,7 +848,8 @@ try {
           const failed = await runSqliteMigrations(
             sqlite3Obj, path.join(app.getPath('userData'), 'sqlite-migrations'), true
           );
-          log.info(`Replayed SQLite migrations without a restart: ${failed === 0 ? 'all applied' : `${failed} did not apply`}`);
+          const outcome = failed === 0 ? 'all applied' : `${failed} did not apply`;
+          log.info(`Replayed SQLite migrations without a restart: ${outcome}`);
           return { ok: failed === 0 };
         } catch (error) {
           log.error(`Could not replay SQLite migrations: ${formatUnknownError(error)}`);

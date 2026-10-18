@@ -267,6 +267,45 @@ describe('DatabaseService result durability', () => {
     expect(remotelyStoredIds).toEqual(new Set(['stable-ingestion-id']));
   });
 
+  describe('resyncing results to MySQL when nothing is sent', () => {
+    const resync = (service: any) => new Promise<any[]>(resolve => {
+      service.resyncTestResultsToMySQL(
+        (...args: any[]) => resolve(['success', ...args]),
+        (...args: any[]) => resolve(['error', ...args])
+      );
+    });
+
+    it('reports a SQLite read that fails, with what it was doing', async () => {
+      const service = createService();
+      const failure = new Error('database is locked');
+      service.execSqlite = vi.fn().mockRejectedValue(failure);
+      service.ensureOrderIngestionIds = vi.fn();
+
+      expect(await resync(service)).toEqual(['error', 'Error fetching records from SQLite:', failure]);
+      expect(service.ensureOrderIngestionIds).not.toHaveBeenCalled();
+    });
+
+    it('reports success when no result is waiting', async () => {
+      const service = createService();
+      service.execSqlite = vi.fn().mockResolvedValue([]);
+      service.ensureOrderIngestionIds = vi.fn();
+
+      expect(await resync(service)).toEqual(['success', 'No records to resync.']);
+      expect(service.ensureOrderIngestionIds).not.toHaveBeenCalled();
+    });
+
+    it('reports a failure to give pending results their identity, and sends nothing', async () => {
+      const service = createService();
+      const failure = new Error('Could not assign ingestion identity to local order 7');
+      service.execSqlite = vi.fn().mockResolvedValue([{ id: 7 }]);
+      service.ensureOrderIngestionIds = vi.fn().mockRejectedValue(failure);
+      service.processResyncRecords = vi.fn();
+
+      expect(await resync(service)).toEqual(['error', failure]);
+      expect(service.processResyncRecords).not.toHaveBeenCalled();
+    });
+  });
+
   it('reads only the API result contract from pending SQLite rows', async () => {
     const service = createService();
     service.execSqlite = vi.fn().mockResolvedValue([{

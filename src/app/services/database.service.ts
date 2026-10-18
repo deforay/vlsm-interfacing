@@ -1239,19 +1239,26 @@ export class DatabaseService {
     const sqliteQuery = 'SELECT * FROM orders WHERE mysql_inserted = 0';
 
     this.execSqlite(sqliteQuery, [])
-      .then((records) => {
-        if (records.length === 0) {
-          success('No records to resync.');
-          return;
-        }
-
-        this.ensureOrderIngestionIds(records)
-          .then(preparedRecords => this.processResyncRecords(preparedRecords, success, errorf))
-          .catch(errorf);
-      })
       .catch((err: any) => {
         errorf('Error fetching records from SQLite:', err);
-      });
+        return null;
+      })
+      .then((records) => {
+        if (records === null) {
+          return null;
+        }
+        if (records.length === 0) {
+          success('No records to resync.');
+          return null;
+        }
+        return this.ensureOrderIngestionIds(records);
+      })
+      .then((preparedRecords) => {
+        if (preparedRecords !== null) {
+          this.processResyncRecords(preparedRecords, success, errorf);
+        }
+      })
+      .catch(errorf);
   }
 
   private async ensureOrderIngestionIds(records: any[]): Promise<any[]> {
