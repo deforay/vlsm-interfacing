@@ -22,15 +22,15 @@ while setting up an instrument and those ten changes do not push out the stable
 configuration from last month that you might actually want back.
 
 **Back Up Now** does the same on demand, and tells you when there is nothing new
-to save. **Open Backup Folder** shows where the copies are — one folder, named
-by date and time, newest last.
+to save. **Open Backup Folder** opens the folder that holds the copies. Each copy
+is a file named by the date and time it was written.
 
 !!! note "What a backup contains"
 
     Settings only. Test results and raw analyzer data are not included.
     Automatic backups never contain passwords, which is what makes them safe to
-    leave on the machine — after restoring one you re-enter the database
-    password and any LIS credentials.
+    leave on the machine. After restoring one, re-enter the database password
+    and any LIS credentials.
 
 ## Exporting settings
 
@@ -43,8 +43,8 @@ by date and time, newest last.
 
 !!! danger "A passphrase cannot be recovered"
 
-    An encrypted export cannot be opened without its passphrase — not by you,
-    not by us. Store it somewhere safe and separate from the file itself.
+    An encrypted export cannot be opened without its passphrase, not by you
+    and not by us. Store it somewhere safe and separate from the file itself.
 
 ## Importing settings
 

@@ -1,4 +1,4 @@
-# What is stored, and where
+# Storage
 
 ## The data directory
 
@@ -12,7 +12,7 @@ cannot move it:
 | macOS | `~/Library/Application Support/vlsm-interfacing` |
 
 It holds `interface.db`, `config.json`, `logs/`, `backups/`,
-`sqlite-migrations/` and `mysql-migrations/`. A served development run
+`settings-backups/`, `sqlite-migrations/` and `mysql-migrations/`. A served development run
 deliberately uses Electron's default directory instead, so working on the tool
 cannot write into an installation's data on the same machine.
 
@@ -24,7 +24,7 @@ The same shape in SQLite and, when configured, MySQL.
 
 | Column | Notes |
 |--------|-------|
-| `order_id`, `test_id` | The sample identifier as the analyzer sent it. Never inferred, cleaned or trimmed into shape — that would attach a result to a different patient. |
+| `order_id`, `test_id` | The sample identifier as the analyzer sent it. Never inferred, cleaned or trimmed into shape. That would attach a result to a different patient. |
 | `test_type`, `test_unit` | Assay and unit, as sent |
 | `results` | The result as stored: as sent, unless one of the instrument's result rules replaced it |
 | `results_as_sent` | The result as read from the transmission, before result rules. `Failed` or `Incomplete` when the analyzer marked the run so, with its own text in `notes`. `NULL` on results stored before 4.5.0. |
@@ -99,8 +99,8 @@ failed run starts again at the next start.
 
 ### `app_log`, `telemetry_events`, `usage_statistics_daily`, `versions`
 
-Operational log; PII-free usage events and their daily aggregates (see
-[usage statistics](telemetry.md)); and the record of which migrations have run.
+The operational log, the PII-free usage events and their daily aggregates (see
+[usage statistics](telemetry.md)), and the record of which migrations have run.
 
 ## Migrations are append-only
 
@@ -109,10 +109,11 @@ They are copied into the data directory at startup so an installation carries
 the migrations it has actually applied.
 
 **An applied migration is never edited.** A machine in a laboratory has already
-run it; changing the file means that machine's schema and a freshly installed
+run it. Changing the file means that machine's schema and a freshly installed
 one will never agree again, and nothing will report the difference. Add another
 migration instead. `npm run test:migrations` applies the whole chain to an empty
-database and fails on a gap or a re-ordering.
+database and to a legacy schema, and fails when an expected table, column or
+index is missing.
 
 ## The rule that governs every value
 
@@ -121,10 +122,10 @@ unit conversion, no `< 40` turned into `40`, no decimal comma turned into a
 point.
 
 This has bitten before, which is why it is written down. Earlier versions
-expanded scientific notation and applied UCUM exponents on the way in; a result
+expanded scientific notation and applied UCUM exponents on the way in. A result
 that had been transformed could not be checked against the analyzer's own
 printout, and the transformation was not always right. The conversion belongs
-wherever the value is interpreted — the LIS — not at the point it is captured.
+where the value is interpreted, in the LIS, not at the point it is captured.
 
 The one exception is the laboratory's own. An instrument's
 [result rules](../guide/settings.md#result-rules) can store `Y` where the

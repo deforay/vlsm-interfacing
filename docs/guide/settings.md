@@ -1,7 +1,9 @@
 # Settings
 
-The Settings page is organised into sections down the left-hand side. Nothing
-takes effect until you press **Save Settings**.
+The Settings page is organised into sections down the left-hand side. Changes
+take effect when you press **Save Settings**. Three things save on their own:
+result forwarding with its own button, backup settings as soon as you change
+them, and the InteLIS connection code when you apply it.
 
 ## System
 
@@ -10,15 +12,16 @@ takes effect until you press **Save Settings**.
 | **Testing Lab Code/ID** | A unique identifier for the laboratory, e.g. `LAB001`. It travels with every result. |
 | **Testing Lab Name** | The laboratory's name, as it should appear on results. |
 | **Display Date Format** | How dates are shown on screen: `16-Sep-2026` (the default), `16-09-2026`, `16/09/2026`, `16.09.2026`, `09/16/2026` or `2026-09-16`. Each choice is shown with today's date. It changes only the display. Stored results, raw data and what the LIS receives keep their own format. Hover over a date in the results to see the stored value. |
-| **Time Zone** | The zone used to record when a result or transmission is received, shown as **Received On**. It starts as this computer's zone. Type part of a name or an offset to search, such as `Kampala` or `+03:00`. Times sent by the instrument, such as when a test was analysed, are stored as sent. Results already stored keep their time. Before 4.8.0 the received time came from the database: UTC in SQLite and the server's own zone in MySQL. |
+| **Time Zone** | The zone used to record when a result or transmission is received, shown as **Received On**. It starts as this computer's zone. Type part of a zone name or an offset, such as `+03:00`, to search. Times sent by the instrument, such as when a test was analysed, are stored as sent. Results already stored keep their time. Before 4.8.0 the received time came from the database: UTC in SQLite and the server's own zone in MySQL. |
 | **Auto-connect on startup** | `Yes` skips the login screen and connects every instrument when the application opens. `No` shows the login screen and leaves connecting to you. |
 
-The **SQLite Database Path** is shown rather than asked for: it is where results
+The **SQLite Database Path** is shown rather than asked for. It is where results
 are stored on this machine, and the tool decides it.
 
-## MySQL *(optional)*
+## MySQL
 
-Configure this if your LIS reads results from MySQL.
+This section is optional. Configure it under **Database** if your LIS reads
+results from MySQL.
 
 | Field | What it is |
 |-------|------------|
@@ -38,14 +41,14 @@ configuration that depends on it.
 
 ## Instruments
 
-**+ Add Instrument** for each analyzer this tool will talk to.
+Press **Add Instrument** for each analyzer this tool talks to.
 
 ### Connection
 
 | Field | What it is |
 |-------|------------|
-| **Connection Mode** | `TCP Server` — the analyzer connects to this tool. `TCP Client` — this tool connects to the analyzer. The analyzer's own configuration decides which one you need. |
-| **Communication Protocol** | `ASTM`, `ASTM (with checksum)`, or `HL7`. |
+| **Connection Mode** | `TCP Server`: the analyzer connects to this tool. `TCP Client`: this tool connects to the analyzer. The analyzer's own configuration decides which one you need. |
+| **Communication Protocol** | `ASTM (without checksum)`, `ASTM (with checksum)`, or `HL7`. |
 | **IP Address** | In server mode, the address on this machine to listen on. In client mode, the analyzer's address. |
 | **Port Number** | 1–65535, matching what the analyzer is configured for. |
 
@@ -62,7 +65,7 @@ configuration that depends on it.
 
 | Field | What it is |
 |-------|------------|
-| **Analyzer Type** | The model. Roche cobas Taqman, 4800, 5800, 6800/8800; Abbott m2000, Alinity m; Cepheid GeneXpert; or one of the generic ASTM and HL7 choices. |
+| **Analyzer Type** | The model. Roche Cobas Taqman, 4800, 5800 or 6800/8800, Abbott m2000 or Alinity M, Cepheid GeneXpert, or one of the generic ASTM and HL7 choices. |
 | **Instrument Name/Code** | The name the LIS knows this analyzer by. It is what results are mapped by, so it has to match what the LIS expects. |
 | **Display Order** | The order the instruments appear in on the console. |
 
@@ -124,24 +127,25 @@ reprocessing does not store it again. See
 Check with your LIS administrator before adding a rule. The LIS reads the value
 you store, not the one the instrument sent.
 
-## LIS API *(optional)*
+## LIS API
 
-If your LIS offers an API, the tool can fetch the instrument names it expects,
-so the names on both sides match.
+This section is optional. If your LIS offers an API, the tool can fetch the
+instrument names it expects, so the names on both sides match. Open **LIS
+Connection** and choose **My laboratory uses another LIS**.
 
 | Field | What it is |
 |-------|------------|
-| **Base URL** | e.g. `https://lis.example.org` |
+| **LIS API Base URL** | e.g. `https://lis.example.org` |
 | **Auth Type** | `None`, `Bearer Token`, `Basic Auth`, or `API Key` |
-| **Fetch Instruments Endpoint** | e.g. `/api/v1.1/instruments?labId=XYZ` |
+| **Fetch Instruments** | Tick **Enable**, then enter the **Endpoint**, e.g. `/api/v1.1/instruments?labId=XYZ` |
 
-**Fetch Instruments** tests the connection and retrieves the names. You can
-always type them by hand instead.
+**Test / Fetch Instruments** tests the connection and retrieves the names. You
+can type them by hand instead.
 
-## Result forwarding *(optional)*
+## Result forwarding
 
-Result forwarding sends every new result to one more system over HTTP, for
-example an integration engine such as Open Integration Engine or Mirth Connect.
+This section is optional. Result forwarding sends every new result to one more
+system over HTTP, for example an integration engine such as Open Integration Engine or Mirth Connect.
 It does not change MySQL or InteLIS delivery. This section has its own
 **Save forwarding** button. **Save Settings** does not save it.
 
@@ -175,6 +179,7 @@ request a receiver gets.
 
 ## Connecting to InteLIS
 
-If your laboratory uses InteLIS, the **Connection Code** from your facility page
+If your laboratory uses InteLIS, open **LIS Connection** and choose **My
+laboratory uses InteLIS**. The **Connection Code** from your facility page
 configures the laboratory, its instruments and the credentials in one step,
 rather than filling in the sections above. Codes are single-use and expire.
