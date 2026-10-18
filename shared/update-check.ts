@@ -28,7 +28,7 @@ function parseVersion(version: string): { numbers: number[]; preRelease: string 
     return null;
   }
   return {
-    numbers: match[1].split('.').map(part => Number(part)),
+    numbers: match[1].split('.').map(Number),
     preRelease: match[2] ?? ''
   };
 }

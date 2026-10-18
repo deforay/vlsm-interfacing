@@ -6,7 +6,6 @@ import {
   IntelisConnectRequest,
   IntelisActivityEvent,
   IntelisActivitySubmissionResponse,
-  IntelisConnectionError,
   IntelisConnectionProfile,
   IntelisConnectionState,
   IntelisInstallationProfile,
@@ -146,7 +145,7 @@ async function requestJson<T>(url: string, init: RequestInit): Promise<T> {
       headers: {
         Accept: 'application/json',
         'Cache-Control': 'no-store',
-        ...(init.headers || {})
+        ...init.headers
       }
     });
     const payload = await readJsonResponse(response);

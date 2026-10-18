@@ -660,7 +660,7 @@ export class DatabaseService {
     const filteredRecord: any = {};
 
     allowedColumns.forEach((columnName) => {
-      if (Object.prototype.hasOwnProperty.call(record, columnName)) {
+      if (Object.hasOwn(record, columnName)) {
         filteredRecord[columnName] = record[columnName];
       }
     });
@@ -2478,7 +2478,8 @@ export class DatabaseService {
           timestamp: new Date(row.added_on),
           category: row.category || 'operational'
         }));
-        subject.next(logs.reverse());
+        logs.reverse();
+        subject.next(logs);
         subject.complete();
       })
       .catch(err => {

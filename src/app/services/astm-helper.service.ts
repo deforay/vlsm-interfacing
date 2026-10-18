@@ -181,13 +181,13 @@ export class ASTMHelperService {
    */
   extractASTMFrames(buffered: string): { tokens: ASTMFrameToken[]; remainder: string } {
     const tokens: ASTMFrameToken[] = [];
-    const controlBytes = [this.ENQ, this.EOT, this.ACK, this.NAK];
+    const controlBytes = new Set([this.ENQ, this.EOT, this.ACK, this.NAK]);
     let buffer = buffered;
 
     while (buffer.length > 0) {
       const first = buffer.charAt(0);
 
-      if (controlBytes.includes(first)) {
+      if (controlBytes.has(first)) {
         tokens.push({ kind: 'control', text: first });
         buffer = buffer.slice(1);
         continue;
@@ -235,7 +235,7 @@ export class ASTMHelperService {
       let end = buffer.length;
       for (let i = 1; i < buffer.length; i++) {
         const current = buffer.charAt(i);
-        if (current === this.STX || controlBytes.includes(current)) {
+        if (current === this.STX || controlBytes.has(current)) {
           end = i;
           break;
         }
@@ -262,7 +262,7 @@ export class ASTMHelperService {
    * @param frameText The complete frame, starting with STX
    */
   isRepeatedFrame(instrumentId: string, frameText: string): boolean {
-    if (!instrumentId || frameText.charAt(0) !== this.STX) {
+    if (!instrumentId || !frameText.startsWith(this.STX)) {
       return false;
     }
 

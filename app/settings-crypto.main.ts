@@ -9,11 +9,10 @@ import * as crypto from 'node:crypto';
 
 import {
   EncryptedSettingsExport,
-  MIN_PASSPHRASE_LENGTH,
   SETTINGS_EXPORT_SCHEMA_VERSION
 } from '../shared/settings-backup';
 
-export { MIN_PASSPHRASE_LENGTH };
+export { MIN_PASSPHRASE_LENGTH } from '../shared/settings-backup';
 
 // scrypt cost. N=2^15 keeps derivation to roughly a tenth of a second on the
 // low-end machines this runs on — negligible for a once-per-export operation,

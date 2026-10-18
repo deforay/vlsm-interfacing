@@ -47,7 +47,7 @@ export interface Cobas4800Sample {
 }
 
 function sampleGroup(index: number, sample: Cobas4800Sample): string[] {
-  const unit = /cp\/mL$/.test(sample.value) ? '1/mL^^UCUM' : '';
+  const unit = sample.value.endsWith('cp/mL') ? '1/mL^^UCUM' : '';
   const assay = sample.assay ?? '0BHIV1';
   return [
     `SPM|${index}|${sample.sampleId}&ROCHE||""|||||||Q^^HL70369`,

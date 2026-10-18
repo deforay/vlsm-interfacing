@@ -162,7 +162,7 @@ export class HL7HelperService {
       }
 
       // Otherwise, return the last available test result segment
-      return testResultObxSegments[testResultObxSegments.length - 1];
+      return testResultObxSegments.at(-1);
     }
 
     // FALLBACK: Use the original logic but prefer later OBX segments (which typically contain results)
@@ -474,7 +474,7 @@ export class HL7HelperService {
       if (segment.startsWith('SPM|')) {
         groups.push([]);
       }
-      groups[groups.length - 1].push(segment);
+      groups.at(-1).push(segment);
     }
 
     // Specimens listed one after another with every result behind the last
