@@ -525,7 +525,7 @@ export class ConsoleComponent implements OnInit, AfterViewInit, OnDestroy {
           document.body.appendChild(notification);
 
           setTimeout(() => {
-            document.body.removeChild(notification);
+            notification.remove();
           }, 3000);
         }
       }, 1000); // Wait 1 second after component initialization
