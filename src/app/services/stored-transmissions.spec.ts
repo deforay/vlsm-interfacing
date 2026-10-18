@@ -526,6 +526,22 @@ describe('compacting storage', () => {
     expect(s.rows('SELECT transmission_id FROM orders WHERE id = ?', [row.id])[0].transmission_id).toBeNull();
   });
 
+  it('links a result the webhook has not delivered only while the webhook is off', async () => {
+    const s = setup('hl7', 'roche-cobas-4800');
+    storeAsOldBuild(s, COBAS_4800_MESSAGE, '2025-08-17 04:00:00', '2025-08-17 04:00:02');
+    const [row] = s.rows('SELECT id, LENGTH(raw_text) AS length FROM orders LIMIT 1');
+    s.database.prepare('UPDATE orders SET lims_sync_status = 1, result_webhook_status = 0 WHERE id = ?').run(row.id);
+    const link = (webhookDelivered: boolean) => s.dbService.linkResultToTransmission(
+      'sqlite', row.id, 'transmission-1', 'MSH|short', row.length, { storedBefore: '2099-01-01 00:00:00', webhookDelivered }
+    );
+
+    expect(await link(true)).toBe(false);
+    expect(s.rows('SELECT transmission_id FROM orders WHERE id = ?', [row.id])[0].transmission_id).toBeNull();
+
+    expect(await link(false)).toBe(true);
+    expect(s.rows('SELECT transmission_id FROM orders WHERE id = ?', [row.id])[0].transmission_id).toBe('transmission-1');
+  });
+
   it('waits for a run the operator started before compacting in the background', async () => {
     const s = setup('hl7', 'roche-cobas-4800');
     storeAsOldBuild(s, COBAS_4800_MESSAGE, '2025-08-17 04:00:00', '2025-08-17 04:00:02');
@@ -675,5 +691,15 @@ describe('listing raw data', () => {
     expect((await s.dbService.listRawData({ search: '100%' }, 50, 0)).total).toBe(0);
     expect((await s.dbService.listRawData({ search: 'VL260003' }, 50, 0)).total).toBe(1);
     expect((await s.dbService.listRawData({ instrumentId: 'OTHER' }, 50, 0)).total).toBe(0);
+  });
+
+  it('matches %, _ and ! in search text as themselves, not as wildcards', async () => {
+    const s = setup('hl7', 'roche-cobas-4800');
+    await s.receive(mllp(COBAS_4800_MESSAGE));
+
+    expect((await s.dbService.listRawData({ search: 'VL26000_' }, 50, 0)).total).toBe(0);
+    expect((await s.dbService.listRawData({ search: 'VL2600%3' }, 50, 0)).total).toBe(0);
+    expect((await s.dbService.listRawData({ search: 'VL260003!' }, 50, 0)).total).toBe(0);
+    expect((await s.dbService.listRawData({ search: 'VL2600' }, 50, 0)).total).toBe(1);
   });
 });

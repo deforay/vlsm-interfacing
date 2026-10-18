@@ -192,6 +192,19 @@ try {
     assert.deepEqual(requests[0].body.results, []);
   }));
 
+  await check('Basic authentication sends the username and the saved password', () => withHandlers(async ({ store, invoke }) => {
+    await invoke('result-webhook-save', { enabled: true, url: receiver, authType: 'basic', username: 'lab', secret: 'pa:ss' });
+    const sealed = store.get('resultWebhook').encryptedSecret;
+    // Saving again without a secret keeps the one already stored.
+    const resaved = await invoke('result-webhook-save', { enabled: true, url: receiver, authType: 'basic', username: 'lab' });
+    assert.equal(resaved.ok, true);
+    assert.equal(store.get('resultWebhook').encryptedSecret, sealed);
+
+    const result = await invoke('result-webhook-test', { enabled: true, url: receiver, authType: 'basic', username: 'lab' });
+    assert.equal(result.ok, true);
+    assert.equal(requests[0].headers.Authorization, `Basic ${Buffer.from('lab:pa:ss', 'utf8').toString('base64')}`);
+  }));
+
   await check('forwarding can be turned off when the saved secret no longer decrypts', () => withHandlers(async ({ store, invoke }) => {
     await invoke('result-webhook-save', { enabled: true, url: receiver, authType: 'bearer', secret: 'tok3n' });
     store.set('resultWebhook', { ...store.get('resultWebhook'), encryptedSecret: Buffer.from('garbage').toString('base64') });
