@@ -1,4 +1,4 @@
-import { app, BrowserWindow, screen, ipcMain, dialog, Tray, Menu, nativeImage } from 'electron';
+import { app, BrowserWindow, screen, ipcMain, dialog, Tray, Menu, nativeImage, shell } from 'electron';
 import * as path from 'node:path';
 import * as fs from 'node:fs';
 import * as mysql from 'mysql2';
@@ -517,7 +517,11 @@ function configureLogging(): void {
   // means a rename cannot scatter them, and there is one folder to ask a
   // laboratory for when something needs explaining.
   log.transports.file.resolvePathFn = () =>
-    path.join(app.getPath('userData'), 'logs', log.transports.file.fileName as string);
+    path.join(logsDirectory(), log.transports.file.fileName as string);
+}
+
+function logsDirectory(): string {
+  return path.join(app.getPath('userData'), 'logs');
 }
 
 function createWindow(): BrowserWindow {
@@ -867,6 +871,19 @@ try {
         if (win.isMinimized()) win.restore();
         win.show();
         win.focus();
+      }
+    });
+
+    // Opens the folder support asks for. The path is fixed here, so the
+    // renderer cannot open any other folder through this handler.
+    ipcMain.handle('open-logs-folder', async () => {
+      const dir = logsDirectory();
+      try {
+        fs.mkdirSync(dir, { recursive: true });
+        const error = await shell.openPath(dir);
+        return error ? { status: 'error', message: error } : { status: 'success' };
+      } catch (err) {
+        return { status: 'error', message: formatUnknownError(err) };
       }
     });
 
