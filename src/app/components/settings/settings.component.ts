@@ -1096,7 +1096,7 @@ export class SettingsComponent implements OnInit, OnDestroy {
         this.electronStoreService.set('lisApiConfig', lisApiConfig);
 
         // Remove the saving notification
-        document.body.removeChild(savingNotification);
+        savingNotification.remove();
 
         // Show success notification
         const savedNotice = new window.Notification('Success', {
@@ -1145,7 +1145,7 @@ export class SettingsComponent implements OnInit, OnDestroy {
       document.body.appendChild(errorNotification);
 
       setTimeout(() => {
-        document.body.removeChild(errorNotification);
+        errorNotification.remove();
       }, 5000);
     }
   }
@@ -1270,7 +1270,7 @@ export class SettingsComponent implements OnInit, OnDestroy {
         document.body.appendChild(notification);
 
         setTimeout(() => {
-          document.body.removeChild(notification);
+          notification.remove();
         }, 2000);
       })
       .catch(err => {
