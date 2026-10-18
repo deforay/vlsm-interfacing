@@ -165,6 +165,12 @@ export interface IntelisDeliveryLimits {
 
 export const INTELIS_CONNECTION_CODE_LENGTH = 12;
 
+function withoutTrailingSlashes(value: string): string {
+  let end = value.length;
+  while (end > 0 && value[end - 1] === '/') end--;
+  return value.slice(0, end);
+}
+
 export function normalizeIntelisConnectionCode(value: string): string {
   const normalized = (value || '').toUpperCase().replace(/[^0-9A-Z]/g, '');
   return normalized.replaceAll(/[IL]/g, '1').replaceAll('O', '0').replaceAll('U', 'V');
@@ -197,7 +203,7 @@ export function normalizeIntelisBaseUrl(value: string): string {
     throw new Error('The InteLIS URL cannot contain credentials, query parameters, or a fragment.');
   }
 
-  parsed.pathname = parsed.pathname.replace(/\/+$/, '');
+  parsed.pathname = withoutTrailingSlashes(parsed.pathname);
   return parsed.toString().replace(/\/$/, '');
 }
 
