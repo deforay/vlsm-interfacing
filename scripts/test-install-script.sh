@@ -24,6 +24,9 @@ fake_dir=""
 calls=""
 output=""
 status=0
+# Conditions that expect evaluates once install.sh has run.
+EXITED_ZERO='[[ ${status} -eq 0 ]]'
+EXITED_NONZERO='[[ ${status} -ne 0 ]]'
 
 # Builds a PATH of stand-ins: each records how it was called, and exits with the
 # code the case under test asks for.
@@ -113,6 +116,7 @@ esac
 FAKE
 
   chmod +x "${fake_dir}"/*
+  return 0
 }
 
 # Runs install.sh with the stand-ins in front of the real tools.
@@ -120,6 +124,7 @@ run_install() {
   setup_fakes
   output="$(CALLS="${calls}" PATH="${fake_dir}:${PATH}" bash "${root}/scripts/install.sh" 2>&1)"
   status=$?
+  return 0
 }
 
 expect() {
@@ -139,26 +144,26 @@ expect() {
 
 echo "a machine with nothing installed yet"
 INSTALLED="" APT_INSTALL_EXIT=0 APT_FIX_EXIT=0 run_install
-expect "installs and reports success" '[[ ${status} -eq 0 ]]'
+expect "installs and reports success" "${EXITED_ZERO}"
 expect "goes through apt in one transaction" 'grep -q "apt-get install -y" "${calls}"'
 expect "removes nothing" '! grep -q "dpkg --remove" "${calls}"'
 
 echo "a machine still carrying the package the tool shipped under before"
 INSTALLED="vlsm-interfacing=4.1.15" APT_INSTALL_EXIT=0 APT_FIX_EXIT=0 run_install
-expect "installs and reports success" '[[ ${status} -eq 0 ]]'
+expect "installs and reports success" "${EXITED_ZERO}"
 expect "leaves the removal to apt rather than doing it first" '! grep -q "dpkg --remove" "${calls}"'
 
 echo "an install that fails, with nothing broken for the repair to fix"
 INSTALLED="vlsm-interfacing=4.1.15" APT_INSTALL_EXIT=100 APT_FIX_EXIT=0 run_install
 # The expensive lie: the repair exits 0 because there is nothing to repair.
-expect "does not report success" '[[ ${status} -ne 0 ]]'
+expect "does not report success" "${EXITED_NONZERO}"
 expect "says the requested version is not installed" 'grep -q "requested version is not installed" <<< "${output}"'
 expect "never removed what the laboratory was running" '! grep -q "dpkg --remove" "${calls}"'
 
 echo "an upgrade of this same package that fails"
 # The name is installed either way, so only the version tells the truth.
 INSTALLED="intelis-interfacing=4.2.1" APT_INSTALL_EXIT=100 APT_FIX_EXIT=0 run_install
-expect "does not mistake the older version for the new one" '[[ ${status} -ne 0 ]]'
+expect "does not mistake the older version for the new one" "${EXITED_NONZERO}"
 expect "tells the operator how to check the machine" 'grep -q "apt-get -f install" <<< "${output}"'
 expect "promises nothing about what was left behind" '! grep -q "has not been changed" <<< "${output}"'
 
@@ -167,7 +172,7 @@ echo "an install that unpacked the package but could not configure it"
 # version alone would call a half-installed application a working one.
 INSTALLED="intelis-interfacing=4.3.0" HALF_CONFIGURED="intelis-interfacing" \
   APT_INSTALL_EXIT=100 APT_FIX_EXIT=100 run_install
-expect "does not call a half-installed package a working one" '[[ ${status} -ne 0 ]]'
+expect "does not call a half-installed package a working one" "${EXITED_NONZERO}"
 expect "says the requested version is not installed" 'grep -q "requested version is not installed" <<< "${output}"'
 
 echo "a package an administrator has pinned with apt-mark hold"
@@ -175,12 +180,12 @@ echo "a package an administrator has pinned with apt-mark hold"
 # not a failure, and the application runs.
 INSTALLED="intelis-interfacing=4.3.0" HELD="intelis-interfacing" \
   APT_INSTALL_EXIT=100 APT_FIX_EXIT=0 run_install
-expect "recognises a held package as installed" '[[ ${status} -eq 0 ]]'
+expect "recognises a held package as installed" "${EXITED_ZERO}"
 
 echo "an install that fails and is then repaired"
 INSTALLED="vlsm-interfacing=4.1.15 intelis-interfacing=4.3.0" HALF_CONFIGURED="" \
   APT_INSTALL_EXIT=100 APT_FIX_EXIT=0 run_install
-expect "reports success once the requested version is really there" '[[ ${status} -eq 0 ]]'
+expect "reports success once the requested version is really there" "${EXITED_ZERO}"
 expect "says so plainly" 'grep -q "after dependency repair" <<< "${output}"'
 
 if [[ ${failures} -ne 0 ]]; then
