@@ -556,7 +556,7 @@ export class DatabaseService {
 
     } catch (error) {
       // Permissive mode - log and continue, but don't set hasRunMigrations so retry is possible
-      console.log('ℹ️ Migration process completed with some skipped items');
+      console.log('ℹ️ Migration process completed with some skipped items:', error);
     }
   }
 
@@ -1153,7 +1153,12 @@ export class DatabaseService {
     if (typeof value === 'string' && /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/.test(value.trim())) {
       return value.trim();
     }
-    const date = value instanceof Date ? value : value ? new Date(value) : new Date();
+    let date = new Date();
+    if (value instanceof Date) {
+      date = value;
+    } else if (value) {
+      date = new Date(value);
+    }
     const safeDate = Number.isNaN(date.getTime()) ? new Date() : date;
     return safeDate.toISOString().slice(0, 19).replace('T', ' ');
   }
@@ -1179,7 +1184,7 @@ export class DatabaseService {
                 record.instrument_id
               );
             })
-            .finally(() => this.resyncIntelisStatusesToMySQL(() => {}, () => {}));
+            .finally(() => this.resyncIntelisStatusesInBackground());
         },
         (mysqlError) => {
           this.logCriticalDatabaseIssue(
@@ -1238,6 +1243,11 @@ export class DatabaseService {
     return records;
   }
 
+  /** Copies InteLIS statuses to MySQL without waiting for or reporting the outcome. */
+  private resyncIntelisStatusesInBackground(): void {
+    this.resyncIntelisStatusesToMySQL(() => {}, () => {});
+  }
+
   private processResyncRecords(records: any[], success: any, errorf: any) {
     // WHY: previous version did `records.forEach(execQuery)` which fired N
     // parallel inserts via IPC on each tick. With a backlog this saturated
@@ -1258,6 +1268,7 @@ export class DatabaseService {
         }
 
         batchIndex++;
+        const firstInstrumentId = batch.find(r => !!r.instrument_id)?.instrument_id ?? null;
         // Normalize each record to the full column set, nulls for missing
         // fields. Required for the bulk-insert `VALUES ?` shape.
         const mysqlValues = batch.map(record =>
@@ -1268,7 +1279,6 @@ export class DatabaseService {
           () => {
             this.markOrdersAsResynced(batch)
               .catch((error: any) => {
-                const firstInstrumentId = batch.find(r => !!r.instrument_id)?.instrument_id ?? null;
                 this.logCriticalDatabaseIssue(
                   `Results replicated but local status update failed: ${error?.message ?? error}`,
                   'database',
@@ -1276,7 +1286,7 @@ export class DatabaseService {
                 );
               })
               .finally(() => {
-                this.resyncIntelisStatusesToMySQL(() => {}, () => {});
+                this.resyncIntelisStatusesInBackground();
                 processNextBatch();
               });
           },
@@ -1285,7 +1295,6 @@ export class DatabaseService {
             // and move on so we don't get stuck retrying the same batch
             // forever — those records stay mysql_inserted=0 and will be
             // retried next tick.
-            const firstInstrumentId = batch.find(r => !!r.instrument_id)?.instrument_id ?? null;
             this.logCriticalDatabaseIssue(
               `Error resyncing orders batch (${batch.length} records) to MySQL: ${batchError?.message ?? batchError}`,
               'database',
@@ -1614,7 +1623,8 @@ export class DatabaseService {
     }
     const search = (filter.search ?? '').trim();
     if (search) {
-      const pattern = `%${search.replace(/[!%_]/g, character => `!${character}`)}%`;
+      const escaped = search.replaceAll(/[!%_]/g, '!$&');
+      const pattern = `%${escaped}%`;
       clauses.push("(instrument_id LIKE ? ESCAPE '!' OR machine LIKE ? ESCAPE '!' OR added_on LIKE ? ESCAPE '!' OR data LIKE ? ESCAPE '!')");
       params.push(pattern, pattern, pattern, pattern);
     }
@@ -1832,9 +1842,12 @@ export class DatabaseService {
     previousLength: number,
     settled: SettledResults | null = null
   ): Promise<boolean> {
-    const settledClause = settled
-      ? ` AND lims_sync_status <> 0${settled.webhookDelivered ? ' AND result_webhook_status <> 0' : ''}`
-      : '';
+    let settledClause = '';
+    if (settled) {
+      settledClause = settled.webhookDelivered
+        ? ' AND lims_sync_status <> 0 AND result_webhook_status <> 0'
+        : ' AND lims_sync_status <> 0';
+    }
     const result = await this.runOn(
       store,
       `UPDATE orders SET transmission_id = ?, raw_text = ?

@@ -204,9 +204,12 @@ function runScheduledBackupIfDue(deps: SettingsBackupDeps): void {
       return;
     }
     const result = writeScheduledBackup(deps);
-    console.log(result.written
-      ? `Settings backup written: ${result.filePath}${result.pruned ? ` (pruned ${result.pruned})` : ''}`
-      : 'Settings unchanged since the last backup; nothing written.');
+    if (result.written) {
+      const pruned = result.pruned ? ` (pruned ${result.pruned})` : '';
+      console.log(`Settings backup written: ${result.filePath}${pruned}`);
+    } else {
+      console.log('Settings unchanged since the last backup; nothing written.');
+    }
   } catch (err) {
     // A failed backup must never take down the app or interrupt instrument
     // traffic; it is reported and retried on the next tick.

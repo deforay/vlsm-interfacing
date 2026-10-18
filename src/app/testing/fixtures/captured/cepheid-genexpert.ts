@@ -71,6 +71,8 @@ export function genexpertMessage(test: GeneXpertTest): string[] {
     const assayName = test.assay === 'MTB-RIF_ULTRA 2' ? 'Xpert MTB-RIF Ultra^4^MTB^' : 'Xpert_HIV-1 Qual^2^HIV-1^';
     const analyte = test.assay === 'MTB-RIF_ULTRA 2' ? 'MTB' : 'HIV-1';
     const failed = outcome === 'ERROR' || outcome === 'INVALID';
+    let analyteResult = outcome === 'DETECTED' ? 'POS^' : 'NEG^';
+    if (failed) analyteResult = 'NO RESULT^';
     records.push(resultRecord(1, `^${test.assay}^^^${assayName}`, `${outcome}^`));
     if (test.error) {
       records.push(`C|1|I|Error^${test.error.code}^${test.error.title}^${test.error.description}^${GENEXPERT_END_TIME}|N`);
@@ -79,7 +81,7 @@ export function genexpertMessage(test: GeneXpertTest): string[] {
       detail(2, `^^^${test.assay}^^^SPC^`, failed ? 'NO RESULT^' : 'PASS^'),
       detail(3, `^^^${test.assay}^^^SPC^Ct`, failed ? '^0.0' : '^34.3'),
       detail(4, `^^^${test.assay}^^^SPC^EndPt`, failed ? '^0.0' : '^231.0'),
-      detail(5, `^^^${test.assay}^^^${analyte}^`, failed ? 'NO RESULT^' : outcome === 'DETECTED' ? 'POS^' : 'NEG^'),
+      detail(5, `^^^${test.assay}^^^${analyte}^`, analyteResult),
       detail(6, `^^^${test.assay}^^^${analyte}^Ct`, outcome === 'DETECTED' ? '^24.8' : '^0.0'),
       detail(7, `^^^${test.assay}^^^${analyte}^EndPt`, outcome === 'DETECTED' ? '^446.0' : '^0.0'),
       resultRecord(8, `^${test.assay}^^^${assayName.replace(/\^[^^]*\^$/, '^QC^')}`, failed ? `${outcome}^` : '^')
@@ -185,7 +187,12 @@ export function genexpertFrMessage(test: GeneXpertFrTest): string[] {
   ];
 
   if (test.assay === 'HIV-1') {
-    const analyte = failed ? 'PAS DE RÉSULTAT^' : quantified ? 'POS^' : test.result === 'DÉTECTÉ' ? 'POS^' : 'NÉG^';
+    let analyte = 'NÉG^';
+    if (failed) {
+      analyte = 'PAS DE RÉSULTAT^';
+    } else if (quantified || test.result === 'DÉTECTÉ') {
+      analyte = 'POS^';
+    }
     const control = failed ? 'PAS DE RÉSULTAT^' : 'RÉUSSITE^';
     records.push(
       frResultRecord(1, '^^^HIV-1^Xpert HIV-1 Viral Load XC^3^^', quantified ? `^${test.result}` : `${test.result}^`, 'copies/mL', '40,00 to 10000000,00', test.flag),

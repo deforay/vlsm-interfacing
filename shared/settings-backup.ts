@@ -194,6 +194,12 @@ export function prepareSettingsForExport(
   return options.includeCredentials ? settings : scrubSensitiveSettings(settings);
 }
 
+function compareCodeUnits(a: string, b: string): number {
+  if (a < b) return -1;
+  if (a > b) return 1;
+  return 0;
+}
+
 /**
  * Serialises settings with object keys in a stable order.
  *
@@ -212,7 +218,7 @@ function stableStringify(value: any): string {
   // Code-unit order, not localeCompare: the result must be identical on every
   // computer, whatever its language settings.
   const entries = Object.keys(value)
-    .sort((a, b) => (a < b ? -1 : a > b ? 1 : 0))
+    .sort(compareCodeUnits)
     .map(key => `${JSON.stringify(key)}:${stableStringify(value[key])}`);
   return `{${entries.join(',')}}`;
 }
