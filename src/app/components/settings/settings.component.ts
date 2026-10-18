@@ -973,8 +973,7 @@ export class SettingsComponent implements OnInit, OnDestroy {
 
     for (let interfaceName in networkInterfaces) {
       const iface = networkInterfaces[interfaceName];
-      for (let i = 0; i < iface.length; i++) {
-        const alias = iface[i];
+      for (const alias of iface) {
         if (alias.family === 'IPv4' && !alias.internal) {
           ips.push(alias.address);
         }
@@ -1044,13 +1043,13 @@ export class SettingsComponent implements OnInit, OnDestroy {
     const that = this;
     if (that.settingsForm.valid) {
       // Store the form values before disconnecting instruments
-      const updatedSettings = JSON.parse(JSON.stringify(that.settingsForm.value));
+      const updatedSettings = structuredClone(that.settingsForm.value);
 
       // Encrypt the MySQL password before saving
       updatedSettings.commonSettings.mysqlPassword = this.cryptoService.encrypt(updatedSettings.commonSettings.mysqlPassword);
 
       // Encrypt LIS API credentials before saving
-      const lisApiConfig = JSON.parse(JSON.stringify(updatedSettings.lisApiSettings));
+      const lisApiConfig = structuredClone(updatedSettings.lisApiSettings);
       if (lisApiConfig.credentials) {
         lisApiConfig.credentials.token = this.cryptoService.encrypt(lisApiConfig.credentials.token || '');
         lisApiConfig.credentials.username = this.cryptoService.encrypt(lisApiConfig.credentials.username || '');
@@ -1218,7 +1217,7 @@ export class SettingsComponent implements OnInit, OnDestroy {
     const originalValue = input.value;
 
     // Remove non-numeric characters
-    const numericValue = originalValue.replace(/[^0-9]/g, '');
+    const numericValue = originalValue.replaceAll(/\D/g, '');
 
     // If the value changed (non-numeric characters were found)
     if (originalValue !== numericValue) {
