@@ -216,7 +216,7 @@ async function createOnlineTestBackup(database, destination) {
 
   // Node 22.12-22.15 pre-dates node:sqlite.backup. VACUUM INTO exercises the
   // same recovery contract for developers using the oldest supported runtime.
-  const escapedDestination = destination.replace(/'/g, "''");
+  const escapedDestination = destination.replaceAll("'", "''");
   database.exec(`VACUUM INTO '${escapedDestination}'`);
 }
 

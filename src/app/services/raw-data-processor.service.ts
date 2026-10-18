@@ -732,7 +732,7 @@ export class RawDataProcessorService {
    */
   static recordsOf(text: string): string {
     return String(text ?? '')
-      .replace(/##START##/g, '\n')
+      .replaceAll('##START##', '\n')
       .replace(/(?:<ETX>|<ETB>|[\x03\x17])[0-9A-Fa-f]{0,2}/g, '\n')
       .replace(/<(?:CR|LF)>|[\r\n]/g, '\n')
       .replace(/<(?:STX|EOT|ENQ|ACK|NAK)>/g, '')
