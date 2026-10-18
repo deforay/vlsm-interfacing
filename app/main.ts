@@ -1,6 +1,6 @@
 import { app, BrowserWindow, screen, ipcMain, dialog, Tray, Menu, nativeImage } from 'electron';
-import * as path from 'path';
-import * as fs from 'fs';
+import * as path from 'node:path';
+import * as fs from 'node:fs';
 import * as mysql from 'mysql2';
 import * as sqlite3 from '@vscode/sqlite3';
 

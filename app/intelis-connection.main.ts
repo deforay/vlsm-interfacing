@@ -1,6 +1,6 @@
 import { ipcMain, net, safeStorage } from 'electron';
-import { randomUUID } from 'crypto';
-import * as os from 'os';
+import { randomUUID } from 'node:crypto';
+import * as os from 'node:os';
 import {
   buildIntelisApiUrl,
   IntelisConnectRequest,

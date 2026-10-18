@@ -1,5 +1,5 @@
 import { ipcMain, net, safeStorage } from 'electron';
-import { randomUUID } from 'crypto';
+import { randomUUID } from 'node:crypto';
 import type * as sqlite3 from '@vscode/sqlite3';
 import {
   buildResultWebhookPayload,
