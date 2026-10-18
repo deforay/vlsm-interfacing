@@ -165,7 +165,7 @@ export class SettingsComponent implements OnInit, OnDestroy {
 
     const commonSettingsStore = this.electronStoreService.get('commonConfig');
     const instrumentSettingsStore = (this.electronStoreService.get('instrumentsConfig') || [])
-      .sort((a, b) => (parseInt(a.displayorder, 10) || Number.MAX_SAFE_INTEGER) - (parseInt(b.displayorder, 10) || Number.MAX_SAFE_INTEGER));
+      .sort((a, b) => (Number.parseInt(a.displayorder, 10) || Number.MAX_SAFE_INTEGER) - (Number.parseInt(b.displayorder, 10) || Number.MAX_SAFE_INTEGER));
     const lisApiConfigStore = this.electronStoreService.get('lisApiConfig');
     this.appPath = this.electronStoreService.get('appPath');
     this.appVersion = this.electronStoreService.get('appVersion');
@@ -182,8 +182,8 @@ export class SettingsComponent implements OnInit, OnDestroy {
           (control) => {
             const value = control.value;
             if (!value) return null; // Allow empty value since MySQL is optional
-            const portNum = parseInt(value);
-            return (isNaN(portNum) || portNum < 1 || portNum > 65535) ? { pattern: true } : null;
+            const portNum = Number.parseInt(value, 10);
+            return (Number.isNaN(portNum) || portNum < 1 || portNum > 65535) ? { pattern: true } : null;
           }
         ]],
         mysqlDb: [''],
@@ -956,8 +956,8 @@ export class SettingsComponent implements OnInit, OnDestroy {
         (control) => {
           const value = control.value;
           if (!value) return null;
-          const portNum = parseInt(value);
-          return (isNaN(portNum) || portNum < 1 || portNum > 65535) ? { pattern: true } : null;
+          const portNum = Number.parseInt(value, 10);
+          return (Number.isNaN(portNum) || portNum < 1 || portNum > 65535) ? { pattern: true } : null;
         }
       ]],
       interfaceConnectionMode: ['', Validators.required],
@@ -1000,8 +1000,8 @@ export class SettingsComponent implements OnInit, OnDestroy {
         (control) => {
           const value = control.value;
           if (!value) return null;
-          const portNum = parseInt(value);
-          return (isNaN(portNum) || portNum < 1 || portNum > 65535) ? { pattern: true } : null;
+          const portNum = Number.parseInt(value, 10);
+          return (Number.isNaN(portNum) || portNum < 1 || portNum > 65535) ? { pattern: true } : null;
         }
       ]],
       interfaceConnectionMode: ['', Validators.required],
@@ -1242,7 +1242,7 @@ export class SettingsComponent implements OnInit, OnDestroy {
 
     // Validate range (1-65535)
     if (numericValue) {
-      const portNum = parseInt(numericValue);
+      const portNum = Number.parseInt(numericValue, 10);
       if (portNum < 1 || portNum > 65535) {
         if (index === 'mysqlPort') {
           this.settingsForm.get('commonSettings.mysqlPort').setErrors({ pattern: true });

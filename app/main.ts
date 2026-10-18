@@ -262,7 +262,7 @@ async function runSqliteMigrations(db, migrationsPath, forceReplay = false) {
       continue;
     }
 
-    const version = parseInt(file.split('.')[0], 10);
+    const version = Number.parseInt(file.split('.')[0], 10);
     const insert = await sqliteRun(db, 'INSERT OR IGNORE INTO versions (version, filename) VALUES (?, ?)', [version, file]);
     if (!insert.ok) {
       log.error(`Failed to record SQLite migration ${file} as applied: ${insert.err?.message}`);

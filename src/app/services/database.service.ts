@@ -452,7 +452,7 @@ export class DatabaseService {
       // STEP 7: Identify pending migrations
       const migrations = migrationFiles
         .map(file => ({
-          version: parseInt(file.replace('.sql', ''), 10),
+          version: Number.parseInt(file.replace('.sql', ''), 10),
           file: file
         }))
         .filter(migration => {
