@@ -8,50 +8,65 @@ This is how the code is worked on, not something the tool does, so it is kept
 out of the published documentation.
 
 ```bash
-bin/review                  # everything since the last reviewed commit
-bin/review <a>..<b>         # a range
-bin/review <commit-sha>     # one commit, without moving the mark
+bin/review                  # the commits not yet recorded as reviewed
+bin/review <a>..<b>         # a range; recorded when it ends at HEAD
+bin/review <commit-sha>     # one commit, without recording it
 bin/review --uncommitted    # the working tree, before committing
+bin/review --pending        # list the commits not yet recorded as reviewed
+bin/review --mark [sha]     # record a commit (default HEAD) as reviewed
+bin/review --verify ...     # add a pass that tries to refute the findings
 ```
 
-## The mark
+## The ledger
 
-The mark records what has already been read. It lives in the clone's git
-directory, at `.git/reviewed`, so recording a read never adds a commit. Each
-line is one finished review, the reviewed-up-to commit first.
+The ledger records which commits have been read. It lives in the clone's git
+directory, at `.git/reviewed-commits.txt`, so recording a read never adds a
+commit. Set `REVIEW_LEDGER` in `.env` to keep it somewhere that outlives the
+clone. Each line holds a commit, its patch-id, the time and the subject.
 
-```
-991e072  2026-08-13  release 4.1.15, the version in the field when this record began
-7663e16  2026-09-04  991e072..7663e16
-4283d0d  2026-09-04  7663e16..4283d0d
-```
+A bare `bin/review` reads every commit on `HEAD` that the ledger does not
+account for, and records them when the reader finishes cleanly. The list is
+fixed before the reader starts, so a commit that lands during a review is not
+recorded as read. A single-commit or working-tree read is a re-read and records
+nothing.
 
-A bare `bin/review` starts from the last line, so nobody has to remember where
-the previous read stopped. The mark moves only when a review ends at `HEAD` and
-the reader exits cleanly. A single-commit or working-tree read is a re-read and
-leaves it alone. Lines are append-only. Correct a mistake by adding one.
+`git land` rebase-merges, so each commit gets a new identity on master. The
+ledger matches a commit by its patch-id as well as its identity, so a commit
+read on its branch is not read again after it lands.
 
-The mark is local to each clone. `git land` rebase-merges, so commits get new
-identities on master and a mark taken on a branch is not an ancestor of master.
-When the mark is not an ancestor of `HEAD`, a bare `bin/review` stops and asks
-for a range.
+An empty ledger starts ten commits back. Anything older is deemed shipped.
 
-The mark used to be a tracked `REVIEWED` file. Its last version is in git
-history, and the first run in a clone that still has it copies it to
-`.git/reviewed`.
+## The verify pass
+
+One pass that both finds and reports has nothing pushing back on it, and that is
+where false positives are. `--verify` gives the findings to a second pass with
+one job: refute each one. It answers CONFIRMED, REFUTED or UNVERIFIED, with the
+file and line that settles it, and reports only what survives. It doubles the
+cost of a run, so it is off unless asked. `REVIEW_VERIFY=1` in `.env` makes it
+the default.
 
 ## Naming the reader
 
 The reviewing CLI is named by `REVIEW_AGENT`, in the untracked `.env` or in your
 shell profile, so the repository carries no vendor name and the reader can be
-swapped without editing anything:
+swapped without editing anything. It is a command line, so a reader that wants a
+subcommand and one that wants a flag are both a setting:
 
 ```bash
-REVIEW_AGENT=<your-review-cli>
+REVIEW_AGENT='<your-review-cli> <subcommand>'
+REVIEW_AGENT_STDIN=1                  # for a reader that takes the prompt on stdin
+REVIEW_AGENT_FALLBACK='<another-cli> ...'
 ```
 
-Only that one key is read from `.env`. A CLI that reads a diff has no business
-inheriting the database password.
+`REVIEW_AGENT_FALLBACK` is a second reader for when the first is out of usage.
+The script switches only when the first exits non-zero with a message matching
+`REVIEW_LIMIT_PATTERN` (default `usage limit|rate limit|quota`), so a finding
+that mentions a limit never triggers it. A reader that exits cleanly without
+printing a review counts as not having reviewed, because some CLIs exit 0 after
+refusing a command they needed. A run that no reader finishes records nothing.
+
+Only the `REVIEW_` keys are read from `.env`. A CLI that reads a diff has no
+business inheriting the database password.
 
 ## What comes back, and what to do with it
 

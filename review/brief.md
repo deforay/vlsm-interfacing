@@ -59,5 +59,26 @@ transmission that would trigger it beats a description of it. If a defect could
 be caught by a test in `analyzer-captures.spec.ts` or through
 `wire-harness.ts` and is not, say so — the missing test is part of the finding.
 
+Carry the evidence. Every claim about code names the file and line and quotes
+the line it rests on. If you cannot find the line that proves a claim, report
+it as UNVERIFIED and say what you looked for. That is a third outcome beside a
+finding and a clear, and it is always better than asserting on thin evidence.
+
+- When a hand-maintained list is missing an entry (an analyzer, a protocol, a
+  migration, a settings field), trace the whole path and report every entry it
+  is missing, not the first.
+- A test that would still pass if the invariant it guards were deleted is a
+  finding. Name the line that should fail and does not.
+- If the commit message or a comment already answers a concern, say why that
+  answer is not enough rather than restating the concern. A trade-off recorded
+  there or in this brief is a rebuttal, not a defect.
+- Report a defect outside the diff separately, not ranked among the diff's
+  findings.
+
+Rank by consequence, not by feel. P1 is a result that reaches the LIS wrong,
+reaches it attached to the wrong sample, or never reaches it. P1 is also an
+installation that cannot upgrade. Everything else starts at P2.
+
 Say plainly when a thing you looked at is fine. A review that reports
-everything as a risk tells the reader nothing about where to look first.
+everything as a risk tells the reader nothing about where to look first. Never
+reach for a finding to avoid an empty review.
