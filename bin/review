@@ -40,10 +40,14 @@ fi
 # machine rather than in the repo. Only the REVIEW_ keys are read: a CLI that
 # reads a diff has no business inheriting the database password or the signing
 # certificate.
+# A linked worktree has no .env of its own, since the file is untracked, so the
+# main checkout's is read instead.
+ENV_FILE=.env
+[ -f "$ENV_FILE" ] || ENV_FILE="$(dirname "$(git rev-parse --path-format=absolute --git-common-dir)")/.env"
 read_env() {
-    [ -f .env ] || return 0
+    [ -f "$ENV_FILE" ] || return 0
     awk -v key="$1" -F= '$0 ~ "^[[:space:]]*" key "[[:space:]]*=" {
-        sub(/^[^=]*=[[:space:]]*/, ""); gsub(/^["'\'']|["'\'']$/, ""); print; exit }' .env
+        sub(/^[^=]*=[[:space:]]*/, ""); gsub(/^["'\'']|["'\'']$/, ""); print; exit }' "$ENV_FILE"
 }
 
 # --git-common-dir rather than --git-dir: in a linked worktree the latter is
