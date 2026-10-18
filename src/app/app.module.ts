@@ -38,6 +38,7 @@ import { BrowserAnimationsModule } from '@angular/platform-browser/animations';
 import { MAT_FORM_FIELD_DEFAULT_OPTIONS } from '@angular/material/form-field';
 import { MatSelectModule } from '@angular/material/select';
 import { TransmissionDialogComponent } from './components/transmission-dialog/transmission-dialog.component';
+import { RestartNoticeComponent } from './components/restart-notice/restart-notice.component';
 import { MatCheckboxModule } from '@angular/material/checkbox';
 import { MatDialogModule } from '@angular/material/dialog';
 import { MatAutocompleteModule } from '@angular/material/autocomplete';
@@ -53,7 +54,8 @@ import { MatDatepickerModule } from '@angular/material/datepicker';
     RawDataComponent,
     DashboardComponent,
     TransmissionDialogComponent,
-    DisplayDateTimePipe
+    DisplayDateTimePipe,
+    RestartNoticeComponent
   ],
   imports: [
     BrowserModule,

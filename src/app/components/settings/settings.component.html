@@ -1084,15 +1084,15 @@
             </div>
             <div class="card-body">
               <div class="form-group">
-                <label for="forceRerunMigrations">Force Re-run Migrations</label>
+                <label for="repairDatabase">Repair Database</label>
                 <p class="help-text">
-                  This will delete the migration history from both SQLite and MySQL and restart the application.
-                  All migrations will be re-applied on next startup. Use this if you suspect the database schema is out of
-                  sync.
+                  Restarts the Interface Tool and applies every database update again, on this computer and on MySQL.
+                  Use it when support asks you to, or when results stop saving after an update. Stored results and
+                  settings are kept.
                 </p>
-                <button id="forceRerunMigrations" type="button" class="btn btn-danger" (click)="forceRerunMigrations()">
+                <button id="repairDatabase" type="button" class="btn btn-outline-primary" (click)="repairDatabase()">
                   <i class="fas fa-sync-alt"></i>
-                  <span>Force Re-run All Migrations</span>
+                  <span>Repair and Restart</span>
                 </button>
               </div>
             </div>

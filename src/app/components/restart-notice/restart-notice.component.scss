@@ -1,0 +1,58 @@
+$primary-color: #1976d2;
+$dark-color: #263238;
+$text-color: #455a64;
+$text-light: #78909c;
+
+.restart-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 2000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+  background: rgba($dark-color, 0.55);
+}
+
+.restart-notice {
+  // Reset the browser's own dialog styles: the backdrop positions it.
+  position: static;
+  margin: 0;
+  border: none;
+  width: 100%;
+  max-width: 28rem;
+  padding: 1.5rem;
+  border-radius: 0.5rem;
+  background: #fff;
+  color: $text-color;
+  box-shadow: 0 1rem 2.5rem rgba(0, 0, 0, 0.25);
+  font-family: "Roboto", "Segoe UI", Arial, sans-serif;
+
+  h2 {
+    margin: 0 0 0.75rem;
+    color: $dark-color;
+    font-size: 1.125rem;
+    font-weight: 600;
+  }
+
+  p {
+    margin: 0 0 0.75rem;
+    line-height: 1.5;
+  }
+
+  .restart-detail {
+    color: $text-light;
+    font-size: 0.875rem;
+  }
+
+  .restart-actions {
+    display: flex;
+    justify-content: flex-end;
+    margin-top: 1.25rem;
+  }
+
+  .btn-primary {
+    background: $primary-color;
+    border-color: $primary-color;
+  }
+}

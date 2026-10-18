@@ -3,7 +3,7 @@ import { ElectronService } from '../core/services';
 import { ElectronStoreService } from './electron-store.service';
 import { CryptoService } from './crypto.service'
 import { LoggingService } from './logging.service';
-import { Observable, Subject } from 'rxjs';
+import { BehaviorSubject, Observable, Subject } from 'rxjs';
 import { v4 as uuidv4 } from 'uuid';
 import { TelemetryEventInput } from '../interfaces/telemetry-event.interface';
 import { RawDataFilter, RawDataStore } from '../interfaces/raw-machine-data.interface';
@@ -90,9 +90,21 @@ export class DatabaseService {
   private migrationDir: string; // Path for migrations
   private hasRunMigrations = false;
   private migrationAutoRetryCount = 0;
-  // Once the schema-error dialog has been shown (and accepted) in this session,
-  // don't show it again — the user is either restarting or has declined.
-  private schemaErrorPromptShown = false;
+  // Once a restart has been asked for in this session, it is not asked for
+  // again: the app is restarting, and many queries can fail in quick succession.
+  private restartRequested = false;
+  private readonly restartRequiredSubject = new BehaviorSubject<boolean>(false);
+  /** True once the database needs a restart to finish updating. */
+  readonly restartRequired$ = this.restartRequiredSubject.asObservable();
+  // Silent SQLite repairs this session. Two is enough: a third would mean the
+  // migrations themselves cannot add what the code needs.
+  private sqliteReplayCount = 0;
+  private sqliteReplay: Promise<boolean> | null = null;
+  // When the last database repair restarted the app, set by the main process.
+  // A schema error soon after one means the repair did not fix it, and
+  // restarting again would loop.
+  private static readonly DATABASE_REPAIR_KEY = 'databaseRepairStartedAt';
+  private static readonly REPAIR_LOOP_WINDOW_MS = 10 * 60 * 1000;
   private static readonly DDL_ERROR_CODES = new Set(['ER_BAD_FIELD_ERROR', 'ER_NO_SUCH_TABLE', 'ER_NO_SUCH_COLUMN']);
   private static readonly DDL_ERROR_PATTERNS = [
     /unknown column/i,
@@ -783,78 +795,101 @@ export class DatabaseService {
   }
 
   /**
-   * Centralized prompt for both SQLite and MySQL schema-out-of-sync errors.
-   * Asks the user whether to re-run migrations now (which restarts the app).
-   * Once shown in a session, won't re-show until the user cancels — that
-   * prevents stacking dialogs when many queries fail in quick succession.
+   * Called when a query still fails because the database structure is behind
+   * the code, after the silent repair has had its chance. The app does not
+   * work properly like that, so it restarts to apply every update before any
+   * instrument connects: RestartNoticeComponent counts down and restarts. The
+   * error goes to the log, not on screen.
+   *
+   * If the last restart for this reason was minutes ago, it did not fix the
+   * problem, and restarting again would loop. The operator is sent to support
+   * instead.
    */
-  private async promptSchemaErrorAndRerunIfConfirmed(source: 'MySQL' | 'SQLite', error: any): Promise<void> {
-    if (this.schemaErrorPromptShown) {
+  private async requestRestartForDatabaseUpdate(source: 'MySQL' | 'SQLite', error: any): Promise<void> {
+    if (this.restartRequested) {
       return;
     }
-    this.schemaErrorPromptShown = true;
+    this.restartRequested = true;
+    this.logCriticalDatabaseIssue(`${source} database structure is out of date; restart required: ${error?.message ?? error}`, 'migration');
+
+    const lastRepair = Number(this.store.get(DatabaseService.DATABASE_REPAIR_KEY)) || 0;
+    if (Date.now() - lastRepair >= DatabaseService.REPAIR_LOOP_WINDOW_MS) {
+      this.restartRequiredSubject.next(true);
+      return;
+    }
 
     try {
-      const result = await this.electronService.ipcRenderer.invoke('show-confirm-dialog', {
-        type: 'warning',
-        buttons: ['Cancel', 'Re-run Migrations Now'],
-        defaultId: 1,
-        cancelId: 0,
-        title: `Database Schema Issue (${source})`,
-        message: `${source} database schema appears to be out of sync.`,
-        detail: `Error: ${error?.message ?? error}\n\nClick "Re-run Migrations Now" to force every ${source} migration file to replay. The application will restart after the replay request is saved.`
+      await this.electronService.ipcRenderer.invoke('show-confirm-dialog', {
+        type: 'error',
+        buttons: ['OK'],
+        defaultId: 0,
+        title: 'Database Needs Attention',
+        message: 'The Interface Tool could not finish updating its database.',
+        detail: `A restart did not fix it. Contact support and send them the log from Settings, Troubleshooting.\n\nDetails: ${error?.message ?? error}`
       });
-
-      if (result?.response === 1) {
-        await this.performForceRerunMigrations(source);
-      } else {
-        // User cancelled — let the prompt fire again later if more DDL errors come in
-        this.schemaErrorPromptShown = false;
-      }
     } catch (dialogErr) {
-      this.schemaErrorPromptShown = false;
-      console.error('Failed to show schema error dialog:', dialogErr);
+      console.error('Failed to show the database notice:', dialogErr);
     }
   }
 
   /**
-   * Shared force-rerun routine used by both the Settings button and the
-   * automatic schema-error dialog.
+   * Re-applies every SQLite migration on the open database, without a
+   * restart. Resolves true when all of them applied. Queries that fail at the
+   * same moment share one replay.
    */
-  public async performForceRerunMigrations(source: 'MySQL' | 'SQLite' = 'MySQL'): Promise<void> {
-    try {
-      await this.resetMysqlMigrations();
-    } catch (err) {
-      if (source === 'MySQL') {
-        this.schemaErrorPromptShown = false;
-        await this.electronService.ipcRenderer.invoke('show-confirm-dialog', {
-          type: 'error',
-          buttons: ['OK'],
-          defaultId: 0,
-          title: 'MySQL Migration Reset Failed',
-          message: 'Could not reset MySQL migration history.',
-          detail: `Error: ${err?.message ?? err}\n\nThe application was not restarted because MySQL migrations would be skipped again. Check the MySQL connection and try re-running migrations.`
-        });
-        throw err;
-      }
-
-      console.warn('MySQL migration reset failed while repairing SQLite schema:', err);
+  private replaySqliteMigrationsSilently(): Promise<boolean> {
+    if (this.sqliteReplay) {
+      return this.sqliteReplay;
     }
+    if (this.sqliteReplayCount >= 2) {
+      return Promise.resolve(false);
+    }
+    this.sqliteReplayCount++;
+    this.sqliteReplay = this.electronService.ipcRenderer.invoke('replay-sqlite-migrations')
+      .then((result: any) => result?.ok === true)
+      .catch((err: any) => {
+        console.error('Silent SQLite repair failed:', err);
+        return false;
+      })
+      .finally(() => {
+        this.sqliteReplay = null;
+      });
+    return this.sqliteReplay;
+  }
+
+  /**
+   * Re-applies every database update and restarts the app. Used by the
+   * restart notice and by Repair Database in Settings.
+   *
+   * The restart always happens: the app does not work properly on a database
+   * that is behind its code. force-rerun-migrations clears SQLite's history
+   * and sets a replay flag. The flag makes the next MySQL connection clear
+   * MySQL's history too, and stays set until that replay succeeds, so an
+   * unreachable MySQL server is replayed once it is back.
+   */
+  public async performForceRerunMigrations(): Promise<void> {
     await this.electronService.ipcRenderer.invoke('force-rerun-migrations');
   }
 
   /**
-   * Wrapper around ElectronService.execSqliteQuery that intercepts SQLite
-   * DDL errors (missing table / column) and prompts the user to re-run
-   * migrations. All renderer-side SQLite traffic should go through this so
-   * schema drift surfaces consistently for both databases.
+   * Wrapper around ElectronService.execSqliteQuery that repairs SQLite schema
+   * drift (a missing table or column). It re-applies the migrations without a
+   * restart and runs the query again, so the query that found the drift still
+   * succeeds. A statement that failed on a missing table or column did not
+   * run, so running it again cannot apply it twice. If the repair does not
+   * fix it, the app restarts. All renderer-side SQLite traffic should go
+   * through this so schema drift is handled the same way for both databases.
    */
-  private execSqlite(sql: string, params: any[] = []): Promise<any> {
-    return this.electronService.execSqliteQuery(sql, params).catch((err: any) => {
-      if (this.isSqliteDdlError(err)) {
-        this.logCriticalDatabaseIssue(`SQLite DDL error: ${err?.message ?? err}`, 'database', null, false);
-        this.promptSchemaErrorAndRerunIfConfirmed('SQLite', err).catch(() => {});
+  private execSqlite(sql: string, params: any[] = [], repairOnSchemaError = true): Promise<any> {
+    return this.electronService.execSqliteQuery(sql, params).catch(async (err: any) => {
+      if (!this.isSqliteDdlError(err)) {
+        throw err;
       }
+      this.logCriticalDatabaseIssue(`SQLite DDL error: ${err?.message ?? err}`, 'database', null, false);
+      if (repairOnSchemaError && await this.replaySqliteMigrationsSilently()) {
+        return this.execSqlite(sql, params, false);
+      }
+      void this.requestRestartForDatabaseUpdate('SQLite', err);
       throw err;
     });
   }
@@ -889,9 +924,9 @@ export class DatabaseService {
               this.logCriticalDatabaseIssue(`DDL error (${queryError.code}), migration re-run attempt ${this.migrationAutoRetryCount}/2. Query: ${query}`, 'migration', null, false);
               this.checkAndRunMigrations(null).catch(e => console.error('Auto-migration re-run failed:', e));
             } else {
-              // Self-healing exhausted — prompt the user to repair via force-rerun
+              // Self-healing exhausted: restart to apply every update.
               this.logCriticalDatabaseIssue(`DDL error persists after ${this.migrationAutoRetryCount} migration re-runs. Query: ${query} | Error: ${queryError.message}`, 'migration', null, false);
-              this.promptSchemaErrorAndRerunIfConfirmed('MySQL', queryError).catch(() => {});
+              void this.requestRestartForDatabaseUpdate('MySQL', queryError);
             }
           }
           errorf(queryError);
@@ -2542,42 +2577,5 @@ export class DatabaseService {
       }
     );
   }
-
-  public resetMysqlMigrations(): Promise<void> {
-    // Use CREATE + DELETE to keep privileges minimal while still repairing a missing tracking table.
-    const createVersionsTable = `
-      CREATE TABLE IF NOT EXISTS versions (
-        id INT AUTO_INCREMENT PRIMARY KEY,
-        version INT NOT NULL UNIQUE,
-        filename VARCHAR(255) NOT NULL,
-        applied_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        INDEX idx_version (version)
-      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
-    `;
-
-    return new Promise((resolve, reject) => {
-      this.execQuery(createVersionsTable, [],
-        () => {
-          this.execQuery('DELETE FROM versions', [],
-            () => {
-              this.hasRunMigrations = false;
-              console.log('MySQL versions table cleared successfully.');
-              resolve();
-            },
-            (err: any) => {
-              console.error('Error clearing MySQL versions table:', err);
-              reject(err);
-            }
-          );
-        },
-        (err: any) => {
-          console.error('Error preparing MySQL versions table:', err);
-          reject(err);
-        }
-      );
-    });
-  }
-
-
 
 }

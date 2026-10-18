@@ -691,33 +691,20 @@ export class SettingsComponent implements OnInit, OnDestroy {
 
 
 
-  public async forceRerunMigrations(): Promise<void> {
+  public async repairDatabase(): Promise<void> {
     try {
       const result = await this.electronService.ipcRenderer.invoke('show-confirm-dialog', {
-        type: 'warning',
-        buttons: ['Cancel', 'Yes, Proceed'],
-        defaultId: 0,
-        title: 'Confirm Migration Reset',
-        message: 'Are you sure you want to force re-run all migrations?',
-        detail: 'This action is irreversible. It will delete the migration history from both the local and server databases and restart the application. All migrations will be re-applied on startup.'
+        type: 'question',
+        buttons: ['Cancel', 'Repair and Restart'],
+        defaultId: 1,
+        cancelId: 0,
+        title: 'Repair Database',
+        message: 'Repair the database and restart?',
+        detail: 'The Interface Tool restarts and applies every database update again, on this computer and on MySQL. This takes a few seconds. Stored results and settings are kept.'
       });
 
-      if (result.response === 1) { // Corresponds to 'Yes, Proceed'
-        try {
-          await this.databaseService.resetMysqlMigrations();
-        } catch (err) {
-          await this.electronService.ipcRenderer.invoke('show-confirm-dialog', {
-            type: 'error',
-            buttons: ['OK'],
-            defaultId: 0,
-            title: 'MySQL Reset Failed',
-            message: 'Could not reset MySQL migration history.',
-            detail: `Error: ${err?.message ?? err}\n\nThe application was not restarted because MySQL migrations would be skipped again. Check the MySQL connection and try re-running migrations.`
-          });
-          return;
-        }
-        // Reset local migration history and restart app
-        await this.electronService.ipcRenderer.invoke('force-rerun-migrations');
+      if (result.response === 1) {
+        await this.databaseService.performForceRerunMigrations();
       }
     } catch (error) {
       console.error('Error showing confirmation dialog:', error);
