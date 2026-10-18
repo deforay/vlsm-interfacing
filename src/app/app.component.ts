@@ -13,7 +13,6 @@ import { RawDataProcessorService } from './services/raw-data-processor.service';
   selector: 'app-root',
   templateUrl: './app.component.html',
   changeDetection: ChangeDetectionStrategy.Eager,
-  styleUrls: ['./app.component.scss']
 })
 export class AppComponent implements OnInit {
   private sessionId: string | null = null;
