@@ -256,7 +256,7 @@ export class DatabaseService {
   ) {
     this.store.electronStoreObservable().subscribe(config => {
       this.commonSettings = config.commonConfig;
-      this.init();
+      this.init().catch(err => console.error('Database service initialization failed:', err));
     });
   }
 
@@ -838,7 +838,7 @@ export class DatabaseService {
    * same moment share one replay.
    */
   private replaySqliteMigrationsSilently(): Promise<boolean> {
-    if (this.sqliteReplay) {
+    if (this.sqliteReplay !== null) {
       return this.sqliteReplay;
     }
     if (this.sqliteReplayCount >= 2) {
@@ -2017,7 +2017,7 @@ export class DatabaseService {
     const sqliteMaxQuery = 'SELECT MAX(lims_sync_date_time) as maxSyncDate FROM orders';
 
     this.execSqlite(sqliteMaxQuery, [])
-      .then(async (sqliteResult: any) => {
+      .then((sqliteResult: any) => {
         const maxSyncDate = sqliteResult[0]?.maxSyncDate || '0000-00-00 00:00:00';
 
         // Step 2: Query MySQL for records with `lims_sync_date_time` greater than `maxSyncDate`
