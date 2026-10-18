@@ -1,4 +1,4 @@
-# Protocols on the wire
+# Protocols
 
 Two protocols, and the parts of them that cause trouble in the field.
 
@@ -18,14 +18,14 @@ record ending in CR.
 <EOT>                                    the analyzer is done
 ```
 
-Frame numbers run 1–7 then 0, restarting for each message. `cc` is the checksum:
+Frame numbers run 1–7 then 0, restarting at 1 for each session. `cc` is the checksum:
 the modulo-256 sum of every byte after `<STX>` up to and including the
 terminator, as two uppercase hex digits.
 
 ### Records get cut wherever the frame ends
 
 This is the single most consequential fact about ASTM in practice. A frame holds
-a bounded number of bytes — the GeneXpert fills 240 — and a record longer than
+a bounded number of bytes, and the GeneXpert fills 240. A record longer than
 what is left is **cut wherever that falls, mid-field, mid-word**. The frame ends
 in `<ETB>` instead of `<ETX>`, and the record continues at the start of the next
 one:
@@ -37,7 +37,7 @@ R|1|^^^HIV-1^Xpert HIV-1 Viral Load XC^3^^|DÉTECTÉ^|co<ETB>E4<CR><LF>
 
 `co` + `pies/mL` is `copies/mL`. Rejoining across `<ETB>cc<CR><LF><STX>n` has to
 happen **before** the stream is split into records. Get it wrong and the result
-either keeps the frame's checksum inside it — `co<ETB>E4` stored as a unit — or
+either keeps the frame's checksum inside it (`co<ETB>E4` stored as a unit) or
 loses every field after the cut, which is how a laboratory ends up with 97 of
 136 results stored empty and synced to their LIS that way.
 
@@ -58,8 +58,8 @@ either a checksum to strip or two characters of data.
 
 ### A retransmitted frame is not a second record
 
-If the analyzer's `<ACK>` does not arrive it sends the same frame again — same
-frame number, since a new frame always advances. Appending it twice duplicates
+If the tool's `<ACK>` does not reach the analyzer, the analyzer sends the same
+frame again with the same frame number. A new frame always advances the number. Appending it twice duplicates
 its records, and a duplicated `O` record becomes a second order with no `R`
 records behind it: a result saved as a failure against a sample that in fact has
 a result, sitting next to the true one, both queued for the LIS.
@@ -83,14 +83,14 @@ with an `ACK` echoing the message control ID, HL7 version and character set.
 
 Two tolerances matter, because analyzers in the field need both:
 
-- **The `<VT>` may be missing.** Some analyzers just start with `MSH`.
+- **The `<VT>` may be missing.** Some analyzers start with `MSH`.
 - **The `<CR>` may be missing, or late.** TCP splits wherever it likes, so a
   block can end one chunk at `<FS>` and have its `<CR>` arrive in the next.
 
 A block is therefore complete at `<FS>`, but held briefly for a `<CR>` that may
 still be coming, so the transmission stored is the one that was sent rather than
 one byte short of it. When no `<CR>` follows, or the connection goes away first,
-the block is taken as it stands — an analyzer that never sends a terminator has
+the block is taken as it stands. An analyzer that never sends a terminator has
 still finished sending a result, and waiting for a byte it will not send would
 lose it.
 
@@ -107,10 +107,10 @@ So a message with more than one `SPM` is split, and each sample is read only
 from its own group: its `SPM` and every segment after it up to the next `SPM`,
 behind the message header. Within a group:
 
-- the sample ID falls back to the group's own `SAC.3`;
-- the test type comes from the group's own `OBR`, not one that precedes the
-  first `SPM`, when the group has one;
-- the result is the group's first result `OBX`. A run-time range is never taken
+- The sample ID falls back to the group's own `SAC.3`.
+- The test type comes from the group's own `OBR`, not one that precedes the
+  first `SPM`, when the group has one.
+- The result is the group's first result `OBX`. A run-time range is never taken
   as a result.
 
 A sample whose group has no result is recorded as a parse failure and stored

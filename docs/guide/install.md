@@ -1,4 +1,4 @@
-# Installing
+# Install
 
 ## Debian and Ubuntu
 
@@ -39,7 +39,7 @@ application: they live in the machine's own data directory and are left alone.
 
 ## Being told about a new version
 
-The console shows a line when a newer version has been published — the version
+The console shows a line when a newer version has been published: the version
 that is available, the version you are running, and a link to what changed.
 Nothing is downloaded and nothing is installed: when to update a machine
 standing between an analyzer and the laboratory system is the laboratory's
@@ -49,9 +49,9 @@ decision, not the software's.
 again.
 
 The check asks GitHub, where the releases are published, a little after startup
-and every few hours after that. A machine with no route to the internet simply
-never sees the line — nothing is logged, nothing fails, and no part of the tool
-waits on it. This is also why the check is not routed through your laboratory
+and every few hours after that. A machine with no route to the internet never
+sees the line. Nothing is logged, nothing fails, and no part of the tool waits
+on it. This is also why the check is not routed through your laboratory
 information system: the tool is meant to work in front of any system, or none.
 
 ## Upgrading from vlsm-interfacing
@@ -70,5 +70,5 @@ carries over:
   package before installing the new one. Removing a package does not touch your
   configuration directory, so nothing of yours is removed with it.
 
-The only visible change is the name — in the Start menu, the applications menu,
+The only visible change is the name: in the Start menu, the applications menu,
 and the installer file you downloaded.

@@ -2,7 +2,7 @@
 
 ## From source
 
-**Prerequisites:** Node.js LTS.
+**Prerequisites:** Node.js 22.22.3 or later (the `engines` field in `package.json`).
 
 ```bash
 git clone https://github.com/deforay/intelis-interfacing.git
@@ -20,27 +20,31 @@ npm run verify
 ```
 
 which is `check:safety` → `lint` → `test` → `build:prod`. The same gate runs for
-pull requests and pushes to `master`, and a release is only built from a commit
-that passed it.
+pull requests and pushes to `master`, after `npm run security:audit`, and a
+release is only built from a commit that passed it.
 
 `npm test` is more than the unit tests:
 
 | Step | What it protects |
 |------|------------------|
 | `test:unit` | Wire-level parsing and persistence, including replays of real analyzer captures |
-| `test:migrations` | The migration chain applies cleanly to an empty database |
+| `test:migrations` | The migration chain applies cleanly to an empty database and to a legacy schema |
+| `test:result-webhook-main` | The first save of result forwarding marks only the results already stored as not queued |
 | `test:settings-crypto` | Encrypted exports are actually encrypted, and tampering is detected |
 | `test:packaged-paths` | Modules the main process imports from outside `app/` are packaged |
 | `test:safety-guard` | The renderer safety check still fires on the shapes it exists to catch |
 | `test:upgrade-identity` | An installed machine keeps its data and is upgraded, not duplicated |
+| `test:tracked-files` | No file that `.gitignore` excludes is tracked |
+| `test:audit-gate` | The dependency audit gate fails on the advisories it exists to catch |
+| `test:install-script` | `scripts/install.sh` neither removes the application it replaces nor reports an upgrade complete while the old version keeps running |
 
-For faster feedback while writing, install the pre-commit hook once per clone:
+The pre-commit hook runs `check:safety` at commit time. Install it once per clone:
 
 ```bash
 npm run install-hooks
 ```
 
-CI is the enforcement; the hook is only sooner.
+CI is the enforcement. The hook only reports sooner.
 
 ## Releasing
 
@@ -51,13 +55,13 @@ git push origin master
 git tag v4.3.0 && git push origin v4.3.0
 ```
 
-Pushing a `v*` tag is what cuts the release. The workflow re-runs the full gate,
-refuses to continue if the tag and `package.json` disagree, then builds and
-publishes a Debian package and the Windows installer and portable build.
+Pushing a `v*` tag is what cuts the release. The workflow refuses to continue if the tag,
+`package.json` and `app/package.json` disagree, re-runs the full gate, then
+builds and publishes a Debian package and the Windows installer and portable build.
 
 Those two are the platforms this tool ships for: a machine beside an analyzer in
 a laboratory is a Windows box or a Debian one. macOS is not a target and is not
-configured — it is useful for development, and nothing more.
+configured. It is useful for development, and nothing more.
 
 `npm run bump` exists because the version lives in four files, and a partial
 bump ships installers labelled differently from the release they land on.

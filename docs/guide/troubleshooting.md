@@ -1,4 +1,4 @@
-# When something is wrong
+# Troubleshooting
 
 Work down the chain: is the analyzer connected, is it sending, is the tool
 storing, is the LIS taking.
@@ -7,13 +7,14 @@ storing, is the LIS taking.
 
 **In TCP Server mode** the tool waits and the analyzer dials in. The log should
 say `Server bound and listening on <address>:<port>` shortly after you press
-Connect. If it does not:
+**Start Server**. If it does not:
 
 - The address must be one this machine actually has. `127.0.0.1` only accepts
   connections from the same machine, which is not what you want when the
   analyzer is a separate box on the network.
 - Something else may already hold the port. Two instruments configured on the
-  same port is the usual cause; so is a second copy of the tool left running.
+  same port is the usual cause. A second copy of the tool left running is
+  another.
 - A firewall between the analyzer and this machine has to allow the port.
 
 **In TCP Client mode** the tool dials the analyzer, so the analyzer has to be
@@ -31,16 +32,16 @@ configuration screen.
 
 ## Results arrive but look wrong
 
-- **Truncated results, or a result with odd characters in it** — this was a
+- **Truncated results, or a result with odd characters in it**: this was a
   defect in versions before 4.2.0 affecting analyzers that split records across
   frames, the Cepheid GeneXpert in particular. Upgrade. Nothing is lost: the raw
-  transmissions were stored intact, and reprocessing them recovers the results —
-  see [raw data and recovery](raw-data.md), including what reprocessing does to
+  transmissions were stored intact, and reprocessing them recovers the results.
+  See [raw data and recovery](raw-data.md), including what reprocessing does to
   results the LIS has already taken.
-- **A result that looks like a foreign number** — `1420403,41` is a French
+- **A result that looks like a foreign number**: `1420403,41` is a French
   analyzer's way of writing 1420403.41. It is stored as sent, deliberately. See
   [why](console.md#received-results).
-- **An empty result with an error note** — the analyzer reported a failed run.
+- **An empty result with an error note**: the analyzer reported a failed run.
   The note carries its explanation.
 
 ## Results are not reaching the LIS
@@ -76,7 +77,7 @@ Log files sit beside the database, in the tool's data directory:
 
 !!! note "The folder name is the old one, and that is deliberate"
 
-    The application was renamed; the data directory was not. Moving it would
+    The application was renamed. The data directory was not. Moving it would
     have meant every existing installation starting empty on the day it
     upgraded. See [Upgrading from vlsm-interfacing](install.md#upgrading-from-vlsm-interfacing).
 
@@ -90,5 +91,5 @@ with:
 - the version, from the bottom of the console
 - the analyzer model and the protocol it is configured for
 - the relevant part of the connection log
-- for a wrong result, the raw transmission from **View Raw Data** — with sample
+- for a wrong result, the raw transmission from **View Raw Data**, with sample
   identifiers and patient details removed

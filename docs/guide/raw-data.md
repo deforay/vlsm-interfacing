@@ -1,4 +1,4 @@
-# Raw data, and recovering results from it
+# Raw data and recovery
 
 Every transmission an analyzer sends is stored exactly as it arrived, before
 the tool tries to understand it. **Console → View Raw Data** shows them: which
@@ -14,7 +14,7 @@ at the end of its row in the console. The window shows the result's records and 
 also shows whether the transmission still matches its fingerprint.
 
 That record exists for one reason. If the tool ever read a transmission wrongly,
-the analyzer does not have to send it again — the result can be worked out from
+the analyzer does not have to send it again. The result can be worked out from
 what was stored, once the reading is fixed.
 
 ## When you would use it
@@ -23,7 +23,7 @@ what was stored, once the reading is fixed.
   This is the usual case, and the one below.
 - **A result did not appear at all** although the console log shows the
   transmission arriving.
-- **Someone needs to see exactly what the analyzer said** — the raw record is
+- **Someone needs to see exactly what the analyzer said.** The raw record is
   the evidence, not the row in the results table.
 
 ## Reprocessing
@@ -75,10 +75,9 @@ A run does not include transmissions that arrive after it starts.
 
 ## Recovering from the framing defect in versions before 4.2.0
 
-Analyzers that split records across frames — the Cepheid GeneXpert in
-particular, which fills 240-byte frames and cuts records wherever that falls —
-were read incorrectly by versions before 4.2.0. Depending on where the cut
-landed, a result was stored either **empty** or **truncated**, sometimes with
+Analyzers that split records across frames were read incorrectly by versions
+before 4.2.0. The Cepheid GeneXpert in particular fills 240-byte frames and
+cuts records wherever that falls. Depending on where the cut landed, a result was stored either **empty** or **truncated**, sometimes with
 stray characters where the unit should be, such as `co␗E4` instead of
 `copies/mL`.
 
@@ -92,7 +91,7 @@ Nothing was lost. The transmissions were stored intact, and every one of those
 2. **Check a single transmission first.** Reprocess one, and compare the new
    result against the analyzer's own printout for that sample. It should match
    exactly, including how the number is written.
-3. **Agree the plan with your LIS** — see the warning above. The affected
+3. **Agree the plan with your LIS.** See the warning above. The affected
    samples already went across as blank or truncated, and correcting them is
    the LIS's business as much as this tool's.
 4. **Then reprocess the rest** in batches. Filter to one day or one
@@ -124,9 +123,9 @@ If the tool closes first, it starts again at the next start.
 
 The automatic run changes only results that are settled:
 
-- already sent to the LIS, or refused by it;
-- already delivered by result forwarding, when forwarding has been set up;
-- stored more than a week ago.
+- already sent to the LIS, or refused by it
+- already delivered by result forwarding, when forwarding has been set up
+- stored more than a week ago
 
 It leaves other results whole, and does not come back to them. Compact Storage
 covers them.

@@ -1,33 +1,34 @@
-# How it is put together
+# Architecture
 
-An Electron application: a Node main process that owns the sockets and the
-databases, and an Angular renderer that draws the console.
+An Electron application: a Node main process that owns the databases and
+result delivery, and an Angular renderer that holds the analyzer sockets,
+parses what arrives and draws the console.
 
 ```
-analyzer ──TCP──► main process ──► parsers ──► SQLite ──► MySQL / LIS API / result webhook
-                       │                         │
-                       └────── IPC ──────► Angular renderer (console, settings)
+analyzer ──TCP──► Angular renderer ──IPC──► main process ──► SQLite ──► MySQL / LIS API / result webhook
+                  (sockets, parsers,
+                   console, settings)
 ```
 
 ## The main process
 
-`app/main.ts`. It owns everything with a handle attached to it:
+`app/main.ts`. It owns the databases and result delivery:
 
-- **TCP sockets**, in either direction. `tcpserver` listens for the analyzer;
-  `tcpclient` dials it.
 - **SQLite**, through `@vscode/sqlite3`, at `interface.db` in the data
   directory. Migrations in `app/sqlite-migrations/` are applied in order and
   recorded, so an installation from two years ago and a fresh one converge.
 - **MySQL**, optionally, as the table an LIS on another machine reads.
-- **Settings**, in `electron-store`, with automatic backups and encrypted
-  export.
+- **Settings backups and encrypted export.** The settings file itself is an
+  `electron-store` file that the renderer also opens and writes directly.
+- **Result delivery over HTTP**, to the LIS API and the result webhook,
+  through Electron's `net.fetch`.
 
 ### The data directory is named, not derived
 
 Electron puts `userData` under `app.getName()`, which is the product name. That
 would mean renaming the product moved every laboratory's settings, database,
-backups and migration history out from under it — silently, with an application
-that opens looking brand new.
+backups and migration history out from under it. It would happen silently, and
+the application would open looking brand new.
 
 So `app/main.ts` names the directory instead, and names it what installations
 have always used:
@@ -43,11 +44,14 @@ the build if either of those two facts stops being true.
 
 ## The renderer
 
-Angular, in `src/`. Services under `src/app/services/` do the protocol work:
+Angular, in `src/`. The renderer holds the TCP sockets, through Node's `net`
+module, in either direction. `tcpserver` listens for the analyzer, and
+`tcpclient` dials it. Services under `src/app/services/` do the protocol work:
 
 | Service | Responsibility |
 |---------|----------------|
-| `instrument-interface.service.ts` | Owns each connection; routes bytes to the right helper; persists results |
+| `tcp-connection.service.ts` | Opens, closes and reconnects each instrument's socket |
+| `instrument-interface.service.ts` | Receives each connection's bytes, routes them to the right helper, and persists results |
 | `astm-helper.service.ts` | E1381 framing, checksums, ACK/NAK, E1394 record extraction |
 | `hl7-helper.service.ts` | MLLP block assembly, HL7 parsing, per-analyzer field mapping |
 | `raw-data-processor.service.ts` | Re-derives results from stored raw transmissions |
@@ -57,7 +61,7 @@ Angular, in `src/`. Services under `src/app/services/` do the protocol work:
 ### The renderer is privileged, and that is why the check exists
 
 It runs with `nodeIntegration: true` and `contextIsolation: false`. Anything
-that executes as script in it executes with full Node — the filesystem, the
+that executes as script in it executes with full Node: the filesystem, the
 network, the operator's machine.
 
 That is safe today for exactly two reasons, and only those two:
@@ -69,7 +73,7 @@ That is safe today for exactly two reasons, and only those two:
 
 Both are invisible in the code that depends on them. A single `[innerHTML]`
 added to render a formatted result, or one remote URL opened in the window,
-converts a rendering convenience into remote code execution — and whoever writes
+converts a rendering convenience into remote code execution. Whoever writes
 that line has no reason to connect it to a `webPreferences` setting written
 years earlier.
 

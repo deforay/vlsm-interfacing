@@ -19,6 +19,7 @@ Authorization: Bearer <token>
 |---------|------|-------------|---------|
 | Receiver URL | `http` or `https` URL | The address of every request. The URL may carry a query string. It cannot carry credentials or a fragment. | none |
 | Authentication | `none`, `bearer`, `basic`, `apikey` | `bearer` sends `Authorization: Bearer <token>`. `basic` sends `Authorization: Basic <base64 username:password>`. `apikey` sends `X-API-Key: <key>`. | `none` |
+| Username | string | `basic` only. Required, without a colon or line break. | none |
 | Secret | string | A bearer token or API key contains visible ASCII characters only, without spaces. A Basic password contains no line breaks. | none |
 
 The request does not follow redirects. A redirect counts as a failed delivery.
@@ -105,7 +106,7 @@ are strings even when they look numeric. See
 | `test_description` | string or null | Assay description, where the analyzer sends one. |
 | `test_location` | string or null | Location, where the analyzer sends one. |
 | `results` | string or null | The result as stored: what the analyzer sent, unless one of the laboratory's [result rules](../guide/settings.md#result-rules) replaced it. |
-| `results_as_sent` | string or null | The result as read from the transmission, before result rules, for example `<20`, `Target Not Detected`, `1,25E+03`. `Failed` for a run the analyzer marked as failed, whose own text is in `notes`. Null for results stored before 4.5.0. |
+| `results_as_sent` | string or null | The result as read from the transmission, before result rules, for example `<20`, `Target Not Detected`, `1,25E+03`. `Failed` or `Incomplete` for a run the analyzer marked so, with its own text in `notes`. Null for results stored before 4.5.0. |
 | `test_unit` | string or null | Unit as sent. |
 | `result_status` | integer or null | `1` final, `0` not final. |
 | `notes` | string or null | Comment records. An errored run carries its explanation here. |
@@ -134,7 +135,7 @@ next retry.
 
 A failed request is retried after 30 seconds. Each further failure doubles the
 wait, up to 15 minutes. While results are being delivered, the next page of
-queued results is sent without waiting. A retry can deliver a result the receiver already
+queued results is sent one second later. A retry can deliver a result the receiver already
 stored, for example when the receiver commits and then times out. The
 `ingestion_id` of that result is unchanged.
 
