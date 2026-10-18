@@ -302,7 +302,7 @@ export class RawDataProcessorService {
       const batch = (await dbService.nextRawDataBatch(store, filter, afterId, RawDataProcessorService.BATCH_SIZE))
         .filter(entry => Number(entry.id) <= lastId);
       if (batch.length > 0) {
-        afterId = Number(batch[batch.length - 1].id);
+        afterId = Number(batch.at(-1).id);
       }
       return batch;
     });
@@ -622,7 +622,7 @@ export class RawDataProcessorService {
       if (batch.length === 0) {
         break;
       }
-      beforeId = Number(batch[batch.length - 1].id);
+      beforeId = Number(batch.at(-1).id);
 
       for (const entry of batch) {
         if (shouldStop()) {

@@ -17,7 +17,7 @@ import {
 } from './settings-backup.main';
 
 const args = process.argv.slice(1),
-  serve = args.some(val => val === '--serve');
+  serve = args.includes('--serve');
 
 // The directory holding a laboratory's data is named here, not derived.
 //
