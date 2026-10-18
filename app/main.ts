@@ -176,7 +176,8 @@ function splitSqliteMigrationStatements(sql: string): string[] {
   return statements;
 }
 
-async function runSqliteMigrations(db, migrationsPath, forceReplay = false) {
+/** Resolves with the number of migrations that did not complete cleanly. */
+async function runSqliteMigrations(db, migrationsPath, forceReplay = false): Promise<number> {
   console.log('Running SQLite migrations from:', migrationsPath);
 
   // 1. Ensure versions table exists
@@ -188,7 +189,7 @@ async function runSqliteMigrations(db, migrationsPath, forceReplay = false) {
   // 3. Get migration files
   if (!fs.existsSync(migrationsPath)) {
     log.error(`SQLite migration directory not found: ${migrationsPath}`);
-    return;
+    return 1;
   }
 
   const migrationFiles = fs.readdirSync(migrationsPath)
@@ -197,7 +198,7 @@ async function runSqliteMigrations(db, migrationsPath, forceReplay = false) {
 
   if (migrationFiles.length === 0) {
     log.warn('No SQLite migration files found');
-    return;
+    return 1;
   }
 
   // 4. Self-heal stale bookkeeping. If the versions table claims migrations are
@@ -233,6 +234,7 @@ async function runSqliteMigrations(db, migrationsPath, forceReplay = false) {
   //    versions row absent so the next launch retries, but remaining statements
   //    are still attempted to repair as much of the schema as possible.
   let successCount = 0;
+  let failedCount = 0;
   for (const file of migrationFiles) {
     if (appliedFilenames.has(file)) {
       continue;
@@ -260,6 +262,7 @@ async function runSqliteMigrations(db, migrationsPath, forceReplay = false) {
 
     if (migrationFailed) {
       log.error(`SQLite migration ${file} did NOT complete cleanly; leaving versions row absent so next launch retries`);
+      failedCount++;
       continue;
     }
 
@@ -267,6 +270,7 @@ async function runSqliteMigrations(db, migrationsPath, forceReplay = false) {
     const insert = await sqliteRun(db, 'INSERT OR IGNORE INTO versions (version, filename) VALUES (?, ?)', [version, file]);
     if (!insert.ok) {
       log.error(`Failed to record SQLite migration ${file} as applied: ${insert.err?.message}`);
+      failedCount++;
       continue;
     }
 
@@ -275,6 +279,7 @@ async function runSqliteMigrations(db, migrationsPath, forceReplay = false) {
   }
 
   console.log(`SQLite migrations: ${successCount} processed`);
+  return failedCount;
 }
 
 
@@ -827,8 +832,44 @@ try {
       return { success: true };
     });
 
+    // Re-applies every SQLite migration on the open database, without a
+    // restart. Each migration statement is idempotent and runs on its own, so
+    // queries from the renderer can interleave with it safely. One replay at a
+    // time: many queries can fail on the same missing column at once.
+    let sqliteReplay: Promise<{ ok: boolean }> | null = null;
+    ipcMain.handle('replay-sqlite-migrations', () => {
+      sqliteReplay ??= (async () => {
+        try {
+          await copySqliteMigrationFiles();
+          const failed = await runSqliteMigrations(
+            sqlite3Obj, path.join(app.getPath('userData'), 'sqlite-migrations'), true
+          );
+          log.info(`Replayed SQLite migrations without a restart: ${failed === 0 ? 'all applied' : `${failed} did not apply`}`);
+          return { ok: failed === 0 };
+        } catch (error) {
+          log.error(`Could not replay SQLite migrations: ${formatUnknownError(error)}`);
+          return { ok: false };
+        } finally {
+          sqliteReplay = null;
+        }
+      })();
+      return sqliteReplay;
+    });
+
+    // Brings the window back from the tray, for a notice that must be seen.
+    ipcMain.handle('show-main-window', () => {
+      if (win && !win.isDestroyed()) {
+        if (win.isMinimized()) win.restore();
+        win.show();
+        win.focus();
+      }
+    });
+
     ipcMain.handle('force-rerun-migrations', async () => {
       store.set(FORCE_MIGRATION_REPLAY_KEY, true);
+      // Read by the restart notice, so a repair that does not fix the schema
+      // is reported instead of restarting again.
+      store.set('databaseRepairStartedAt', Date.now());
 
       const db = getSQLiteDBConnection();
       if (db) {
@@ -970,6 +1011,12 @@ try {
       const forceMigrationReplay = store.get(FORCE_MIGRATION_REPLAY_KEY) === true;
       await copySqliteMigrationFiles();
       await copyMySQLMigrationFiles();
+      const updateNotice = forceMigrationReplay
+        ? await showStartupNotice(
+          'Finishing the update',
+          'Applying database updates. This takes a few seconds, and the Interface Tool opens when it is done.'
+        )
+        : null;
       await runSqliteMigrations(sqlite3Obj, migrationsPath, forceMigrationReplay);
       const startupNotice = await reclaimSpaceIfRequested(sqlite3Obj);
 
@@ -978,8 +1025,10 @@ try {
 
       // Now that the database and IPC are ready, create the main window
       createWindow();
-      if (startupNotice && !startupNotice.isDestroyed()) {
-        startupNotice.destroy();
+      for (const notice of [updateNotice, startupNotice]) {
+        if (notice && !notice.isDestroyed()) {
+          notice.destroy();
+        }
       }
 
       // Log app startup to both console and file

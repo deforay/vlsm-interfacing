@@ -1,0 +1,20 @@
+<div class="restart-backdrop" *ngIf="visible">
+  <dialog class="restart-notice" open aria-modal="true" aria-labelledby="restartNoticeTitle" aria-describedby="restartNoticeText">
+    <h2 id="restartNoticeTitle">Restart required</h2>
+    <p id="restartNoticeText" aria-live="polite">
+      <ng-container *ngIf="restarting">Restarting…</ng-container>
+      <ng-container *ngIf="!restarting && waitingFor.length === 0">
+        The Interface Tool restarts in {{ secondsLeft }} {{ secondsLeft === 1 ? 'second' : 'seconds' }} to finish updating.
+      </ng-container>
+      <ng-container *ngIf="!restarting && waitingFor.length > 0">
+        Waiting for {{ waitingFor.join(', ') }} to finish sending, then restarting to finish updating.
+      </ng-container>
+    </p>
+    <p class="restart-detail">Stored results and settings are kept.</p>
+    <div class="restart-actions">
+      <button type="button" class="btn btn-primary" (click)="restartNow()" [disabled]="restarting">
+        Restart Now
+      </button>
+    </div>
+  </dialog>
+</div>

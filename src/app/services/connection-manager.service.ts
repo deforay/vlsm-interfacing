@@ -252,6 +252,13 @@ export class ConnectionManagerService implements OnDestroy {
     return this.activeInstrumentsSubject.asObservable();
   }
 
+  /** The instruments sending data at this moment, by name. */
+  instrumentsReceiving(): string[] {
+    return [...this.activeInstruments.values()]
+      .filter(instrument => instrument.transmissionInProgress)
+      .map(instrument => instrument.connectionParams.instrumentId);
+  }
+
   connect(instrument: any) {
     if (!instrument?.connectionParams) return;
 
