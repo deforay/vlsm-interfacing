@@ -272,15 +272,20 @@ $background-color: #f9fafb;
     padding: 0;
     margin: 0;
 
-    li {
+    li button {
       display: flex;
       align-items: center;
       gap: 0.75rem;
+      width: 100%;
       padding: 0.75rem 1.5rem;
       cursor: pointer;
       color: $text-color;
+      background: none;
+      font: inherit;
       font-size: 0.875rem;
       font-weight: 500;
+      text-align: left;
+      border: none;
       border-left: 3px solid transparent;
       transition: all 0.2s ease;
 
@@ -394,6 +399,7 @@ $background-color: #f9fafb;
 
 // Form styles
 .form-group {
+  position: relative;
   margin-bottom: 1.25rem;
 
   label {
@@ -413,6 +419,10 @@ $background-color: #f9fafb;
     margin-top: 0.25rem;
     font-size: 0.75rem;
     color: $text-light;
+  }
+
+  &:has(.input-icon) .form-control {
+    padding-left: 2.5rem;
   }
 }
 
@@ -464,6 +474,23 @@ $background-color: #f9fafb;
 
   &::placeholder {
     color: color.adjust($text-light, $lightness: 15%);
+  }
+
+  // Validation states
+  &.ng-invalid.ng-touched {
+    border-color: $danger-color;
+
+    &:focus {
+      box-shadow: 0 0 0 3px rgba($danger-color, 0.1);
+    }
+  }
+
+  &.ng-valid.ng-touched {
+    border-color: $success-color;
+
+    &:focus {
+      box-shadow: 0 0 0 3px rgba($success-color, 0.1);
+    }
   }
 }
 
@@ -537,14 +564,6 @@ select.form-control {
   }
 
   .form-control.with-icon {
-    padding-left: 2.5rem;
-  }
-}
-
-.form-group {
-  position: relative;
-
-  &:has(.input-icon) .form-control {
     padding-left: 2.5rem;
   }
 }
@@ -642,6 +661,7 @@ select.form-control {
 
 // Instrument card
 .instrument-card {
+  animation: fadeIn 0.3s ease;
   background: $background-color;
   border: 1px solid $border-color;
   border-radius: 0.5rem;
@@ -1249,10 +1269,6 @@ select.form-control {
   }
 }
 
-.instrument-card {
-  animation: fadeIn 0.3s ease;
-}
-
 .instrument-card .instrument-body .result-rules-section {
   grid-column: 1 / -1;
 
@@ -1329,25 +1345,6 @@ select.form-control {
   }
 }
 
-// Validation states
-.form-control {
-  &.ng-invalid.ng-touched {
-    border-color: $danger-color;
-
-    &:focus {
-      box-shadow: 0 0 0 3px rgba($danger-color, 0.1);
-    }
-  }
-
-  &.ng-valid.ng-touched {
-    border-color: $success-color;
-
-    &:focus {
-      box-shadow: 0 0 0 3px rgba($success-color, 0.1);
-    }
-  }
-}
-
 // Responsive adjustments
 @media (max-width: 1200px) {
   .settings-grid {
@@ -1395,7 +1392,7 @@ select.form-control {
       display: none;
     }
 
-    .sidebar-nav li {
+    .sidebar-nav li button {
       border-left: none;
       border-bottom: 1px solid $border-color;
     }
@@ -1547,6 +1544,11 @@ select.form-control {
 }
 
 .passphrase-modal {
+  // Reset the browser's own dialog styles: the backdrop positions it.
+  position: static;
+  margin: 0;
+  border: none;
+  color: inherit;
   width: 100%;
   max-width: 30rem;
   max-height: 90vh;
