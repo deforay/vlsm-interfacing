@@ -52,7 +52,9 @@ export class LisApiService {
   }
 
   private buildUrl(baseUrl: string, endpoint: string): string {
-    const base = baseUrl.replace(/\/+$/, '');
+    let end = baseUrl.length;
+    while (end > 0 && baseUrl[end - 1] === '/') end--;
+    const base = baseUrl.slice(0, end);
     const path = endpoint.startsWith('/') ? endpoint : '/' + endpoint;
     return base + path;
   }

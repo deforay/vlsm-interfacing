@@ -13,6 +13,8 @@ import {
 describe('InteLIS URL contract', () => {
   it('normalizes a secure base URL and builds the versioned endpoint', () => {
     expect(normalizeIntelisBaseUrl(' https://vlsm.test/ ')).toBe('https://vlsm.test');
+    expect(normalizeIntelisBaseUrl('https://vlsm.test/vlsm///')).toBe('https://vlsm.test/vlsm');
+    expect(normalizeIntelisBaseUrl('https://vlsm.test/a/b')).toBe('https://vlsm.test/a/b');
     expect(buildIntelisApiUrl('https://vlsm.test/', 'connection'))
       .toBe('https://vlsm.test/api/v1/interface/connection');
     expect(buildIntelisApiUrl('https://vlsm.test/', 'results'))
