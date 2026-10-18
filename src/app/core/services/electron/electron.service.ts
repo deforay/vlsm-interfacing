@@ -14,7 +14,7 @@ interface MySQLPool {
 interface MySQLClient {
   createPool: (config: any) => MySQLPool;
   createConnection: (config: any) => {
-    connect: (cb: (err: any | null) => void) => void;
+    connect: (cb: (err: any) => void) => void;
     query: (q: string, cb: (err: any, res?: any) => void) => void;
     destroy: () => void;
   };

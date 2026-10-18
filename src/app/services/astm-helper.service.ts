@@ -738,7 +738,7 @@ export class ASTMHelperService {
    * @param partData Raw ASTM part data
    * @returns Sample result object or null if extraction fails
    */
-  extractSampleResultFromASTM(dataArray: any, partData: string): any | null {
+  extractSampleResultFromASTM(dataArray: any, partData: string): any {
     const sampleResult: any = {};
 
     try {
