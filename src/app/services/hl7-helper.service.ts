@@ -101,9 +101,7 @@ export class HL7HelperService {
  */
   sendHL7ACK(instrumentConnectionData: any, msgID: string, characterSet: string = 'UNICODE UTF-8', messageProfileIdentifier: string = '', hl7Version: string = '2.5.1'): void {
     try {
-      if (instrumentConnectionData &&
-        instrumentConnectionData.connectionSocket &&
-        instrumentConnectionData.connectionSocket.writable) {
+      if (instrumentConnectionData?.connectionSocket?.writable) {
 
         // Generate and send ACK immediately
         const ackMessage = this.generateHL7ACK(msgID, characterSet, messageProfileIdentifier, hl7Version);

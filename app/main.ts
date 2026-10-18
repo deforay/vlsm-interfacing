@@ -706,7 +706,7 @@ try {
             reject({ success: false, error: err.message, code: err.code, version: 'unknown' });
           } else {
             testConnection.query('SELECT VERSION() as version', (versionErr: any, results: any) => {
-              const version = results && results[0] ? results[0].version : 'unknown';
+              const version = results?.[0] ? results[0].version : 'unknown';
               testConnection.destroy();
               if (versionErr) {
                 reject({ success: false, error: versionErr.message, version: version });

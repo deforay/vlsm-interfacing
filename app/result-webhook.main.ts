@@ -210,7 +210,7 @@ function recordHealth(
   update: Pick<StoredResultWebhook, 'health' | 'lastCheckedAt'> & Partial<Pick<StoredResultWebhook, 'lastDeliveredAt' | 'lastError'>>
 ): void {
   const current = getStored(store);
-  if (!current || current.url !== url) return;
+  if (current?.url !== url) return;
   const next: StoredResultWebhook = { ...current, ...update };
   if (!update.lastError) delete next.lastError;
   store.set(RESULT_WEBHOOK_KEY, next);
@@ -259,7 +259,7 @@ export function registerResultWebhookIpc(store: StoreLike, getDatabase: () => sq
         activatedAt
       };
       if (encryptedSecret) next.encryptedSecret = encryptedSecret;
-      if (stored && stored.url === target.url) {
+      if (stored?.url === target.url) {
         // Health only carries over while it still describes the same receiver.
         for (const key of ['health', 'lastDeliveredAt', 'lastCheckedAt', 'lastError'] as const) {
           if (stored[key] !== undefined) (next as any)[key] = stored[key];

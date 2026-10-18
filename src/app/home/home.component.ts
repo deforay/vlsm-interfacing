@@ -21,7 +21,7 @@ export class HomeComponent {
     //console.info(this.settings);
     this.appVersion = this.store.get('appVersion');
 
-    if (undefined !== this.settings && null !== this.settings && undefined !== this.settings.interfaceAutoConnect && null !== this.settings.interfaceAutoConnect && 'yes' === this.settings.interfaceAutoConnect) {
+    if (this.settings?.interfaceAutoConnect === 'yes') {
       this.store.set('loggedin', true);
       this.router.navigate(['/console']);
     }
