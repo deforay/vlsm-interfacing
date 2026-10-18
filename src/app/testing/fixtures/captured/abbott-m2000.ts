@@ -21,7 +21,7 @@
 import { CR, EOT, ENQ, astmFrame } from '../../wire-harness';
 
 export const M2000_SERIAL = '275000001';
-export const M2000_HEADER = `H|\\^&|||m2000^8.1.9.0^${M2000_SERIAL}^H1P1O1R1C1L1|||||||P|1|20260112122248`;
+export const M2000_HEADER = String.raw`H|\^&|||m2000^8.1.9.0^${M2000_SERIAL}^H1P1O1R1C1L1|||||||P|1|20260112122248`;
 export const M2000_RUN = 'HIV120126A';
 export const M2000_OPERATOR = 'admin^Administrator';
 export const M2000_RESULT_TIME = '20260112122150';

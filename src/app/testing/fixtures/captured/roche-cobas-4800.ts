@@ -67,14 +67,14 @@ function sampleGroup(index: number, sample: Cobas4800Sample): string[] {
 
 export function cobas4800Run(messageId: string, samples: Cobas4800Sample[]): string {
   return [
-    `MSH|^~\\&|cobas 4800 software 2.3.0.1905^56450_00001^M|EXAMPLE LAB|LIS|LIS Facility|20260613145247+0100||OUL^R22^OUL_R22|${messageId}|P|2.5.1|||ER|AL||UNICODE UTF-8|||LAB-29^IHE`,
+    String.raw`MSH|^~\&|cobas 4800 software 2.3.0.1905^56450_00001^M|EXAMPLE LAB|LIS|LIS Facility|20260613145247+0100||OUL^R22^OUL_R22|${messageId}|P|2.5.1|||ER|AL||UNICODE UTF-8|||LAB-29^IHE`,
     ...samples.flatMap((sample, index) => sampleGroup(index + 1, sample))
   ].join(CR);
 }
 
 export function cobas4800Query(messageId: string, sampleId: string): string {
   return [
-    `MSH|^~\\&|cobas 4800 software 2.3.0.1905|EXAMPLE LAB|LIS|LIS Facility|20260613120846+0100||QBP^Q11^QBP_Q11|${messageId}|P|2.5.1|||ER|AL||UNICODE UTF-8|||LAB-27^IHE`,
+    String.raw`MSH|^~\&|cobas 4800 software 2.3.0.1905|EXAMPLE LAB|LIS|LIS Facility|20260613120846+0100||QBP^Q11^QBP_Q11|${messageId}|P|2.5.1|||ER|AL||UNICODE UTF-8|||LAB-27^IHE`,
     `QPD|WOS^Work Order Step^IHELAW|${messageId}-WOS|${sampleId}`,
     'RCP|I||R^^HL70394'
   ].join(CR);

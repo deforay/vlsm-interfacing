@@ -67,7 +67,7 @@ export function alinityMessage(sample: AlinitySample): string {
   const unit = notDetected ? '' : '^Copies/mL';
   const supplemental = '^S_OTHER^Other Supplemental^IHELAW';
   const segments = [
-    `MSH|^~\\&|||||20260112150335+0100||OUL^R22^OUL_R22|${sample.messageId}|P|2.5.1|||NE|AL||UNICODE UTF-8|||LAB-29^IHE`,
+    String.raw`MSH|^~\&|||||20260112150335+0100||OUL^R22^OUL_R22|${sample.messageId}|P|2.5.1|||NE|AL||UNICODE UTF-8|||LAB-29^IHE`,
     'SPM|1|||PLAS^Plasma^HL70487|||||||P^Patient^HL70369',
     `SAC|||${sample.sampleId}|||||||A000001|7||||2^Position^99ABT`,
     'OBR||""||1006^HIV-1^99ABT',

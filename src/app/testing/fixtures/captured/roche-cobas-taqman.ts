@@ -63,7 +63,7 @@ export const TAQMAN_SAMPLES: TaqmanSample[] = [
 export function taqmanMessage(sample: TaqmanSample): string[] {
   const instrument = sample.version === '3.3.5.1002' ? 'Taqman96' : 'Cobas TaqMan';
   return [
-    `H|\\^&|||ALTM0000001^Roche^AMPLILINK^${sample.version}^Roche ASTM+^TM0000001^192.0.2.10||||||||1|20260314090241`,
+    String.raw`H|\^&|||ALTM0000001^Roche^AMPLILINK^${sample.version}^Roche ASTM+^TM0000001^192.0.2.10||||||||1|20260314090241`,
     'P|1',
     `O|1|${sample.sampleId}|${sample.sampleId}|^^^ALL||20260310125523|||||A`,
     `R|1|^^^HI2CAP96|${sample.result}|${sample.unit}|20^10000000^TiterRanges|N||V||${TAQMAN_LAB}|20260310175015|20260310205415|${instrument}`,
