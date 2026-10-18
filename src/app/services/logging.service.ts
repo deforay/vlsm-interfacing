@@ -26,18 +26,18 @@ export class LoggingService implements OnDestroy {
   // single stuck write can't block every later batch for the rest of the session.
   private static readonly PROCESSING_STALL_TIMEOUT_MS = 180000;
 
-  private logQueue: LogEntry[] = [];
+  private readonly logQueue: LogEntry[] = [];
   private isProcessing = false;
   private processingStartedAt = 0;
   private droppedLogCount = 0;
-  private processingInterval = 10000; // Process queue every 10 seconds
+  private readonly processingInterval = 10000; // Process queue every 10 seconds
   private databaseServicePromise: Promise<any> | null = null;
   private readonly queueProcessingTimer: ReturnType<typeof setInterval>;
 
   constructor(
-    private injector: Injector,
-    private logDisplayService: LogDisplayService,
-    private electronService: ElectronService
+    private readonly injector: Injector,
+    private readonly logDisplayService: LogDisplayService,
+    private readonly electronService: ElectronService
   ) {
     this.queueProcessingTimer = setInterval(() => this.processQueue(), this.processingInterval);
   }

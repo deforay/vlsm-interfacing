@@ -19,13 +19,13 @@ export class AppComponent implements OnInit {
   private sessionId: string | null = null;
 
   constructor(
-    private electronService: ElectronService,
-    private translate: TranslateService,
-    private databaseService: DatabaseService,
-    private intelisResultSync: IntelisResultSyncService,
-    private intelisUsageSync: IntelisUsageSyncService,
-    private resultWebhookSync: ResultWebhookSyncService,
-    private rawDataProcessor: RawDataProcessorService
+    private readonly electronService: ElectronService,
+    private readonly translate: TranslateService,
+    private readonly databaseService: DatabaseService,
+    private readonly intelisResultSync: IntelisResultSyncService,
+    private readonly intelisUsageSync: IntelisUsageSyncService,
+    private readonly resultWebhookSync: ResultWebhookSyncService,
+    private readonly rawDataProcessor: RawDataProcessorService
   ) {
     this.translate.setFallbackLang('en');
 

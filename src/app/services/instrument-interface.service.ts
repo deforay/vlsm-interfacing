@@ -64,7 +64,7 @@ export class InstrumentInterfaceService {
   // A block that is complete but for its <CR>, with the timer waiting for it
   // and the work to take the block as it stands
   private readonly hl7PendingTerminator = new Map<string, { timer: ReturnType<typeof setTimeout>; flush: () => void }>();
-  private connectedInstruments = new Map<string, BehaviorSubject<boolean>>();
+  private readonly connectedInstruments = new Map<string, BehaviorSubject<boolean>>();
   private readonly connectionStatusSubscriptions = new Map<string, Subscription>();
   private readonly lastProtocolMismatchReport = new Map<string, number>();
   private readonly resultSavedSubject = new Subject<{ sampleResult: any; instrumentId: string }>();
@@ -73,8 +73,8 @@ export class InstrumentInterfaceService {
   constructor(public dbService: DatabaseService,
     public tcpService: TcpConnectionService,
     public utilitiesService: UtilitiesService,
-    private hl7Helper: HL7HelperService,
-    private astmHelper: ASTMHelperService,
+    private readonly hl7Helper: HL7HelperService,
+    private readonly astmHelper: ASTMHelperService,
     private readonly electronStoreService?: ElectronStoreService
   ) {
   }

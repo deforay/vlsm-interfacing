@@ -15,8 +15,8 @@ export interface LogEntry {
   providedIn: 'root'
 })
 export class LogDisplayService {
-  private logSubject = new Subject<LogEntry>();
-  private clearLogSubject = new Subject<string | null>();
+  private readonly logSubject = new Subject<LogEntry>();
+  private readonly clearLogSubject = new Subject<string | null>();
 
   log$ = this.logSubject.asObservable();
   clear$ = this.clearLogSubject.asObservable();

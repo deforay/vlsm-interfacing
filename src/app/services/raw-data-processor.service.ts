@@ -84,7 +84,7 @@ export class RawDataProcessorService {
   // The background compaction leaves results this recent alone.
   private static readonly SETTLED_AFTER_DAYS = 7;
 
-  private reprocessingStatus = new BehaviorSubject<ReprocessingStatus>(RawDataProcessorService.idleStatus());
+  private readonly reprocessingStatus = new BehaviorSubject<ReprocessingStatus>(RawDataProcessorService.idleStatus());
   private cancelRequested = false;
   /** The compaction running in the background, if any. */
   private backgroundRun: Promise<void> | null = null;
@@ -96,12 +96,12 @@ export class RawDataProcessorService {
   public readonly backgroundCompaction$ = this.backgroundCompaction.asObservable();
 
   private instrumentsSettings: any = null;
-  private commonSettings: any = null;
+  private readonly commonSettings: any = null;
 
   constructor(
-    private utilsService: UtilitiesService,
+    private readonly utilsService: UtilitiesService,
     private readonly electronStoreService: ElectronStoreService,
-    private instrumentInterfaceService: InstrumentInterfaceService
+    private readonly instrumentInterfaceService: InstrumentInterfaceService
   ) {
     this.commonSettings = this.electronStoreService.get('commonConfig');
     this.instrumentsSettings = this.electronStoreService.get('instrumentsConfig');

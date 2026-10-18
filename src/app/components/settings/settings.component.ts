@@ -153,7 +153,7 @@ export class SettingsComponent implements OnInit, OnDestroy {
     private readonly electronStoreService: ElectronStoreService,
     private readonly utilitiesService: UtilitiesService,
     private readonly cryptoService: CryptoService,
-    private connectionManagerService: ConnectionManagerService,
+    private readonly connectionManagerService: ConnectionManagerService,
     private readonly databaseService: DatabaseService,
     private readonly lisApiService: LisApiService,
     private readonly intelisConnectionService: IntelisConnectionService,

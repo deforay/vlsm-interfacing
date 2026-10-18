@@ -46,10 +46,10 @@ export class DashboardComponent implements OnInit, OnDestroy {
   filteredSessionDatasArray: { mode: string; sessionId: string; startTime: string; endTime?: string }[] = [];
 
   constructor(
-    private router: Router,
-    private route: ActivatedRoute,
-    private utilitiesService: UtilitiesService,
-    private connectionManagerService: ConnectionManagerService
+    private readonly router: Router,
+    private readonly route: ActivatedRoute,
+    private readonly utilitiesService: UtilitiesService,
+    private readonly connectionManagerService: ConnectionManagerService
   ) { }
 
   ngOnInit() {
