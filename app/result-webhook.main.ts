@@ -105,8 +105,10 @@ function authorizationHeaders(target: ResolvedResultWebhookTarget, secret: strin
   switch (target.authType) {
     case 'bearer':
       return { Authorization: `Bearer ${secret}` };
-    case 'basic':
-      return { Authorization: `Basic ${Buffer.from(`${target.username}:${secret}`, 'utf8').toString('base64')}` };
+    case 'basic': {
+      const credentials = Buffer.from(`${target.username}:${secret}`, 'utf8').toString('base64');
+      return { Authorization: `Basic ${credentials}` };
+    }
     case 'apikey':
       return { 'X-API-Key': secret };
     default:
@@ -226,9 +228,12 @@ export function registerResultWebhookIpc(store: StoreLike, getDatabase: () => sq
       const enabled = request?.enabled === true;
       // Everything is validated before anything is changed.
       const target = resolveTarget(request, stored);
-      const encryptedSecret = target.secret.kind === 'provided'
-        ? encryptSecret(target.secret.secret)
-        : target.secret.kind === 'stored' ? stored.encryptedSecret : undefined;
+      let encryptedSecret: string | undefined;
+      if (target.secret.kind === 'provided') {
+        encryptedSecret = encryptSecret(target.secret.secret);
+      } else if (target.secret.kind === 'stored') {
+        encryptedSecret = stored.encryptedSecret;
+      }
 
       let activatedAt = stored?.activatedAt;
       if (!activatedAt) {

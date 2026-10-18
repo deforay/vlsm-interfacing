@@ -58,8 +58,12 @@ function obx(setId: number, type: string, identifier: string, subId: string, val
 export function alinityMessage(sample: AlinitySample): string {
   const notDetected = sample.result === 'Not Detected';
   const belowRange = sample.result === '< 20';
-  const interpretation = notDetected ? 'Target Not Detected' : belowRange ? 'Detected <LLOQ' : 'Detected';
-  const cycle = notDetected ? '-1.00' : belowRange ? '27.03' : '18.62';
+  const byOutcome = (ifNotDetected: string, ifBelowRange: string, ifDetected: string): string => {
+    if (notDetected) return ifNotDetected;
+    return belowRange ? ifBelowRange : ifDetected;
+  };
+  const interpretation = byOutcome('Target Not Detected', 'Detected <LLOQ', 'Detected');
+  const cycle = byOutcome('-1.00', '27.03', '18.62');
   const unit = notDetected ? '' : '^Copies/mL';
   const supplemental = '^S_OTHER^Other Supplemental^IHELAW';
   const segments = [
@@ -78,7 +82,7 @@ export function alinityMessage(sample: AlinitySample): string {
   ];
   let next = 5;
   if (sample.newerSoftware) {
-    const log = notDetected ? 'Not Detected' : belowRange ? '< 1.30' : '4.21';
+    const log = byOutcome('Not Detected', '< 1.30', '4.21');
     segments.push(obx(next++, 'ST', `1006.S^HIV-1^99ABT${supplemental}`, '0', log, '^Log (Copies/mL)'));
   }
   segments.push(

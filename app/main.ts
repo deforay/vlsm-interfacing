@@ -64,7 +64,8 @@ let tray: Tray = null;
 
 function formatUnknownError(error: unknown): string {
   if (error instanceof Error) {
-    return `${error.name}: ${error.message}${error.stack ? `\n${error.stack}` : ''}`;
+    const stack = error.stack ? `\n${error.stack}` : '';
+    return `${error.name}: ${error.message}${stack}`;
   }
 
   if (typeof error === 'string') {

@@ -15,7 +15,7 @@ export class ElectronStoreService {
         this.store = new storeClass();
         this.electronStoreSubject = new BehaviorSubject<any>(this.getAll());
       } catch (e) {
-        console.warn('electron-store was not loaded');
+        console.warn('electron-store was not loaded:', e);
         this.electronStoreSubject = new BehaviorSubject<any>(null);
       }
     } else {

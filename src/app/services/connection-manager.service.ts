@@ -431,9 +431,8 @@ export class ConnectionManagerService implements OnDestroy {
           // This prevents "Listening" status when already connected
           if (!instrumentFromMap.isConnected) {
             instrumentFromMap.connectionInProcess = status;
-            instrumentFromMap.instrumentButtonText = status
-              ? 'Connecting...'
-              : (isTcpServer ? 'Start Server' : 'Connect');
+            const idleButtonText = isTcpServer ? 'Start Server' : 'Connect';
+            instrumentFromMap.instrumentButtonText = status ? 'Connecting...' : idleButtonText;
 
             // Only update the status text if we're not in the middle of a transmission
             if (!instrumentFromMap.transmissionInProgress) {
