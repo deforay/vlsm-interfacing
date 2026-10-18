@@ -88,7 +88,7 @@ try {
   });
 
   check('tampering with the ciphertext is detected', () => {
-    const tampered = JSON.parse(JSON.stringify(envelope));
+    const tampered = structuredClone(envelope);
     const bytes = Buffer.from(tampered.payload, 'base64');
     bytes[0] ^= 0xff;
     tampered.payload = bytes.toString('base64');
@@ -96,7 +96,7 @@ try {
   });
 
   check('tampering with the auth tag is detected', () => {
-    const tampered = JSON.parse(JSON.stringify(envelope));
+    const tampered = structuredClone(envelope);
     const tag = Buffer.from(tampered.cipher.authTag, 'base64');
     tag[0] ^= 0xff;
     tampered.cipher.authTag = tag.toString('base64');

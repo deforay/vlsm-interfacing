@@ -135,9 +135,9 @@ const SENSITIVE_COMMON_CONFIG_FIELDS = ['mysqlPassword', 'encryptionKey'] as con
  */
 const SENSITIVE_TOP_LEVEL_FIELDS = ['encryptionKey'] as const;
 
-/** Deep clone via JSON: settings are plain JSON already (they live in a JSON store). */
+/** Deep clone. Settings are plain JSON already (they live in a JSON store). */
 function cloneSettings(settings: Record<string, any>): Record<string, any> {
-  return JSON.parse(JSON.stringify(settings ?? {}));
+  return structuredClone(settings ?? {});
 }
 
 /**
