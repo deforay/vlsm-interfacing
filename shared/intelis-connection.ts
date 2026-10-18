@@ -167,7 +167,7 @@ export const INTELIS_CONNECTION_CODE_LENGTH = 12;
 
 export function normalizeIntelisConnectionCode(value: string): string {
   const normalized = (value || '').toUpperCase().replace(/[^0-9A-Z]/g, '');
-  return normalized.replace(/[IL]/g, '1').replace(/O/g, '0').replace(/U/g, 'V');
+  return normalized.replaceAll(/[IL]/g, '1').replaceAll('O', '0').replaceAll('U', 'V');
 }
 
 export function formatIntelisConnectionCode(value: string): string {

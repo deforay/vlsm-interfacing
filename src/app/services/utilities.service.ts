@@ -106,12 +106,12 @@ export class UtilitiesService {
     // Only decode if HTML entities are detected
     if (text.includes('&')) {
       return text
-        .replace(/&lt;/g, '<')
-        .replace(/&gt;/g, '>')
-        .replace(/&amp;/g, '&')
-        .replace(/&quot;/g, '"')
-        .replace(/&#39;/g, "'")
-        .replace(/&nbsp;/g, ' ');
+        .replaceAll('&lt;', '<')
+        .replaceAll('&gt;', '>')
+        .replaceAll('&amp;', '&')
+        .replaceAll('&quot;', '"')
+        .replaceAll('&#39;', "'")
+        .replaceAll('&nbsp;', ' ');
     }
     return text;
   }
@@ -227,7 +227,7 @@ export class UtilitiesService {
     }
 
     // Always remove remaining <ETX>
-    astmData = astmData.replace(/<ETX>/g, ''); // Ensure <ETX> is removed completely
+    astmData = astmData.replaceAll('<ETX>', ''); // Ensure <ETX> is removed completely
 
     return astmData;
   }

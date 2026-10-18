@@ -554,7 +554,7 @@ function createWindow(): BrowserWindow {
     }
 
     const fullPath = path.join(__dirname, pathIndex);
-    const url = `file://${path.resolve(fullPath).replace(/\\/g, '/')}`;
+    const url = `file://${path.resolve(fullPath).replaceAll('\\', '/')}`;
     win.loadURL(url);
   }
 
