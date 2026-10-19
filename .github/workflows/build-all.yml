@@ -200,7 +200,9 @@ jobs:
         with:
           tag_name: ${{ needs.version-check.outputs.release_tag }}
           name: ${{ needs.version-check.outputs.release_tag }}
-          generate_release_notes: true
+          # Only the Linux job generates the notes. The action adds generated
+          # notes to a release that already has them, so with both jobs asking,
+          # every release listed its changes twice.
           draft: false
           files: release/*.exe
 
