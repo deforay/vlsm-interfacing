@@ -4,7 +4,22 @@ import { Injectable } from '@angular/core';
 import type { Message } from 'hl7parser';
 import { UtilitiesService } from './utilities.service';
 
-const randomUUID = () => (window as any).require('crypto').randomUUID();
+const CONTROL_ID_ALPHABET = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+
+/**
+ * A control ID for a message this tool sends: the message's 14-digit
+ * timestamp, then six random letters or digits. That is exactly the 20
+ * characters HL7 v2.5.1 allows in MSH-10 and MSA-2, and it holds no HL7
+ * delimiter. The timestamp makes the ID readable beside the connection log.
+ */
+export function hl7ControlId(timestamp: string): string {
+  const { randomInt } = (window as any).require('crypto');
+  let suffix = '';
+  for (let i = 0; i < 6; i++) {
+    suffix += CONTROL_ID_ALPHABET[randomInt(CONTROL_ID_ALPHABET.length)];
+  }
+  return timestamp + suffix;
+}
 
 @Injectable({
   providedIn: 'root'
@@ -27,11 +42,14 @@ export class HL7HelperService {
    * @returns The ACK, framed for MLLP
    */
   generateHL7ACK(messageID: string | number, characterSet: string, messageProfileIdentifier: string, hl7Version = '2.5.1'): string {
+    // Generate timestamp once
+    const moment = require('moment');
+    const date = moment().format('YYYYMMDDHHmmss');
+
     // Handle empty/null parameters
     if (!messageID || messageID === '') {
-      // The message had no control ID to echo. MSA-2 is required and holds at
-      // most 20 characters in v2.5.1, so a random 20-character value stands in.
-      messageID = randomUUID().replaceAll('-', '').slice(0, 20);
+      // The message had no control ID to echo, and MSA-2 is required.
+      messageID = hl7ControlId(date);
     }
     if (!characterSet || characterSet === '') {
       characterSet = 'UNICODE UTF-8';
@@ -45,12 +63,8 @@ export class HL7HelperService {
     const CR = '\x0D';  // Carriage return
     const FS = '\x1C';  // End of message
 
-    // Generate timestamp once
-    const moment = require('moment');
-    const date = moment().format('YYYYMMDDHHmmss');
-
     // Build optimized ACK message with field position comments
-    const ack = String.raw`${VT}MSH|^~\&|InteLIS|InteLIS|InteLIS|InteLIS|${date}||ACK^R22^ACK|${randomUUID()}|P|${hl7Version}|||NE|AL||${characterSet}||${messageProfileIdentifier}${CR}MSA|AA|${messageID}${CR}${FS}${CR}`;
+    const ack = String.raw`${VT}MSH|^~\&|InteLIS|InteLIS|InteLIS|InteLIS|${date}||ACK^R22^ACK|${hl7ControlId(date)}|P|${hl7Version}|||NE|AL||${characterSet}||${messageProfileIdentifier}${CR}MSA|AA|${messageID}${CR}${FS}${CR}`;
 
     /*
     MSH Field Breakdown:
@@ -63,7 +77,7 @@ export class HL7HelperService {
     ${date}|      - MSH-7: Date/Time of Message
     |             - MSH-8: Security (empty)
     ACK^R22^ACK|  - MSH-9: Message Type (ACK^Event^Message Structure)
-    ${randomUUID()}| - MSH-10: Message Control ID (new UUID for this ACK)
+    ${hl7ControlId(date)}| - MSH-10: Message Control ID (new for this ACK)
     P|            - MSH-11: Processing ID (P=Production)
     ${hl7Version}| - MSH-12: Version ID
     |             - MSH-13: Sequence Number (empty)
@@ -399,7 +413,7 @@ export class HL7HelperService {
     const moment = require('moment');
     const date = moment(new Date()).format('YYYYMMDDHHmmss');
 
-    let message = String.raw`MSH|^~\&|LIS|LISFacility|Roche|x800|` + date + '||ORM^O01|' + randomUUID() + '|P|2.3\r';
+    let message = String.raw`MSH|^~\&|LIS|LISFacility|Roche|x800|` + date + '||ORM^O01|' + hl7ControlId(date) + '|P|2.3\r';
     message += 'PID|||123456^^^LIS||Doe^John\r';
     message += 'ORC|NW|' + sampleResult.order_id + '|||' + date + '\r';
     message += 'OBR|1||' + sampleResult.order_id + '^LIS|' + sampleResult.test_id + '^' + sampleResult.test_type + '^L\r';

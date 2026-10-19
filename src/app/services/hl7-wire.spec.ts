@@ -54,6 +54,7 @@ describe('HL7 over the wire', () => {
       const segments = parseHL7Response(response);
       // Field n of MSH sits at index n-1 because MSH-1 is the separator itself
       expect(segments.MSH[8]).toBe('ACK^R22^ACK');
+      expect(segments.MSH[9]).toMatch(/^\d{14}[0-9A-Z]{6}$/);
       expect(segments.MSH[11]).toBe('2.3.1');
       expect(segments.MSH[17]).toBe('8859/1');
       expect(segments.MSA).toEqual(['MSA', 'AA', 'MSG-ACK-1']);

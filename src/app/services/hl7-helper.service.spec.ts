@@ -152,13 +152,40 @@ describe('HL7HelperService', () => {
       expect(msa2(service.generateHL7ACK('MSG00042', '', ''))).toBe('MSG00042');
     });
 
-    it('fills a missing control ID with a random value that fits v2.5.1\'s 20 characters', () => {
+    it('fills a missing control ID with a timestamped value that fits v2.5.1\'s 20 characters', () => {
       const first = msa2(service.generateHL7ACK('', '', ''));
       const second = msa2(service.generateHL7ACK('', '', ''));
 
-      expect(first).toMatch(/^[0-9a-f]{20}$/);
-      expect(second).toMatch(/^[0-9a-f]{20}$/);
+      expect(first).toMatch(/^\d{14}[0-9A-Z]{6}$/);
+      expect(second).toMatch(/^\d{14}[0-9A-Z]{6}$/);
       expect(first).not.toBe(second);
+    });
+  });
+
+  describe('control IDs of messages the tool sends', () => {
+    beforeEach(() => {
+      const globalObject = globalThis as any;
+      globalObject.window = globalObject.window ?? {};
+      if (typeof globalObject.window.require !== 'function') {
+        globalObject.window.require = (moduleName: string) => require(moduleName);
+      }
+    });
+
+    const msh = (message: string) => message.replace(/^\x0B/, '').split('\r')[0].split('|');
+
+    it('gives each ACK its own 20-character MSH-10 that starts with its MSH-7', () => {
+      const first = msh(service.generateHL7ACK('MSG00042', '', ''));
+      const second = msh(service.generateHL7ACK('MSG00042', '', ''));
+
+      expect(first[9]).toMatch(/^\d{14}[0-9A-Z]{6}$/);
+      expect(first[9].startsWith(first[6])).toBe(true);
+      expect(first[9]).not.toBe(second[9]);
+    });
+
+    it('gives an order message a 20-character MSH-10', () => {
+      const order = msh(service.generateHL7MessageForOrder({ order_id: 'S1', test_id: 'T1', test_type: 'vl' }));
+
+      expect(order[9]).toMatch(/^\d{14}[0-9A-Z]{6}$/);
     });
   });
 });
