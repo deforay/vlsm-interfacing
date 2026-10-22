@@ -702,4 +702,11 @@ describe('listing raw data', () => {
     expect((await s.dbService.listRawData({ search: 'VL260003!' }, 50, 0)).total).toBe(0);
     expect((await s.dbService.listRawData({ search: 'VL2600' }, 50, 0)).total).toBe(1);
   });
+
+  it('finds a transmission by text that contains the escape character', async () => {
+    const s = setup('hl7', 'roche-cobas-4800');
+    await s.receive(mllp(cobas4800Run('MSG-4800!RUN', COBAS_4800_RUN)));
+
+    expect((await s.dbService.listRawData({ search: 'MSG-4800!RUN' }, 50, 0)).total).toBe(1);
+  });
 });
