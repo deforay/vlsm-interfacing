@@ -89,7 +89,9 @@ export class DatabaseService {
   private commonSettings = null;
   private migrationDir: string; // Path for migrations
   private hasRunMigrations = false;
+  // Silent MySQL repairs this session, and the one in progress.
   private migrationAutoRetryCount = 0;
+  private mysqlReplay: Promise<boolean> | null = null;
   // Once a restart has been asked for in this session, it is not asked for
   // again: the app is restarting, and many queries can fail in quick succession.
   private restartRequested = false;
@@ -353,7 +355,7 @@ export class DatabaseService {
    * Checks if migrations have been run and executes them if not.
    * This method is called automatically when the MySQL connection is established.
    */
-  private async checkAndRunMigrations(connection) {
+  private async checkAndRunMigrations(connection, replayAll = false) {
     const forceReplay = await this.isForceMigrationReplayRequested();
 
     if (this.hasRunMigrations && !forceReplay) {
@@ -431,30 +433,38 @@ export class DatabaseService {
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
     `;
 
-      await this.execQueryPromise(createVersionsTable, []);
+      await this.execMigrationQuery(createVersionsTable, []);
       console.log('✅ Versions tracking table ready');
 
       // STEP 6: Get already executed migrations — self-healing: if versions table is stale/corrupt, reset it
       let executedResults: any[];
       try {
         if (forceReplay) {
-          await this.execQueryPromise('DELETE FROM versions', []);
+          await this.execMigrationQuery('DELETE FROM versions', []);
           executedResults = [];
           console.log('✅ MySQL versions table cleared for force replay');
         } else {
-          executedResults = await this.execQueryPromise('SELECT version, filename FROM versions ORDER BY version', []);
+          executedResults = await this.execMigrationQuery('SELECT version, filename FROM versions ORDER BY version', []);
         }
       } catch (versionsQueryErr) {
         console.warn('⚠️ Versions table query failed, resetting migration tracking:', versionsQueryErr.message);
-        await this.execQueryPromise('DROP TABLE IF EXISTS versions', []);
-        await this.execQueryPromise(createVersionsTable, []);
+        await this.execMigrationQuery('DROP TABLE IF EXISTS versions', []);
+        await this.execMigrationQuery(createVersionsTable, []);
         executedResults = [];
         console.log('✅ Versions table reset — all migrations will re-run');
       }
       const executedVersions = executedResults.map((row: any) => row.version);
       console.log('Previously executed versions:', executedVersions);
 
-      await this.ensureMysqlSchemaCompatibility();
+      let hadUnexpectedFailures = false;
+      try {
+        await this.ensureMysqlSchemaCompatibility();
+      } catch (compatibilityErr) {
+        // WHY: the migration files below can still create what is missing, so
+        // a failed column repair must not stop them from running.
+        hadUnexpectedFailures = true;
+        this.logCriticalDatabaseIssue(`MySQL column repair failed before migrations: ${compatibilityErr?.message ?? compatibilityErr}`, 'migration');
+      }
 
       // STEP 7: Identify pending migrations
       const migrations = migrationFiles
@@ -467,14 +477,18 @@ export class DatabaseService {
             console.warn(`⚠️ Skipping file with invalid version number: ${migration.file}`);
             return false;
           }
-          return !executedVersions.includes(migration.version);
+          // WHY: a missing table means the history in `versions` is wrong, so
+          // a repair replays every file. Each one is safe to run again.
+          return replayAll || !executedVersions.includes(migration.version);
         })
         .sort((a, b) => a.version - b.version);
 
       if (migrations.length === 0) {
         console.log('✅ All migrations already executed');
-        this.hasRunMigrations = true;
-        await this.clearForceMigrationReplayRequest(forceReplay);
+        this.hasRunMigrations = !hadUnexpectedFailures;
+        if (!hadUnexpectedFailures) {
+          await this.clearForceMigrationReplayRequest(forceReplay);
+        }
         return;
       }
 
@@ -484,7 +498,6 @@ export class DatabaseService {
       // WHY: re-runs should tolerate idempotent DDL conflicts, but they must not
       // mark a migration successful when a real statement failed.
       let successCount = 0;
-      let hadUnexpectedFailures = false;
 
       for (const migration of migrations) {
         console.log(`\n--- Executing Migration ${migration.version}: ${migration.file} ---`);
@@ -511,7 +524,7 @@ export class DatabaseService {
           for (let i = 0; i < statements.length; i++) {
             const statement = statements[i];
             try {
-              await this.execQueryPromise(statement, []);
+              await this.execMigrationQuery(statement, []);
             } catch (stmtErr) {
               if (this.isExpectedMigrationReplayError(stmtErr)) {
                 console.warn(`ℹ️ Migration replay note for ${migration.file}: ${stmtErr.message}`);
@@ -532,7 +545,7 @@ export class DatabaseService {
 
           // Record migration as completed
           try {
-            await this.execQueryPromise(
+            await this.execMigrationQuery(
               'INSERT INTO versions (version, filename) VALUES (?, ?)',
               [migration.version, migration.file]
             );
@@ -562,7 +575,6 @@ export class DatabaseService {
       if (hadUnexpectedFailures) {
         console.warn('⚠️ MySQL migrations completed with unexpected failures. Pending migrations will retry later.');
       } else {
-        this.migrationAutoRetryCount = 0; // Reset so future DDL errors can trigger re-runs again
         await this.clearForceMigrationReplayRequest(forceReplay);
       }
 
@@ -624,11 +636,11 @@ export class DatabaseService {
     // WHY: older installations can have stale migration history that says a
     // migration ran even though a later column in that file was never added.
     console.warn(`Repairing missing MySQL column ${tableName}.${columnName}`);
-    await this.execQueryPromise(alterSql, []);
+    await this.execRepairStatement(alterSql);
   }
 
   private async mysqlTableExists(tableName: string): Promise<boolean> {
-    const rows = await this.execQueryPromise(
+    const rows = await this.execMigrationQuery(
       'SELECT COUNT(*) AS table_count FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_SCHEMA = ? AND TABLE_NAME = ?',
       [this.commonSettings.mysqlDb, tableName]
     );
@@ -636,7 +648,7 @@ export class DatabaseService {
   }
 
   private async mysqlColumnExists(tableName: string, columnName: string): Promise<boolean> {
-    const rows = await this.execQueryPromise(
+    const rows = await this.execMigrationQuery(
       'SELECT COUNT(*) AS column_count FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = ? AND TABLE_NAME = ? AND COLUMN_NAME = ?',
       [this.commonSettings.mysqlDb, tableName, columnName]
     );
@@ -649,7 +661,7 @@ export class DatabaseService {
       return;
     }
 
-    const rows = await this.execQueryPromise(
+    const rows = await this.execMigrationQuery(
       'SELECT COUNT(*) AS index_count FROM INFORMATION_SCHEMA.STATISTICS WHERE TABLE_SCHEMA = ? AND TABLE_NAME = ? AND INDEX_NAME = ?',
       [this.commonSettings.mysqlDb, tableName, indexName]
     );
@@ -660,7 +672,19 @@ export class DatabaseService {
     // WHY: retry safety depends on the database enforcing ingestion identity,
     // including installations whose migration history is incomplete.
     console.warn(`Repairing missing MySQL index ${tableName}.${indexName}`);
-    await this.execQueryPromise(createSql, []);
+    await this.execRepairStatement(createSql);
+  }
+
+  private async execRepairStatement(sql: string): Promise<void> {
+    try {
+      await this.execMigrationQuery(sql, []);
+    } catch (err) {
+      // WHY: another repair or a migration can add the same column or index
+      // between the check and this statement. It is there, which is the goal.
+      if (!this.isExpectedMigrationReplayError(err)) {
+        throw err;
+      }
+    }
   }
 
   private filterRecordColumns(record: any, allowedColumns: readonly string[]): any {
@@ -771,10 +795,18 @@ export class DatabaseService {
   }
 
   // Helper method to convert execQuery to Promise-based:
-  private execQueryPromise(query: string, data: any[]): Promise<any> {
+  private execQueryPromise(query: string, data: any[], repairOnSchemaError = true): Promise<any> {
     return new Promise((resolve, reject) => {
-      this.execQuery(query, data, resolve, reject);
+      this.execQuery(query, data, resolve, reject, null, repairOnSchemaError);
     });
+  }
+
+  /**
+   * Runs a statement for the migrations or the schema repair. A schema error
+   * here must not start a repair, since the repair would wait on itself.
+   */
+  private execMigrationQuery(query: string, data: any[]): Promise<any> {
+    return this.execQueryPromise(query, data, false);
   }
 
   private logCriticalDatabaseIssue(
@@ -894,7 +926,7 @@ export class DatabaseService {
     });
   }
 
-  execQuery(query: string, data: any, success: any, errorf: any, callback = null, retryAfterSchemaRepair = true) {
+  execQuery(query: string, data: any, success: any, errorf: any, callback = null, repairOnSchemaError = true) {
     if (!this.mysqlPool) {
       errorf({ error: 'Database Connection not found' });
       return;
@@ -909,25 +941,9 @@ export class DatabaseService {
       connection.query({ sql: query }, data, (queryError, results) => {
         if (queryError) {
           connection.release();
-          // If the error is DDL-related (missing table/column), trigger a migration re-run.
-          // Cap at 2 auto-retries per session to prevent infinite loops if a migration can't fix the issue.
-          const isDdlError = this.isMysqlDdlError(queryError);
-          if (isDdlError) {
-            if (retryAfterSchemaRepair) {
-              this.repairMysqlSchemaAndRetryQuery(queryError, query, data, success, errorf, callback);
-              return;
-            }
-
-            if (this.migrationAutoRetryCount < 2) {
-              this.migrationAutoRetryCount++;
-              this.hasRunMigrations = false;
-              this.logCriticalDatabaseIssue(`DDL error (${queryError.code}), migration re-run attempt ${this.migrationAutoRetryCount}/2. Query: ${query}`, 'migration', null, false);
-              this.checkAndRunMigrations(null).catch(e => console.error('Auto-migration re-run failed:', e));
-            } else {
-              // Self-healing exhausted: restart to apply every update.
-              this.logCriticalDatabaseIssue(`DDL error persists after ${this.migrationAutoRetryCount} migration re-runs. Query: ${query} | Error: ${queryError.message}`, 'migration', null, false);
-              void this.requestRestartForDatabaseUpdate('MySQL', queryError);
-            }
+          if (repairOnSchemaError && this.isMysqlDdlError(queryError)) {
+            this.repairMysqlSchemaAndRetryQuery(queryError, query, data, success, errorf, callback);
+            return;
           }
           errorf(queryError);
           return;
@@ -957,19 +973,51 @@ export class DatabaseService {
       || DatabaseService.DDL_ERROR_PATTERNS.some(pattern => pattern.test(error?.message ?? ''));
   }
 
+  /**
+   * Replays every MySQL migration on the live database, then runs the query
+   * that found the drift again. Only if it still fails does the app ask for a
+   * restart. Mirrors the SQLite repair in execSqlite.
+   */
   private repairMysqlSchemaAndRetryQuery(queryError: any, query: string, data: any, success: any, errorf: any, callback: any): void {
-    // WHY: the first failing query is often log/result traffic racing ahead of
-    // migration replay. Repair known schema drift immediately, then retry once
-    // before falling back to the migration prompt.
     this.logCriticalDatabaseIssue(`MySQL DDL error; repairing schema before retry. Query: ${query} | Error: ${queryError?.message ?? queryError}`, 'migration', null, false);
-    this.ensureMysqlSchemaCompatibility()
-      .then(() => {
-        this.execQuery(query, data, success, errorf, callback, false);
+    const failAfterRepair = (error: any) => {
+      if (this.isMysqlDdlError(error)) {
+        void this.requestRestartForDatabaseUpdate('MySQL', error);
+      }
+      errorf(error);
+    };
+    void this.replayMysqlMigrationsSilently().then((repaired) => {
+      if (!repaired) {
+        this.logCriticalDatabaseIssue(`MySQL schema repair did not finish. Retrying query: ${query}`, 'migration', null, false);
+      }
+      this.execQuery(query, data, success, failAfterRepair, callback, false);
+    });
+  }
+
+  /**
+   * Replays every MySQL migration file and resolves true when all of them
+   * applied. Queries that fail at the same moment share one replay, so two
+   * repairs never race to add the same column.
+   */
+  private replayMysqlMigrationsSilently(): Promise<boolean> {
+    if (this.mysqlReplay !== null) {
+      return this.mysqlReplay;
+    }
+    if (this.migrationAutoRetryCount >= 2) {
+      return Promise.resolve(false);
+    }
+    this.migrationAutoRetryCount++;
+    this.hasRunMigrations = false;
+    this.mysqlReplay = this.checkAndRunMigrations(null, true)
+      .then(() => this.hasRunMigrations)
+      .catch((err: any) => {
+        console.error('Silent MySQL repair failed:', err);
+        return false;
       })
-      .catch((repairError) => {
-        this.logCriticalDatabaseIssue(`MySQL schema repair failed: ${repairError?.message ?? repairError}. Retrying query: ${query}`, 'migration', null, false);
-        this.execQuery(query, data, success, errorf, callback, false);
+      .finally(() => {
+        this.mysqlReplay = null;
       });
+    return this.mysqlReplay;
   }
 
 
